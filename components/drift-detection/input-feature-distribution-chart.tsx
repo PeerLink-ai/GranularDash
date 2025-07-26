@@ -1,113 +1,58 @@
 "use client"
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
-import { Line, LineChart, ResponsiveContainer, XAxis, YAxis, CartesianGrid, ReferenceArea } from "recharts"
-import { DateRangePicker } from "@/components/date-range-picker"
-import { useState } from "react"
+import { ResponsiveContainer, XAxis, YAxis, CartesianGrid, Area, AreaChart } from "recharts"
+import { ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 
 // Mock data for input feature distribution
-const mockInputFeatureData = [
-  { date: "2024-01-01", current: 0.5, baseline: 0.52 },
-  { date: "2024-01-02", current: 0.51, baseline: 0.52 },
-  { date: "2024-01-03", current: 0.53, baseline: 0.52 },
-  { date: "2024-01-04", current: 0.55, baseline: 0.52 },
-  { date: "2024-01-05", current: 0.58, baseline: 0.52 }, // Drift starts
-  { date: "2024-01-06", current: 0.62, baseline: 0.52 },
-  { date: "2024-01-07", current: 0.65, baseline: 0.52 },
-  { date: "2024-01-08", current: 0.63, baseline: 0.52 },
-  { date: "2024-01-09", current: 0.6, baseline: 0.52 },
-  { date: "2024-01-10", current: 0.57, baseline: 0.52 }, // Drift ends
-  { date: "2024-01-11", current: 0.53, baseline: 0.52 },
-  { date: "2024-01-12", current: 0.51, baseline: 0.52 },
+const inputFeatureData = [
+  { name: "Jan", baseline: 50, current: 52, drift: 0 },
+  { name: "Feb", baseline: 55, current: 58, drift: 0 },
+  { name: "Mar", baseline: 60, current: 65, drift: 0 },
+  { name: "Apr", baseline: 62, current: 70, drift: 1 }, // Drift detected
+  { name: "May", baseline: 65, current: 68, drift: 0 },
+  { name: "Jun", baseline: 70, current: 75, drift: 0 },
+  { name: "Jul", baseline: 72, current: 80, drift: 1 }, // Drift detected
+  { name: "Aug", baseline: 75, current: 78, drift: 0 },
+  { name: "Sep", baseline: 78, current: 85, drift: 1 }, // Drift detected
+  { name: "Oct", baseline: 80, current: 82, drift: 0 },
+  { name: "Nov", baseline: 82, current: 88, drift: 1 }, // Drift detected
+  { name: "Dec", baseline: 85, current: 90, drift: 0 },
 ]
 
 export function InputFeatureDistributionChart() {
-  const [dateRange, setDateRange] = useState({ from: new Date("2024-01-01"), to: new Date("2024-01-12") })
-
-  const filteredData = mockInputFeatureData.filter((item) => {
-    const itemDate = new Date(item.date)
-    return itemDate >= dateRange.from && itemDate <= dateRange.to
-  })
-
-  // Define drift thresholds and areas
-  const driftThresholdUpper = 0.55
-  const driftThresholdLower = 0.45
-
-  const driftAreas = []
-  let inDrift = false
-  let driftStart = ""
-
-  for (let i = 0; i < filteredData.length; i++) {
-    const item = filteredData[i]
-    if ((item.current > driftThresholdUpper || item.current < driftThresholdLower) && !inDrift) {
-      inDrift = true
-      driftStart = item.date
-    } else if (!(item.current > driftThresholdUpper || item.current < driftThresholdLower) && inDrift) {
-      inDrift = false
-      driftAreas.push({ x1: driftStart, x2: item.date, tooltip: `Drift: ${driftStart} to ${item.date}` })
-    }
-    if (inDrift && i === filteredData.length - 1) {
-      driftAreas.push({ x1: driftStart, x2: item.date, tooltip: `Drift: ${driftStart} to ${item.date}` })
-    }
-  }
-
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">Input Feature Distribution vs. Baseline</CardTitle>
-        <DateRangePicker dateRange={dateRange} onDateRangeChange={setDateRange} />
-      </CardHeader>
-      <CardContent>
-        <ChartContainer
-          config={{
-            current: {
-              label: "Current Distribution",
-              color: "hsl(var(--chart-1))",
-            },
-            baseline: {
-              label: "Baseline Distribution",
-              color: "hsl(var(--chart-2))",
-            },
+    <div className="h-[300px]">
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart
+          data={inputFeatureData}
+          margin={{
+            top: 10,
+            right: 30,
+            left: 0,
+            bottom: 0,
           }}
-          className="h-[250px]"
         >
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={filteredData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" />
-              <YAxis />
-              <ChartTooltip content={<ChartTooltipContent />} />
-              <Line type="monotone" dataKey="current" stroke="var(--color-current)" dot={false} />
-              <Line
-                type="monotone"
-                dataKey="baseline"
-                stroke="var(--color-baseline)"
-                strokeDasharray="5 5"
-                dot={false}
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="name" />
+          <YAxis />
+          <ChartTooltip content={<ChartTooltipContent />} />
+          <Area type="monotone" dataKey="baseline" stroke="#8884d8" fill="#8884d8" fillOpacity={0.3} name="Baseline" />
+          <Area type="monotone" dataKey="current" stroke="#82ca9d" fill="#82ca9d" fillOpacity={0.3} name="Current" />
+          {/* Shaded zones for drift */}
+          {inputFeatureData.map((entry, index) =>
+            entry.drift === 1 ? (
+              <Area
+                key={index}
+                dataKey="current"
+                data={[inputFeatureData[index]]}
+                stroke="none"
+                fill="#ff0000"
+                fillOpacity={0.1}
               />
-
-              {driftAreas.map((area, index) => (
-                <ReferenceArea
-                  key={index}
-                  x1={area.x1}
-                  x2={area.x2}
-                  y1={0}
-                  y2={1} // Assuming y-axis goes from 0 to 1 for distribution
-                  stroke="red"
-                  strokeOpacity={0.3}
-                  fill="red"
-                  fillOpacity={0.1}
-                >
-                  <text x="50%" y="50%" fill="red" textAnchor="middle" dominantBaseline="middle" fontSize="10">
-                    {area.tooltip}
-                  </text>
-                </ReferenceArea>
-              ))}
-            </LineChart>
-          </ResponsiveContainer>
-        </ChartContainer>
-      </CardContent>
-    </Card>
+            ) : null,
+          )}
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
   )
 }

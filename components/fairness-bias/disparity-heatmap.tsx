@@ -1,93 +1,105 @@
 "use client"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
 import { Line, LineChart, ResponsiveContainer } from "recharts"
 import type { HeatmapData, MetricData } from "@/components/analytics/fairness-bias-tab"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 interface DisparityHeatmapProps {
   data: HeatmapData[]
   onCellClick: (group: string, metricName: string, data: MetricData) => void
 }
 
-const metricLabels: { [key: string]: string } = {
-  disparateImpact: "Disparate Impact Ratio",
-  equalOpportunity: "Equal Opportunity Difference",
-  demographicParity: "Demographic Parity",
-  falsePositiveRate: "False Positive Rate",
+const getDeviationColor = (deviation: number) => {
+  if (deviation > 70) return "bg-red-100 dark:bg-red-900/20"
+  if (deviation > 40) return "bg-yellow-100 dark:bg-yellow-900/20"
+  return "bg-green-100 dark:bg-green-900/20"
+}
+
+const getTextColor = (deviation: number) => {
+  if (deviation > 70) return "text-red-700 dark:text-red-300"
+  if (deviation > 40) return "text-yellow-700 dark:text-yellow-300"
+  return "text-green-700 dark:text-green-300"
 }
 
 export function DisparityHeatmap({ data, onCellClick }: DisparityHeatmapProps) {
-  const getCellColor = (deviation: number) => {
-    // Deviation is 0-100. 0 means no deviation, 100 means max deviation.
-    // We want a gradient from green (low deviation) to red (high deviation).
-    // Using HSL for a smooth transition: H (hue) from 120 (green) to 0 (red).
-    const hue = 120 - (deviation / 100) * 120
-    const saturation = 70 // Keep saturation constant for vibrancy
-    const lightness = 50 // Keep lightness constant
-    return `hsl(${hue}, ${saturation}%, ${lightness}%)`
+  const metrics = ["disparateImpact", "equalOpportunity", "demographicParity", "falsePositiveRate"]
+  const metricLabels: { [key: string]: string } = {
+    disparateImpact: "Disparate Impact",
+    equalOpportunity: "Equal Opportunity",
+    demographicParity: "Demographic Parity",
+    falsePositiveRate: "False Positive Rate",
   }
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[700px] border-collapse">
-        <thead>
-          <tr className="bg-muted/50">
-            <th className="sticky left-0 bg-muted/50 px-4 py-2 text-left text-sm font-medium text-muted-foreground">
-              Protected Group
-            </th>
-            {Object.keys(data[0]?.metrics || {}).map((metricKey) => (
-              <th key={metricKey} className="px-4 py-2 text-left text-sm font-medium text-muted-foreground">
-                {metricLabels[metricKey]}
-              </th>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-[150px]">Protected Group</TableHead>
+            {metrics.map((metric) => (
+              <TableHead key={metric} className="text-center">
+                {metricLabels[metric]}
+              </TableHead>
             ))}
-          </tr>
-        </thead>
-        <tbody>
-          {data.map((row, rowIndex) => (
-            <tr key={row.group} className={cn(rowIndex % 2 === 0 ? "bg-background" : "bg-muted/20")}>
-              <td className="sticky left-0 bg-inherit px-4 py-3 text-sm font-medium">{row.group}</td>
-              {Object.entries(row.metrics).map(([metricKey, metricData]) => (
-                <TooltipProvider key={metricKey}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <td
-                        className="cursor-pointer px-4 py-2 text-center"
-                        style={{ backgroundColor: getCellColor(metricData.deviation) }}
-                        onClick={() => onCellClick(row.group, metricKey, metricData)}
-                      >
-                        <div className="flex flex-col items-center justify-center">
-                          <span className="font-semibold">{metricData.value.toFixed(2)}</span>
-                          <div className="h-8 w-20">
-                            <ResponsiveContainer width="100%" height="100%">
-                              <LineChart data={metricData.history.map((val) => ({ value: val }))}>
-                                <Line
-                                  type="monotone"
-                                  dataKey="value"
-                                  stroke="#fff"
-                                  strokeWidth={1}
-                                  dot={false}
-                                  isAnimationActive={false}
-                                />
-                              </LineChart>
-                            </ResponsiveContainer>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {data.map((row) => (
+            <TableRow key={row.group}>
+              <TableCell className="font-medium">{row.group}</TableCell>
+              {metrics.map((metricKey) => {
+                const metricData = row.metrics[metricKey as keyof typeof row.metrics]
+                return (
+                  <TableCell
+                    key={`${row.group}-${metricKey}`}
+                    className={cn(
+                      "relative p-2 text-center cursor-pointer transition-colors hover:bg-gray-100 dark:hover:bg-gray-800",
+                      getDeviationColor(metricData.deviation),
+                    )}
+                    onClick={() => onCellClick(row.group, metricKey, metricData)}
+                  >
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="flex flex-col items-center">
+                            <span className={cn("font-semibold", getTextColor(metricData.deviation))}>
+                              {metricData.value.toFixed(2)}
+                            </span>
+                            <div className="h-8 w-full max-w-[80px] opacity-70">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <LineChart data={metricData.history.map((val) => ({ value: val }))}>
+                                  <Line
+                                    type="monotone"
+                                    dataKey="value"
+                                    stroke={getTextColor(metricData.deviation)
+                                      .replace("text-", "#")
+                                      .replace("dark:", "")}
+                                    strokeWidth={2}
+                                    dot={false}
+                                  />
+                                </LineChart>
+                              </ResponsiveContainer>
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p className="font-semibold">{metricLabels[metricKey]}</p>
-                      <p>
-                        Value: <span className="font-bold">{metricData.value.toFixed(2)}</span>
-                      </p>
-                      <p>History: {metricData.history.map((val) => val.toFixed(2)).join(", ")} (last 5 days)</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              ))}
-            </tr>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>
+                            Value: {metricData.value.toFixed(2)}
+                            <br />
+                            History: {metricData.history.map((v) => v.toFixed(2)).join(", ")}
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </TableCell>
+                )
+              })}
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   )
 }

@@ -28,31 +28,39 @@ export function DisparityDetailModal({ isOpen, onClose, group, metricName, metri
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg p-4">
         {" "}
-        {/* Adjusted max-width to sm:max-w-md */}
-        <DialogHeader>
-          <DialogTitle>
+        {/* Adjusted max-width to sm:max-w-lg and reduced padding */}
+        <DialogHeader className="pb-2">
+          {" "}
+          {/* Reduced padding-bottom */}
+          <DialogTitle className="text-lg">
             Details for {metricLabels[metricName]} - {group}
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="text-sm">
             In-depth analysis of the selected fairness metric for the protected group.
           </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4 py-4">
+        <div className="grid gap-3 py-3">
+          {" "}
+          {/* Reduced gap and padding */}
           <Card>
-            <CardHeader>
-              <CardTitle>Metric Trend Over Time</CardTitle>
+            <CardHeader className="pb-2">
+              {" "}
+              {/* Reduced padding-bottom */}
+              <CardTitle className="text-base">Metric Trend Over Time</CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="h-[200px]">
+            <CardContent className="pt-2">
+              {" "}
+              {/* Reduced padding-top */}
+              <div className="h-[180px]">
                 {" "}
-                {/* Slightly reduced height for smaller modal */}
+                {/* Further reduced height for smaller modal */}
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" />
-                    <YAxis />
+                    <XAxis dataKey="date" tickLine={false} axisLine={false} />
+                    <YAxis tickLine={false} axisLine={false} />
                     <Tooltip />
                     <Line type="monotone" dataKey="value" stroke="#8884d8" activeDot={{ r: 8 }} />
                   </LineChart>
@@ -60,13 +68,14 @@ export function DisparityDetailModal({ isOpen, onClose, group, metricName, metri
               </div>
             </CardContent>
           </Card>
-
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            {" "}
+            {/* Reduced gap */}
             <Card>
-              <CardHeader>
-                <CardTitle>Sample Counts</CardTitle>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Sample Counts</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="pt-2 text-sm">
                 <p>
                   Total Samples: <span className="font-semibold">10,000</span>
                 </p>
@@ -79,11 +88,13 @@ export function DisparityDetailModal({ isOpen, onClose, group, metricName, metri
               </CardContent>
             </Card>
             <Card>
-              <CardHeader>
-                <CardTitle>Remediation Suggestions</CardTitle>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Remediation Suggestions</CardTitle>
               </CardHeader>
-              <CardContent>
-                <ul className="list-disc pl-5 text-sm text-muted-foreground">
+              <CardContent className="pt-2">
+                <ul className="list-disc pl-5 text-xs text-muted-foreground">
+                  {" "}
+                  {/* Reduced font size */}
                   <li>Review data collection process for potential biases.</li>
                   <li>Consider re-sampling or re-weighting training data for {group}.</li>
                   <li>Explore fairness-aware machine learning algorithms.</li>

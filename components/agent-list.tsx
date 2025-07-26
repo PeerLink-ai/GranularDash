@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
@@ -9,6 +9,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { MoreHorizontal } from "lucide-react"
 import { EditAgentModal } from "./edit-agent-modal" // Import the new modal
 import { ConnectAgentModal } from "@/components/connect-agent-modal"
+import { ViewAgentModal } from "@/components/view-agent-modal"
 
 const initialAgents = [
   {
@@ -40,6 +41,7 @@ const initialAgents = [
 export function AgentList({ isConnectModalOpen, onOpenChange }) {
   const [agents, setAgents] = useState(initialAgents)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false)
   const [selectedAgent, setSelectedAgent] = useState(null)
   const [connectedExternalAgents, setConnectedExternalAgents] = useState([
     {
@@ -58,6 +60,41 @@ export function AgentList({ isConnectModalOpen, onOpenChange }) {
     },
   ])
 
+  // Load agents from localStorage on mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const storedInternal = localStorage.getItem("gd_internal_agents")
+      const storedExternal = localStorage.getItem("gd_external_agents")
+      if (storedInternal) {
+        try {
+          setAgents(JSON.parse(storedInternal))
+        } catch {
+          // ignore parse errors
+        }
+      }
+      if (storedExternal) {
+        try {
+          setConnectedExternalAgents(JSON.parse(storedExternal))
+        } catch {
+          // ignore
+        }
+      }
+    }
+  }, [])
+
+  // Persist agent lists whenever they change
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("gd_internal_agents", JSON.stringify(agents))
+    }
+  }, [agents])
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("gd_external_agents", JSON.stringify(connectedExternalAgents))
+    }
+  }, [connectedExternalAgents])
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "Active":
@@ -72,6 +109,11 @@ export function AgentList({ isConnectModalOpen, onOpenChange }) {
   const handleEditClick = (agent) => {
     setSelectedAgent(agent)
     setIsEditModalOpen(true)
+  }
+
+  const handleViewClick = (agent) => {
+    setSelectedAgent(agent)
+    setIsViewModalOpen(true)
   }
 
   const handleSaveAgent = (updatedAgent) => {
@@ -151,9 +193,9 @@ export function AgentList({ isConnectModalOpen, onOpenChange }) {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleViewClick(agent)}>View Details</DropdownMenuItem>
                           <DropdownMenuItem onClick={() => handleEditClick(agent)}>Edit</DropdownMenuItem>
                           <DropdownMenuItem onClick={() => handleDeleteAgent(agent.id)}>Delete</DropdownMenuItem>
-                          {/* Add more actions here if needed */}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -174,7 +216,16 @@ export function AgentList({ isConnectModalOpen, onOpenChange }) {
         />
       )}
 
+      {selectedAgent && (
+        <ViewAgentModal
+          isOpen={isViewModalOpen}
+          onOpenChange={setIsViewModalOpen}
+          agent={selectedAgent}
+        />
+      )}
+
       <ConnectAgentModal isOpen={isConnectModalOpen} onOpenChange={onOpenChange} onConnectAgent={handleConnectAgent} />
     </>
   )
 }
+

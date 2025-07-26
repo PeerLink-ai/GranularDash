@@ -1,52 +1,53 @@
 "use client"
 
+import { useState } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { DateRangePicker } from "@/components/date-range-picker"
 import { OverviewTab } from "@/components/analytics/overview-tab"
 import { AnalyticsTab } from "@/components/analytics/analytics-tab"
-import { ReportsTab } from "@/components/analytics/reports-tab"
 import { NotificationsTab } from "@/components/analytics/notifications-tab"
-import { Button } from "@/components/ui/button"
-import { Download } from "lucide-react"
+import { ReportsTab } from "@/components/analytics/reports-tab"
+import { DriftDetectionTab } from "@/components/analytics/drift-detection-tab" // Import the new tab
+import { FairnessBiasTab } from "@/components/analytics/fairness-bias-tab" // Import the new tab
 
 export default function AnalyticsPage() {
-  const handleExportData = () => {
-    // Implement export functionality here
-    console.log("Exporting data...")
-  }
+  const [activeTab, setActiveTab] = useState("overview")
 
   return (
-    <div className="flex-1 space-y-4 p-8 pt-6">
-      <div className="flex items-center justify-between space-y-2">
-        <h2 className="text-3xl font-bold tracking-tight">Analytics</h2>
-        <div className="flex items-center space-x-2">
-          <DateRangePicker />
-          <Button onClick={handleExportData} className="flex items-center gap-2">
-            <Download className="h-4 w-4" />
-            Export Data
-          </Button>
+    <div className="flex flex-col w-full min-h-screen">
+      <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-10">
+        <div className="grid gap-4">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="grid w-full grid-cols-6">
+              {" "}
+              {/* Adjusted grid-cols to accommodate new tabs */}
+              <TabsTrigger value="overview">Overview</TabsTrigger>
+              <TabsTrigger value="analytics">Analytics</TabsTrigger>
+              <TabsTrigger value="notifications">Notifications</TabsTrigger>
+              <TabsTrigger value="reports">Reports</TabsTrigger>
+              <TabsTrigger value="drift-detection">Drift Detection</TabsTrigger> {/* New Tab */}
+              <TabsTrigger value="fairness-bias">Fairness & Bias</TabsTrigger> {/* New Tab */}
+            </TabsList>
+            <TabsContent value="overview">
+              <OverviewTab />
+            </TabsContent>
+            <TabsContent value="analytics">
+              <AnalyticsTab />
+            </TabsContent>
+            <TabsContent value="notifications">
+              <NotificationsTab />
+            </TabsContent>
+            <TabsContent value="reports">
+              <ReportsTab />
+            </TabsContent>
+            <TabsContent value="drift-detection">
+              <DriftDetectionTab /> {/* Render the new tab component */}
+            </TabsContent>
+            <TabsContent value="fairness-bias">
+              <FairnessBiasTab /> {/* Render the new tab component */}
+            </TabsContent>
+          </Tabs>
         </div>
-      </div>
-      <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="analytics">Analytics</TabsTrigger>
-          <TabsTrigger value="reports">Reports</TabsTrigger>
-          <TabsTrigger value="notifications">Notifications</TabsTrigger>
-        </TabsList>
-        <TabsContent value="overview" className="space-y-4">
-          <OverviewTab />
-        </TabsContent>
-        <TabsContent value="analytics" className="space-y-4">
-          <AnalyticsTab />
-        </TabsContent>
-        <TabsContent value="reports" className="space-y-4">
-          <ReportsTab />
-        </TabsContent>
-        <TabsContent value="notifications" className="space-y-4">
-          <NotificationsTab />
-        </TabsContent>
-      </Tabs>
+      </main>
     </div>
   )
 }

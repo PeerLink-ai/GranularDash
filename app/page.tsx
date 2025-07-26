@@ -1,6 +1,6 @@
 import { SystemHealthOverview } from "@/components/system-health-overview"
 import { RecentAgentActivities } from "@/components/recent-agent-activities"
-import { PolicyViolations } from "@/components/policy-violations" // Corrected import
+import { PolicyViolations } from "@/components/policy-violations"
 import { KeyGovernanceMetrics } from "@/components/key-governance-metrics"
 import { AnomalyTrendChart } from "@/components/anomaly-trend-chart"
 import { AgentResourceUsage } from "@/components/agent-resource-usage"
@@ -20,7 +20,7 @@ export default function Dashboard() {
           <RecentAgentActivities />
         </div>
         <div className="lg:col-span-1">
-          <PolicyViolations /> {/* Using the corrected component name */}
+          <PolicyViolations />
         </div>
       </div>
 

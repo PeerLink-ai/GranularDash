@@ -1,156 +1,123 @@
 "use client"
 
 import { useState } from "react"
-import { AlertTriangle, Info, XCircle } from "lucide-react"
-
-import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { ViolationDetailsModal } from "@/components/violation-details-modal"
+import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Badge } from "@/components/ui/badge"
 
-type Violation = {
-  id: string
-  policyName: string
-  agentId: string
-  severity: "High" | "Medium" | "Low"
-  status: "Open" | "Resolved" | "Acknowledged"
-  timestamp: string
-  description: string
-  actionTaken?: string
-}
-
-const initialViolations: Violation[] = [
+const policyViolations = [
   {
-    id: "PV001",
-    policyName: "Data Exfiltration Prevention",
-    agentId: "Agent-001",
+    id: "pv001",
+    agent: "Agent Alpha",
+    policy: "Data Handling Policy",
     severity: "High",
-    status: "Open",
-    timestamp: "2024-07-24 10:30 AM",
-    description: "Attempted unauthorized data transfer to external server.",
-    actionTaken: "Blocked transfer, alerted security team.",
+    date: "2023-10-26",
+    description: "Unauthorized access attempt to sensitive customer data.",
   },
   {
-    id: "PV002",
-    policyName: "Sensitive Data Access Control",
-    agentId: "Agent-005",
+    id: "pv002",
+    agent: "Agent Beta",
+    policy: "Bias Mitigation Policy",
     severity: "Medium",
-    status: "Acknowledged",
-    timestamp: "2024-07-23 03:15 PM",
-    description: "User accessed sensitive customer data without proper authorization.",
-    actionTaken: "Revoked access, initiated internal investigation.",
+    date: "2023-10-25",
+    description: "Detected potential bias in loan application scoring.",
   },
   {
-    id: "PV003",
-    policyName: "Software Installation Policy",
-    agentId: "Agent-010",
+    id: "pv003",
+    agent: "Agent Gamma",
+    policy: "Compliance Reporting Policy",
     severity: "Low",
-    status: "Resolved",
-    timestamp: "2024-07-22 09:00 AM",
-    description: "Unauthorized software installation detected.",
-    actionTaken: "Uninstalled software, user re-educated on policy.",
-  },
-  {
-    id: "PV004",
-    policyName: "Network Segmentation Compliance",
-    agentId: "Agent-003",
-    severity: "High",
-    status: "Open",
-    timestamp: "2024-07-21 11:45 AM",
-    description: "Agent attempted to bridge segmented networks.",
-    actionTaken: "Isolated agent, reviewing network configuration.",
-  },
-  {
-    id: "PV005",
-    policyName: "Password Policy Enforcement",
-    agentId: "Agent-007",
-    severity: "Medium",
-    status: "Open",
-    timestamp: "2024-07-20 02:00 PM",
-    description: "Weak password detected for a critical system account.",
-    actionTaken: "Forced password reset, notified user.",
+    date: "2023-10-24",
+    description: "Delayed submission of daily activity log.",
   },
 ]
 
 export function PolicyViolations() {
-  // Corrected export name
-  const [selectedViolation, setSelectedViolation] = useState<Violation | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
 
-  const handleRowClick = (violation: Violation) => {
-    setSelectedViolation(violation)
-    setIsModalOpen(true)
-  }
-
-  const getSeverityIcon = (severity: Violation["severity"]) => {
+  const getSeverityColor = (severity: string) => {
     switch (severity) {
       case "High":
-        return <XCircle className="h-4 w-4 text-red-500" />
+        return "bg-red-500 text-white"
       case "Medium":
-        return <AlertTriangle className="h-4 w-4 text-yellow-500" />
+        return "bg-yellow-500 text-black"
       case "Low":
-        return <Info className="h-4 w-4 text-blue-500" />
+        return "bg-green-500 text-white"
       default:
-        return null
-    }
-  }
-
-  const getStatusBadgeVariant = (status: Violation["status"]) => {
-    switch (status) {
-      case "Open":
-        return "destructive"
-      case "Resolved":
-        return "default"
-      case "Acknowledged":
-        return "secondary"
-      default:
-        return "outline"
+        return "bg-gray-200 text-black"
     }
   }
 
   return (
-    <Card className="col-span-full lg:col-span-2">
-      <CardHeader>
-        <CardTitle>Recent Policy Violations</CardTitle>
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-md font-medium">Policy Violations</CardTitle>
+        <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+          <DialogTrigger asChild>
+            <Button variant="outline" size="sm">
+              View All
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[800px]">
+            <DialogHeader>
+              <DialogTitle>All Policy Violations</DialogTitle>
+              <DialogDescription>A comprehensive list of all detected policy violations.</DialogDescription>
+            </DialogHeader>
+            <div className="overflow-auto max-h-[60vh]">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Agent</TableHead>
+                    <TableHead>Policy</TableHead>
+                    <TableHead>Severity</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Description</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {policyViolations.map((violation) => (
+                    <TableRow key={violation.id}>
+                      <TableCell className="font-medium">{violation.agent}</TableCell>
+                      <TableCell>{violation.policy}</TableCell>
+                      <TableCell>
+                        <Badge className={getSeverityColor(violation.severity)}>{violation.severity}</Badge>
+                      </TableCell>
+                      <TableCell>{violation.date}</TableCell>
+                      <TableCell className="text-muted-foreground">{violation.description}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <DialogFooter>
+              <Button onClick={() => setIsModalOpen(false)}>Close</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </CardHeader>
       <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Policy Name</TableHead>
-              <TableHead>Agent ID</TableHead>
-              <TableHead>Severity</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Timestamp</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {initialViolations.map((violation) => (
-              <TableRow
-                key={violation.id}
-                onClick={() => handleRowClick(violation)}
-                className="cursor-pointer hover:bg-muted/50"
-              >
-                <TableCell className="font-medium">{violation.policyName}</TableCell>
-                <TableCell>{violation.agentId}</TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    {getSeverityIcon(violation.severity)}
-                    {violation.severity}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <Badge variant={getStatusBadgeVariant(violation.status)}>{violation.status}</Badge>
-                </TableCell>
-                <TableCell className="text-muted-foreground">{violation.timestamp}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+        <div className="space-y-4">
+          {policyViolations.map((violation) => (
+            <div key={violation.id} className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">{violation.agent}</p>
+                <p className="text-xs text-muted-foreground">{violation.policy}</p>
+              </div>
+              <Badge className={getSeverityColor(violation.severity)}>{violation.severity}</Badge>
+            </div>
+          ))}
+        </div>
       </CardContent>
-      {selectedViolation && (
-        <ViolationDetailsModal isOpen={isModalOpen} onOpenChange={setIsModalOpen} violation={selectedViolation} />
-      )}
     </Card>
   )
 }

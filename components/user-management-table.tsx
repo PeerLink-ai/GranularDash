@@ -53,6 +53,14 @@ const initialUsers = [
     status: "Active",
     lastLogin: "2023-07-25",
   },
+  {
+    id: "U005",
+    name: "Eve Adams",
+    email: "eve.a@example.com",
+    role: "Viewer",
+    status: "Pending Verification",
+    lastLogin: "N/A",
+  },
 ]
 
 export function UserManagementTable() {
@@ -77,11 +85,20 @@ export function UserManagementTable() {
         return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
       case "Pending":
         return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
+      case "Pending Verification":
+        return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
       case "Suspended":
         return "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
       default:
         return "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
     }
+  }
+
+  const sendVerificationEmail = (email: string) => {
+    // This is a placeholder for actual email sending logic.
+    // In a real application, you would call an API endpoint here.
+    console.log(`Simulating sending verification email to: ${email}`)
+    // You might integrate with a service like SendGrid, Mailgun, or a Vercel Serverless Function
   }
 
   const handleEditClick = (user) => {
@@ -101,7 +118,7 @@ export function UserManagementTable() {
         name: "",
         email: "",
         role: "Viewer", // Default role
-        status: "Active", // Default status
+        status: "Pending Verification", // Default status for new users
       })
     }
     setIsEditModalOpen(true)
@@ -116,9 +133,11 @@ export function UserManagementTable() {
       const newUser = {
         ...editFormData,
         id: `U${Date.now()}`, // Simple unique ID generation
-        lastLogin: new Date().toISOString().split("T")[0], // Current date for last login
+        lastLogin: "N/A", // New users haven't logged in yet
+        status: "Pending Verification", // Explicitly set for new users
       }
       setUsers([...users, newUser])
+      sendVerificationEmail(newUser.email) // Simulate sending verification email
     }
     setIsEditModalOpen(false)
     setSelectedUser(null) // Clear selected user after save
@@ -207,7 +226,9 @@ export function UserManagementTable() {
           <DialogHeader>
             <DialogTitle>{selectedUser ? "Edit User" : "Add New User"}</DialogTitle>
             <DialogDescription>
-              {selectedUser ? "Make changes to the user's profile and role." : "Enter details for the new user."}
+              {selectedUser
+                ? "Make changes to the user's profile and role."
+                : "Enter details for the new user. A verification email will be sent to the provided address."}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -220,6 +241,7 @@ export function UserManagementTable() {
                 value={editFormData.name}
                 onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
                 className="col-span-3"
+                required
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
@@ -232,6 +254,9 @@ export function UserManagementTable() {
                 value={editFormData.email}
                 onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
                 className="col-span-3"
+                required
+                pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$"
+                title="Please enter a valid email address"
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
@@ -259,6 +284,7 @@ export function UserManagementTable() {
               <Select
                 value={editFormData.status}
                 onValueChange={(value) => setEditFormData({ ...editFormData, status: value })}
+                disabled={!selectedUser} // Disable status change for new users (always Pending Verification)
               >
                 <SelectTrigger className="col-span-3">
                   <SelectValue placeholder="Select status" />
@@ -267,6 +293,7 @@ export function UserManagementTable() {
                   <SelectItem value="Active">Active</SelectItem>
                   <SelectItem value="Inactive">Inactive</SelectItem>
                   <SelectItem value="Suspended">Suspended</SelectItem>
+                  <SelectItem value="Pending Verification">Pending Verification</SelectItem>
                 </SelectContent>
               </Select>
             </div>

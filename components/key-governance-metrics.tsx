@@ -1,95 +1,142 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { ShieldCheck, AlertTriangle, FileText, ArrowRight } from "lucide-react"
+"use client"
 
-const governanceMetrics = [
+import { useState } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { ArrowUpRight, ArrowDownRight } from "lucide-react"
+
+const metrics = [
   {
-    id: 1,
-    title: "Policy Adherence Rate",
-    subtitle: "Overall compliance with defined policies",
-    icon: ShieldCheck,
-    status: "On Track",
-    progress: 95,
-    target: 100,
-    current: 95,
-    unit: "%",
+    id: "policy-compliance",
+    name: "Policy Compliance Rate",
+    value: "98.5%",
+    change: "+0.2%",
+    trend: "up",
+    description: "Percentage of AI models and agents adhering to defined policies.",
   },
   {
-    id: 2,
-    title: "Anomaly Detection Rate",
-    subtitle: "Effectiveness of anomaly identification",
-    icon: AlertTriangle,
-    status: "Improving",
-    progress: 88,
-    target: 90,
-    current: 88,
-    unit: "%",
+    id: "risk-exposure",
+    name: "Overall Risk Exposure",
+    value: "Medium",
+    change: "-5%",
+    trend: "down",
+    description: "Aggregated risk level across all AI systems.",
   },
   {
-    id: 3,
-    title: "Audit Readiness Score",
-    subtitle: "Preparedness for regulatory audits",
-    icon: FileText,
-    status: "Excellent",
-    progress: 92,
-    target: 95,
-    current: 92,
-    unit: "%",
+    id: "audit-readiness",
+    name: "Audit Readiness Score",
+    value: "85/100",
+    change: "+3",
+    trend: "up",
+    description: "Score indicating preparedness for regulatory and internal audits.",
+  },
+  {
+    id: "incident-response-time",
+    name: "Avg. Incident Response Time",
+    value: "2.5 hrs",
+    change: "-0.5 hrs",
+    trend: "down",
+    description: "Average time taken to resolve AI-related incidents.",
+  },
+  {
+    id: "data-privacy-score",
+    name: "Data Privacy Compliance",
+    value: "92%",
+    change: "+1%",
+    trend: "up",
+    description: "Compliance rate with data privacy regulations (e.g., GDPR, CCPA).",
+  },
+  {
+    id: "model-transparency",
+    name: "Model Transparency Index",
+    value: "7.8/10",
+    change: "+0.1",
+    trend: "up",
+    description: "Measure of interpretability and explainability of AI models.",
   },
 ]
 
-const statusColors = {
-  "On Track": "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-  Improving: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
-  Excellent: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
-  Behind: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
-}
-
 export function KeyGovernanceMetrics() {
+  const [isModalOpen, setIsModalOpen] = useState(false)
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Key Governance Metrics</h2>
-        <Button variant="outline" size="sm">
-          View Details <ArrowRight className="ml-2 h-4 w-4" />
-        </Button>
-      </div>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {governanceMetrics.map((metric) => (
-          <Card key={metric.id}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">{metric.title}</CardTitle>
-              <metric.icon className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <p className="text-xs text-muted-foreground">{metric.subtitle}</p>
-              <div className="mt-2 space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <span className={`px-2 py-1 rounded-full ${statusColors[metric.status]}`}>{metric.status}</span>
-                  <span className="text-muted-foreground">
-                    {metric.current}
-                    {metric.unit} / {metric.target}
-                    {metric.unit}
-                  </span>
-                </div>
-                <div className="w-full bg-secondary rounded-full h-1.5">
-                  <div
-                    className="bg-primary h-1.5 rounded-full"
-                    style={{ width: `${Math.min(metric.progress, 100)}%` }}
-                  />
-                </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="font-medium">
-                    {metric.current}
-                    {metric.unit}
-                  </span>
-                  <span className="text-muted-foreground">{metric.progress}% complete</span>
-                </div>
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-md font-medium">Key Governance Metrics</CardTitle>
+        <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+          <DialogTrigger asChild>
+            <Button variant="outline" size="sm">
+              View All
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[800px]">
+            <DialogHeader>
+              <DialogTitle>All Key Governance Metrics</DialogTitle>
+              <DialogDescription>A comprehensive overview of all AI governance metrics.</DialogDescription>
+            </DialogHeader>
+            <div className="overflow-auto max-h-[60vh]">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Metric</TableHead>
+                    <TableHead>Value</TableHead>
+                    <TableHead>Change</TableHead>
+                    <TableHead>Description</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {metrics.map((metric) => (
+                    <TableRow key={metric.id}>
+                      <TableCell className="font-medium">{metric.name}</TableCell>
+                      <TableCell>{metric.value}</TableCell>
+                      <TableCell
+                        className={`flex items-center gap-1 ${metric.trend === "up" ? "text-green-500" : "text-red-500"}`}
+                      >
+                        {metric.trend === "up" ? (
+                          <ArrowUpRight className="h-4 w-4" />
+                        ) : (
+                          <ArrowDownRight className="h-4 w-4" />
+                        )}
+                        {metric.change}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{metric.description}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <DialogFooter>
+              <Button onClick={() => setIsModalOpen(false)}>Close</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {metrics.slice(0, 3).map((metric) => (
+            <div key={metric.id} className="flex flex-col items-start rounded-lg border p-4">
+              <div className="text-sm font-medium text-muted-foreground">{metric.name}</div>
+              <div className="mt-1 text-2xl font-bold">{metric.value}</div>
+              <div
+                className={`flex items-center gap-1 text-sm ${metric.trend === "up" ? "text-green-500" : "text-red-500"}`}
+              >
+                {metric.trend === "up" ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
+                {metric.change}
               </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    </div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   )
 }

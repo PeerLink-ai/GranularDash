@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { PolicyList } from "@/components/policy-list" // Assuming PolicyList exists and is correct
+import { PolicyList } from "@/components/policy-list"
 
 export default function PoliciesRulesPage() {
   return (

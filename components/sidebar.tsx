@@ -19,6 +19,7 @@ import {
   Key,
   MessageSquare,
   Video,
+  GitFork,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -29,6 +30,7 @@ const navigation = [
   { name: "Behavioral Analytics", href: "/analytics", icon: BarChart2 },
   { name: "Agent Management", href: "/agent-management", icon: Building2 },
   { name: "Policies & Rules", href: "/policies-rules", icon: Folder },
+  { name: "Data & Model Lineage", href: "/data-model-lineage", icon: GitFork }, // New navigation item
   { name: "Audit Logs", href: "/audit-logs", icon: FileText },
   { name: "Compliance Reports", href: "/compliance-reports", icon: Receipt },
   { name: "Risk Management", href: "/risk-management", icon: Shield },

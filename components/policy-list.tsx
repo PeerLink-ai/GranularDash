@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { MoreHorizontal } from "lucide-react"
+import { MoreHorizontal, PlusCircle } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -58,8 +58,15 @@ export function PolicyList() {
   const [policies, setPolicies] = useState(initialPolicies)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isViewModalOpen, setIsViewModalOpen] = useState(false)
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [selectedPolicy, setSelectedPolicy] = useState(null)
   const [editFormData, setEditFormData] = useState({ id: "", name: "", category: "", version: "", description: "" })
+  const [addFormData, setAddFormData] = useState({
+    name: "",
+    category: "",
+    version: "",
+    description: "",
+  })
 
   const handleEditClick = (policy) => {
     setSelectedPolicy(policy)
@@ -91,10 +98,26 @@ export function PolicyList() {
     setPolicies(policies.filter((p) => p.id !== policyId))
   }
 
+  const handleAddPolicy = () => {
+    const newPolicyId = `P${String(policies.length + 1).padStart(3, "0")}`
+    const newPolicy = {
+      id: newPolicyId,
+      ...addFormData,
+      lastUpdated: new Date().toISOString().split("T")[0],
+    }
+    setPolicies([...policies, newPolicy])
+    setAddFormData({ name: "", category: "", version: "", description: "" })
+    setIsAddModalOpen(false)
+  }
+
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Policy List</CardTitle>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-2xl font-bold">Policy List</CardTitle>
+        <Button size="sm" onClick={() => setIsAddModalOpen(true)}>
+          <PlusCircle className="mr-2 h-4 w-4" />
+          Add Policy
+        </Button>
       </CardHeader>
       <CardContent>
         <Table>
@@ -136,6 +159,67 @@ export function PolicyList() {
           </TableBody>
         </Table>
       </CardContent>
+
+      {/* Add Policy Modal */}
+      <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Add New Policy</DialogTitle>
+            <DialogDescription>Enter the details for the new policy.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="add-name" className="text-right">
+                Name
+              </Label>
+              <Input
+                id="add-name"
+                value={addFormData.name}
+                onChange={(e) => setAddFormData({ ...addFormData, name: e.target.value })}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="add-category" className="text-right">
+                Category
+              </Label>
+              <Input
+                id="add-category"
+                value={addFormData.category}
+                onChange={(e) => setAddFormData({ ...addFormData, category: e.target.value })}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="add-version" className="text-right">
+                Version
+              </Label>
+              <Input
+                id="add-version"
+                value={addFormData.version}
+                onChange={(e) => setAddFormData({ ...addFormData, version: e.target.value })}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-start gap-4">
+              <Label htmlFor="add-description" className="text-right">
+                Description
+              </Label>
+              <Textarea
+                id="add-description"
+                value={addFormData.description}
+                onChange={(e) => setAddFormData({ ...addFormData, description: e.target.value })}
+                className="col-span-3"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="submit" onClick={handleAddPolicy}>
+              Create Policy
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Policy Modal */}
       <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>

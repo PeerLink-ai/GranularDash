@@ -1,6 +1,9 @@
+"use client"
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { AlertCircle, CheckCircle } from "lucide-react"
+import { useRouter } from "next/navigation" // Import useRouter
 
 const agentActivities = [
   {
@@ -46,6 +49,8 @@ const agentActivities = [
 ]
 
 export function RecentAgentActivities() {
+  const router = useRouter() // Initialize useRouter
+
   return (
     <Card>
       <CardHeader>
@@ -82,7 +87,7 @@ export function RecentAgentActivities() {
             </div>
           ))}
         </div>
-        <Button className="w-full mt-4 bg-transparent" variant="outline">
+        <Button className="w-full mt-4 bg-transparent" variant="outline" onClick={() => router.push("/audit-logs")}>
           View All Activities
         </Button>
       </CardContent>

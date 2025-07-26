@@ -1,6 +1,9 @@
+"use client"
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { ArrowUpRight, ArrowDownRight } from "lucide-react"
+import { useRouter } from "next/navigation" // Import useRouter
 
 const transactions = [
   { id: 1, name: "Amazon.com", amount: -129.99, date: "2023-07-15", type: "expense" },
@@ -11,6 +14,8 @@ const transactions = [
 ]
 
 export function RecentTransactions() {
+  const router = useRouter() // Initialize useRouter
+
   return (
     <Card>
       <CardHeader>
@@ -43,7 +48,7 @@ export function RecentTransactions() {
             </div>
           ))}
         </div>
-        <Button className="w-full mt-4" variant="outline">
+        <Button className="w-full mt-4 bg-transparent" variant="outline" onClick={() => router.push("/transactions")}>
           View All Transactions
         </Button>
       </CardContent>

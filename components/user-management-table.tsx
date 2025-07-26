@@ -86,19 +86,43 @@ export function UserManagementTable() {
 
   const handleEditClick = (user) => {
     setSelectedUser(user)
-    setEditFormData({
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      status: user.status,
-    })
+    if (user) {
+      setEditFormData({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        status: user.status,
+      })
+    } else {
+      // For adding a new user, initialize with empty values and default role/status
+      setEditFormData({
+        id: "",
+        name: "",
+        email: "",
+        role: "Viewer", // Default role
+        status: "Active", // Default status
+      })
+    }
     setIsEditModalOpen(true)
   }
 
   const handleSaveUser = () => {
-    setUsers(users.map((u) => (u.id === editFormData.id ? { ...u, ...editFormData } : u)))
+    if (selectedUser) {
+      // Editing existing user
+      setUsers(users.map((u) => (u.id === editFormData.id ? { ...u, ...editFormData } : u)))
+    } else {
+      // Adding new user
+      const newUser = {
+        ...editFormData,
+        id: `U${Date.now()}`, // Simple unique ID generation
+        lastLogin: new Date().toISOString().split("T")[0], // Current date for last login
+      }
+      setUsers([...users, newUser])
+    }
     setIsEditModalOpen(false)
+    setSelectedUser(null) // Clear selected user after save
+    setEditFormData({ id: "", name: "", email: "", role: "", status: "" }) // Reset form data
   }
 
   const handleDeleteUser = (userId) => {

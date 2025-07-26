@@ -1,6 +1,9 @@
+"use client"
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Calendar, PiggyBank, TrendingUp, CreditCard, ArrowRight } from "lucide-react"
+import { useRouter } from "next/navigation" // Import useRouter
 
 const events = [
   {
@@ -42,11 +45,13 @@ const statusColors = {
 }
 
 export function UpcomingEvents() {
+  const router = useRouter() // Initialize useRouter
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Upcoming Events</h2>
-        <Button variant="outline" size="sm">
+        <Button variant="outline" size="sm" onClick={() => router.push("/financial-goals")}>
           View All <ArrowRight className="ml-2 h-4 w-4" />
         </Button>
       </div>

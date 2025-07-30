@@ -1,0 +1,24 @@
+[
+  {
+    "agentId": "chatgpt-001",
+    "agentName": "ChatGPT Assistant",
+    "agentApiUrl": "https://api.openai.com/v1/chat/completions",
+    "agentApiKey": "***",
+    "agentType": "openai",
+    "status": "inactive",
+    "createdAt": "2025-07-30T00:00:30.885Z",
+    "lastConnected": null,
+    "connectionStatus": "Failed"
+  },
+  {
+    "agentId": "demo-agent",
+    "agentName": "Demo Agent",
+    "agentApiUrl": "https://api.example.com/v1/agent",
+    "agentApiKey": "***",
+    "agentType": "custom",
+    "status": "inactive",
+    "createdAt": "2025-07-30T06:54:56.099Z",
+    "lastConnected": null,
+    "connectionStatus": "Failed"
+  }
+]

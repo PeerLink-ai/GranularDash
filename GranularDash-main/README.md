@@ -6,7 +6,7 @@ This repository is a Next.js 13 (App Router) frontend for an AI compliance and g
 
 ## Project Structure
 
-````
+\`\`\``
 /app                 # Top‑level route segments (pages)
   ├─ agent-management    # Governance workflows & approval queues
   ├─ analytics           # Drift detection & performance insights
@@ -84,15 +84,15 @@ This repository is a Next.js 13 (App Router) frontend for an AI compliance and g
 ## Getting Started
 
 1. Install dependencies:
-   ```bash
+   \`\`\`bash
    npm install
-````
+\`\`\``
 
 2. Run the development server:
 
-   ```bash
+   \`\`\`bash
    npm run dev
-   ```
+   \`\`\`
 3. Open `http://localhost:3000` in your browser.
 
 ## Customization & Theming

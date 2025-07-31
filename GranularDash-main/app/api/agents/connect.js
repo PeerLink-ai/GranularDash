@@ -35,4 +35,4 @@ export default async function handler(req, res) {
   fs.writeFileSync(logFile, JSON.stringify(logs, null, 2));
 
   return res.status(200).json({ success: true, status, logEntry });
-} 
+}

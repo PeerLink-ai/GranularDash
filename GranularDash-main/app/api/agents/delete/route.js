@@ -74,4 +74,4 @@ export async function DELETE(request) {
     status: 200,
     headers: { 'Content-Type': 'application/json' }
   });
-} 
+}

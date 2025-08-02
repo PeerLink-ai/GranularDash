@@ -1,48 +1,23 @@
-import { SystemHealthOverview } from "@/components/system-health-overview"
-import { RecentAgentActivities } from "@/components/recent-agent-activities"
-import { PolicyViolations } from "@/components/policy-violations"
-import { KeyGovernanceMetrics } from "@/components/key-governance-metrics"
-import { AnomalyTrendChart } from "@/components/anomaly-trend-chart"
-import { AgentResourceUsage } from "@/components/agent-resource-usage"
-import { AuditReadiness } from "@/components/audit-readiness"
-import { ScheduledAudits } from "@/components/scheduled-audits"
+"use client"
 
-export default function Dashboard() {
-  return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold tracking-tight">AI Governance Dashboard</h1>
+import { useAuth } from "@/contexts/auth-context"
+import { SignInForm } from "@/components/sign-in-form"
+import { DashboardOverview } from "@/components/dashboard-overview"
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        <div className="lg:col-span-1">
-          <SystemHealthOverview />
-        </div>
-        <div className="lg:col-span-1">
-          <RecentAgentActivities />
-        </div>
-        <div className="lg:col-span-1">
-          <PolicyViolations />
-        </div>
+export default function HomePage() {
+  const { user, isLoading } = useAuth()
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
+    )
+  }
 
-      <KeyGovernanceMetrics />
+  if (!user) {
+    return <SignInForm />
+  }
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <AnomalyTrendChart />
-        </div>
-        <div className="lg:col-span-1">
-          <AgentResourceUsage />
-        </div>
-      </div>
-
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        <div className="lg:col-span-1">
-          <AuditReadiness />
-        </div>
-        <div className="lg:col-span-2">
-          <ScheduledAudits />
-        </div>
-      </div>
-    </div>
-  )
+  return <DashboardOverview />
 }

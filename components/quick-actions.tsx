@@ -1,59 +1,141 @@
 "use client"
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useAuth } from "@/contexts/auth-context"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { PlusCircle, SendHorizontal, CreditCard } from "lucide-react"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-
-function ActionDialog({ title, description, actionText }: { title: string; description: string; actionText: string }) {
-  return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button variant="outline" className="w-full justify-start">
-          {title === "Add Funds" && <PlusCircle className="mr-2 h-4 w-4" />}
-          {title === "Send Money" && <SendHorizontal className="mr-2 h-4 w-4" />}
-          {title === "Top Up" && <CreditCard className="mr-2 h-4 w-4" />}
-          {title}
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-4 py-4">
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="amount" className="text-right">
-              Amount
-            </Label>
-            <Input id="amount" type="number" placeholder="Enter amount" className="col-span-3" />
-          </div>
-        </div>
-        <Button type="submit">{actionText}</Button>
-      </DialogContent>
-    </Dialog>
-  )
-}
+import { Bot, BarChart3, Shield, Users, FileText, TestTube, AlertTriangle } from "lucide-react"
+import Link from "next/link"
 
 export function QuickActions() {
+  const { user } = useAuth()
+
+  if (!user) return null
+
+  const getActionsForRole = () => {
+    const baseActions = [
+      {
+        title: "View Analytics",
+        description: "Check AI performance metrics",
+        icon: BarChart3,
+        href: "/analytics",
+        permission: "view_analytics",
+      },
+    ]
+
+    const roleSpecificActions = {
+      admin: [
+        {
+          title: "Manage Agents",
+          description: "Connect and configure AI agents",
+          icon: Bot,
+          href: "/agent-management",
+          permission: "manage_agents",
+        },
+        {
+          title: "User Management",
+          description: "Manage users and permissions",
+          icon: Users,
+          href: "/users-roles",
+          permission: "manage_users",
+        },
+        {
+          title: "Security Policies",
+          description: "Configure governance rules",
+          icon: Shield,
+          href: "/policies-rules",
+          permission: "manage_policies",
+        },
+        {
+          title: "Audit Logs",
+          description: "Review system activity",
+          icon: FileText,
+          href: "/audit-logs",
+          permission: "view_audit_logs",
+        },
+      ],
+      developer: [
+        {
+          title: "Manage Agents",
+          description: "Connect and test AI agents",
+          icon: Bot,
+          href: "/agent-management",
+          permission: "manage_agents",
+        },
+        {
+          title: "Test Agents",
+          description: "Run agent performance tests",
+          icon: TestTube,
+          href: "/training-simulation",
+          permission: "test_agents",
+        },
+        {
+          title: "Data Lineage",
+          description: "Track model dependencies",
+          icon: FileText,
+          href: "/data-model-lineage",
+          permission: "view_analytics",
+        },
+      ],
+      analyst: [
+        {
+          title: "View Reports",
+          description: "Access compliance reports",
+          icon: FileText,
+          href: "/compliance-reports",
+          permission: "view_reports",
+        },
+        {
+          title: "Risk Analysis",
+          description: "Review risk assessments",
+          icon: AlertTriangle,
+          href: "/risk-management",
+          permission: "view_reports",
+        },
+      ],
+      viewer: [
+        {
+          title: "System Status",
+          description: "Check system health",
+          icon: Shield,
+          href: "/",
+          permission: "view_dashboard",
+        },
+      ],
+    }
+
+    const actions = [...baseActions, ...(roleSpecificActions[user.role] || [])]
+    return actions.filter((action) => user.permissions.includes(action.permission))
+  }
+
+  const availableActions = getActionsForRole()
+
   return (
-    <Card className="border border-border">
+    <Card>
       <CardHeader>
-        <CardTitle className="text-lg font-medium">Quick Actions</CardTitle>
+        <CardTitle>Quick Actions</CardTitle>
+        <CardDescription>Common tasks for your role as {user.role}</CardDescription>
       </CardHeader>
-      <CardContent className="grid gap-4">
-        <ActionDialog title="Add Funds" description="Add funds to your account" actionText="Add Funds" />
-        <ActionDialog title="Send Money" description="Send money to another account" actionText="Send Money" />
-        <ActionDialog title="Top Up" description="Top up your account" actionText="Top Up" />
+      <CardContent>
+        <div className="grid gap-3">
+          {availableActions.map((action) => {
+            const Icon = action.icon
+            return (
+              <Link key={action.title} href={action.href}>
+                <Button variant="outline" className="w-full justify-start h-auto p-4 bg-transparent">
+                  <div className="flex items-center space-x-3">
+                    <div className="p-2 rounded-lg bg-muted">
+                      <Icon className="h-4 w-4" />
+                    </div>
+                    <div className="text-left">
+                      <div className="font-medium">{action.title}</div>
+                      <div className="text-sm text-muted-foreground">{action.description}</div>
+                    </div>
+                  </div>
+                </Button>
+              </Link>
+            )
+          })}
+        </div>
       </CardContent>
     </Card>
   )

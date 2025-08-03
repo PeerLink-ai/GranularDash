@@ -1,226 +1,199 @@
 "use client"
 
 import { useState } from "react"
-import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { useToast } from "@/hooks/use-toast"
-import { Bot, Zap, Code, Brain, Sparkles, CheckCircle, ExternalLink } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Input } from "@/components/ui/input"
+import { Brain, Bot, Zap, Code, Loader2 } from "lucide-react"
+import { useToast } from "@/components/ui/use-toast"
+import { useAuth } from "@/contexts/auth-context"
 
-const integrations = [
-  {
-    id: "openai",
-    name: "OpenAI",
-    description: "Connect GPT-4, GPT-3.5, and other OpenAI models with OAuth",
-    icon: Brain,
-    status: "available",
-    features: ["GPT-4o", "GPT-4", "GPT-3.5-turbo", "DALL-E", "Whisper"],
-    color: "bg-green-500",
-    oauthUrl: "https://platform.openai.com/oauth/authorize",
-  },
-  {
-    id: "anthropic",
-    name: "Anthropic",
-    description: "Connect Claude 3 models with secure OAuth integration",
-    icon: Bot,
-    status: "available",
-    features: ["Claude 3 Opus", "Claude 3 Sonnet", "Claude 3 Haiku"],
-    color: "bg-orange-500",
-    oauthUrl: "https://console.anthropic.com/oauth/authorize",
-  },
-  {
-    id: "replit",
-    name: "Replit",
-    description: "Connect Replit AI agents and code execution environments",
-    icon: Code,
-    status: "available",
-    features: ["Code Generation", "Code Execution", "Replit Agent"],
-    color: "bg-blue-500",
-    oauthUrl: "https://replit.com/oauth/authorize",
-  },
-  {
-    id: "groq",
-    name: "Groq",
-    description: "Ultra-fast inference with Llama and Mixtral models",
-    icon: Zap,
-    status: "available",
-    features: ["Llama 3", "Mixtral 8x7B", "Gemma 7B"],
-    color: "bg-purple-500",
-    oauthUrl: "https://console.groq.com/oauth/authorize",
-  },
-  {
-    id: "google",
-    name: "Google AI",
-    description: "Connect Gemini Pro and other Google AI models",
-    icon: Sparkles,
-    status: "coming-soon",
-    features: ["Gemini Pro", "PaLM 2", "Bard"],
-    color: "bg-yellow-500",
-    oauthUrl: null,
-  },
+interface ConnectAgentModalProps {
+  isOpen: boolean
+  onClose: () => void
+}
+
+const providers = [
+  { name: "OpenAI", icon: Brain, models: ["gpt-4o", "gpt-3.5-turbo"] },
+  { name: "Anthropic", icon: Bot, models: ["claude-3-opus", "claude-3-sonnet"] },
+  { name: "Groq", icon: Zap, models: ["llama3-8b", "llama3-70b"] },
+  { name: "Replit", icon: Code, models: ["replit-code-v1"] },
 ]
 
-export function IntegrationModal({ isOpen, onOpenChange }) {
-  const [connecting, setConnecting] = useState<string | null>(null)
+export function ConnectAgentModal({ isOpen, onClose }: ConnectAgentModalProps) {
+  const { user } = useAuth()
   const { toast } = useToast()
+  const [selectedProvider, setSelectedProvider] = useState("")
+  const [selectedModel, setSelectedModel] = useState("")
+  const [agentName, setAgentName] = useState("")
+  const [isConnecting, setIsConnecting] = useState(false)
 
-  const handleConnect = async (integration) => {
-    if (integration.status === "coming-soon") return
+  const handleConnect = async () => {
+    if (!user) {
+      toast({
+        title: "Authentication Error",
+        description: "You must be signed in to connect an agent.",
+        variant: "destructive",
+      })
+      return
+    }
+    if (!selectedProvider || !selectedModel || !agentName) {
+      toast({
+        title: "Missing Information",
+        description: "Please fill in all fields.",
+        variant: "destructive",
+      })
+      return
+    }
 
-    setConnecting(integration.id)
-
+    setIsConnecting(true)
     try {
-      // Start OAuth flow
-      const response = await fetch(`/api/integrations/${integration.id}/connect`, {
+      // Simulate OAuth connection
+      const oauthResponse = await fetch(`/api/integrations/${selectedProvider.toLowerCase()}/connect`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "X-User-ID": user.id, // Pass user ID for server-side handling
+        },
+        body: JSON.stringify({
+          redirectUri: `${window.location.origin}/api/integrations/${selectedProvider.toLowerCase()}/callback`,
+        }),
+      })
+
+      if (!oauthResponse.ok) {
+        throw new Error("OAuth simulation failed.")
+      }
+
+      const oauthData = await oauthResponse.json()
+      // In a real app, this would redirect to the OAuth provider
+      // For this demo, we directly call the callback route
+      const callbackResponse = await fetch(oauthData.redirectUrl, {
+        method: "GET", // Or POST, depending on OAuth flow
+        headers: {
+          "X-User-ID": user.id,
         },
       })
 
+      if (!callbackResponse.ok) {
+        throw new Error("OAuth callback simulation failed.")
+      }
+
+      // Now, register the agent in our system
+      const response = await fetch("/api/agents", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-User-ID": user.id, // Pass user ID for server-side handling
+        },
+        body: JSON.stringify({
+          name: agentName,
+          provider: selectedProvider,
+          model: selectedModel,
+          endpoint: `https://api.${selectedProvider.toLowerCase()}.com/v1/chat/completions`, // Mock endpoint
+        }),
+      })
+
       if (response.ok) {
-        const { authUrl } = await response.json()
-
-        // Open OAuth popup
-        const popup = window.open(
-          authUrl,
-          "oauth",
-          "width=600,height=700,scrollbars=yes,resizable=yes,left=" +
-            (window.screen.width / 2 - 300) +
-            ",top=" +
-            (window.screen.height / 2 - 350),
-        )
-
-        // Listen for OAuth completion
-        const checkClosed = setInterval(() => {
-          if (popup?.closed) {
-            clearInterval(checkClosed)
-            setConnecting(null)
-
-            // Check if connection was successful
-            setTimeout(() => {
-              toast({
-                title: "Agent Connected!",
-                description: `Successfully connected ${integration.name} agent`,
-              })
-              onOpenChange(false)
-              // Refresh the page to show new agents
-              window.location.reload()
-            }, 500)
-          }
-        }, 1000)
-
-        // Handle popup blocked
-        if (!popup || popup.closed) {
-          throw new Error("Popup blocked")
-        }
+        toast({
+          title: "Agent Connected!",
+          description: `${agentName} from ${selectedProvider} is now connected.`,
+        })
+        onClose()
+        // Trigger a refresh of the agent list in AgentList component
+        window.dispatchEvent(new CustomEvent("agentConnected"))
       } else {
-        throw new Error("Failed to initiate OAuth")
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to connect agent.")
       }
     } catch (error) {
-      console.error("Connection failed:", error)
       toast({
         title: "Connection Failed",
-        description:
-          error.message === "Popup blocked"
-            ? "Please allow popups for this site and try again"
-            : "Failed to connect agent. Please try again.",
+        description: error instanceof Error ? error.message : "An unexpected error occurred.",
         variant: "destructive",
       })
-      setConnecting(null)
+    } finally {
+      setIsConnecting(false)
     }
   }
 
+  const selectedProviderData = providers.find((p) => p.name === selectedProvider)
+
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Connect AI Agents</DialogTitle>
-          <DialogDescription>
-            Choose from our supported AI providers. We'll securely connect using OAuth - no API keys needed!
-          </DialogDescription>
+          <DialogTitle>Connect New AI Agent</DialogTitle>
+          <DialogDescription>Select an AI provider and model to connect to your dashboard.</DialogDescription>
         </DialogHeader>
-
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {integrations.map((integration) => {
-            const Icon = integration.icon
-            const isConnecting = connecting === integration.id
-            const isComingSoon = integration.status === "coming-soon"
-
-            return (
-              <Card key={integration.id} className="relative hover:shadow-md transition-shadow">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <div className={`p-2 rounded-lg ${integration.color} text-white`}>
+        <div className="grid gap-4 py-4">
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="provider" className="text-right">
+              Provider
+            </Label>
+            <Select onValueChange={setSelectedProvider} value={selectedProvider}>
+              <SelectTrigger className="col-span-3">
+                <SelectValue placeholder="Select a provider" />
+              </SelectTrigger>
+              <SelectContent>
+                {providers.map((provider) => {
+                  const Icon = provider.icon
+                  return (
+                    <SelectItem key={provider.name} value={provider.name}>
+                      <div className="flex items-center gap-2">
                         <Icon className="h-4 w-4" />
+                        {provider.name}
                       </div>
-                      <CardTitle className="text-lg">{integration.name}</CardTitle>
-                    </div>
-                    {isComingSoon ? (
-                      <Badge variant="secondary">Coming Soon</Badge>
-                    ) : (
-                      <Badge variant="outline" className="text-green-600 border-green-200">
-                        <CheckCircle className="h-3 w-3 mr-1" />
-                        OAuth Ready
-                      </Badge>
-                    )}
-                  </div>
-                  <CardDescription>{integration.description}</CardDescription>
-                </CardHeader>
-
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium">Available Models:</p>
-                    <div className="flex flex-wrap gap-1">
-                      {integration.features.map((feature) => (
-                        <Badge key={feature} variant="outline" className="text-xs">
-                          {feature}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Button
-                      className="w-full"
-                      onClick={() => handleConnect(integration)}
-                      disabled={isConnecting || isComingSoon}
-                    >
-                      {isConnecting ? (
-                        <>
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                          Connecting...
-                        </>
-                      ) : isComingSoon ? (
-                        "Coming Soon"
-                      ) : (
-                        <>
-                          <ExternalLink className="mr-2 h-4 w-4" />
-                          Connect {integration.name}
-                        </>
-                      )}
-                    </Button>
-
-                    {!isComingSoon && (
-                      <p className="text-xs text-muted-foreground text-center">Secure OAuth - No API keys required</p>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            )
-          })}
+                    </SelectItem>
+                  )
+                })}
+              </SelectContent>
+            </Select>
+          </div>
+          {selectedProvider && (
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="model" className="text-right">
+                Model
+              </Label>
+              <Select onValueChange={setSelectedModel} value={selectedModel}>
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="Select a model" />
+                </SelectTrigger>
+                <SelectContent>
+                  {selectedProviderData?.models.map((model) => (
+                    <SelectItem key={model} value={model}>
+                      {model}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="agent-name" className="text-right">
+              Agent Name
+            </Label>
+            <Input
+              id="agent-name"
+              placeholder="e.g., My Custom GPT"
+              className="col-span-3"
+              value={agentName}
+              onChange={(e) => setAgentName(e.target.value)}
+            />
+          </div>
         </div>
-
-        <div className="mt-6 p-4 bg-muted rounded-lg">
-          <h4 className="font-medium mb-2">How it works:</h4>
-          <ol className="text-sm text-muted-foreground space-y-1">
-            <li>1. Click "Connect" to open the provider's OAuth page</li>
-            <li>2. Sign in to your provider account and authorize Granular</li>
-            <li>3. Your agent will be automatically configured and ready to use</li>
-            <li>4. No API keys to manage - everything is handled securely</li>
-          </ol>
+        <div className="flex justify-end">
+          <Button onClick={handleConnect} disabled={isConnecting}>
+            {isConnecting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Connecting...
+              </>
+            ) : (
+              "Connect Agent"
+            )}
+          </Button>
         </div>
       </DialogContent>
     </Dialog>

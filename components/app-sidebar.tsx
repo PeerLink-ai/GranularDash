@@ -50,6 +50,7 @@ export function AppSidebar() {
       {
         label: "Overview",
         items: [
+          { title: "Home", href: "/", icon: Home, permission: "view_dashboard" }, // Added Home section
           { title: "AI Governance Dashboard", href: "/", icon: Home, permission: "view_dashboard" },
           { title: "Behavioral Analytics", href: "/analytics", icon: BarChart2, permission: "view_analytics" },
         ],

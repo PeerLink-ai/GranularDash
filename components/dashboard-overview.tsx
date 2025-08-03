@@ -8,9 +8,36 @@ import { QuickActions } from "@/components/quick-actions"
 import { RecentActivity } from "@/components/recent-activity"
 import { SystemHealth } from "@/components/system-health"
 import { Bot, Shield, AlertTriangle, CheckCircle } from "lucide-react"
+import { useEffect, useState } from "react"
 
 export function DashboardOverview() {
   const { user } = useAuth()
+  const [connectedAgentsCount, setConnectedAgentsCount] = useState(0)
+
+  useEffect(() => {
+    const fetchAgents = async () => {
+      if (user) {
+        try {
+          const response = await fetch("/api/agents", {
+            headers: {
+              "X-User-ID": user.id,
+            },
+          })
+          if (response.ok) {
+            const data = await response.json()
+            setConnectedAgentsCount(data.agents.length)
+          } else {
+            console.error("Failed to fetch agents:", response.statusText)
+            setConnectedAgentsCount(0)
+          }
+        } catch (error) {
+          console.error("Error fetching agents:", error)
+          setConnectedAgentsCount(0)
+        }
+      }
+    }
+    fetchAgents()
+  }, [user])
 
   if (!user) return null
 
@@ -44,10 +71,10 @@ export function DashboardOverview() {
     }
   }
 
-  const hasConnectedAgents = user.connectedAgents.length > 0
+  const hasConnectedAgents = connectedAgentsCount > 0
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-4 md:p-6">
       {/* Welcome Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -68,7 +95,7 @@ export function DashboardOverview() {
             <Bot className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{user.connectedAgents.length}</div>
+            <div className="text-2xl font-bold">{connectedAgentsCount}</div>
             <p className="text-xs text-muted-foreground">
               {hasConnectedAgents ? "Active and monitored" : "No agents connected"}
             </p>

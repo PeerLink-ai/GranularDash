@@ -1,99 +1,148 @@
 "use client"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Progress } from "@/components/ui/progress"
+import { CheckCircle, AlertTriangle, XCircle, Server, Clock, Zap, Loader2, Bot } from "lucide-react"
+import { useAuth } from "@/contexts/auth-context"
+import { useEffect, useState } from "react"
 import { Badge } from "@/components/ui/badge"
-import { CheckCircle, AlertTriangle, Server, Database, Wifi } from "lucide-react"
 
-const systemMetrics = [
-  {
-    name: "API Gateway",
-    status: "healthy",
-    uptime: 99.9,
-    icon: Server,
-    description: "All endpoints responding normally",
-  },
-  {
-    name: "Database",
-    status: "healthy",
-    uptime: 99.8,
-    icon: Database,
-    description: "Query performance optimal",
-  },
-  {
-    name: "Agent Connections",
-    status: "healthy",
-    uptime: 99.7,
-    icon: Wifi,
-    description: "All agents connected and responsive",
-  },
-]
+interface SystemHealthMetrics {
+  overallStatus: "healthy" | "degraded" | "critical"
+  uptimePercentage: number
+  avgResponseTimeMs: number
+  activeAgents: number
+  lastUpdated: string
+}
 
 export function SystemHealth() {
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "healthy":
-        return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-      case "warning":
-        return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
-      case "error":
-        return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-      default:
-        return "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
+  const { user } = useAuth()
+  const [healthMetrics, setHealthMetrics] = useState<SystemHealthMetrics | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const fetchHealthMetrics = async () => {
+      if (!user) {
+        setIsLoading(false)
+        return
+      }
+      setIsLoading(true)
+      setError(null)
+      try {
+        // Simulate fetching system health metrics
+        // In a real app, this would be an API call to a backend service
+        const mockMetrics: SystemHealthMetrics = {
+          overallStatus: "healthy",
+          uptimePercentage: 99.9,
+          avgResponseTimeMs: 150,
+          activeAgents: 3, // This should ideally come from connected agents count
+          lastUpdated: new Date().toLocaleTimeString(),
+        }
+
+        // Adjust activeAgents based on user's connected agents (simulated)
+        const agentsResponse = await fetch("/api/agents", {
+          headers: {
+            "X-User-ID": user.id,
+          },
+        })
+        if (agentsResponse.ok) {
+          const agentsData = await agentsResponse.json()
+          mockMetrics.activeAgents = agentsData.agents.filter((agent: any) => agent.status === "active").length
+        }
+
+        setHealthMetrics(mockMetrics)
+      } catch (err) {
+        setError("Failed to load system health.")
+        setHealthMetrics(null)
+      } finally {
+        setIsLoading(false)
+      }
     }
-  }
+    fetchHealthMetrics()
+    const interval = setInterval(fetchHealthMetrics, 60000) // Refetch every minute
+    return () => clearInterval(interval)
+  }, [user])
+
+  if (!user) return null
 
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "healthy":
-        return CheckCircle
-      case "warning":
-      case "error":
-        return AlertTriangle
+        return <CheckCircle className="h-5 w-5 text-green-500" />
+      case "degraded":
+        return <AlertTriangle className="h-5 w-5 text-yellow-500" />
+      case "critical":
+        return <XCircle className="h-5 w-5 text-red-500" />
       default:
-        return CheckCircle
+        return <Server className="h-5 w-5 text-muted-foreground" />
     }
   }
-
-  const overallHealth = systemMetrics.every((metric) => metric.status === "healthy") ? "healthy" : "warning"
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center space-x-2">
-          <span>System Health</span>
-          <Badge className={getStatusColor(overallHealth)}>
-            {overallHealth === "healthy" ? "All Systems Operational" : "Some Issues Detected"}
-          </Badge>
-        </CardTitle>
-        <CardDescription>Real-time monitoring of system components</CardDescription>
+        <CardTitle>System Health</CardTitle>
+        <CardDescription>Overall status and performance of your AI governance platform.</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="space-y-4">
-          {systemMetrics.map((metric) => {
-            const Icon = metric.icon
-            const StatusIcon = getStatusIcon(metric.status)
-
-            return (
-              <div key={metric.name} className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <Icon className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-medium">{metric.name}</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <StatusIcon
-                      className={`h-4 w-4 ${metric.status === "healthy" ? "text-green-500" : "text-yellow-500"}`}
-                    />
-                    <span className="text-sm font-medium">{metric.uptime}%</span>
-                  </div>
+        {isLoading ? (
+          <div className="text-center py-8">
+            <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary mb-4" />
+            <p className="text-muted-foreground">Loading system health...</p>
+          </div>
+        ) : error ? (
+          <div className="text-center py-8 text-red-500">
+            <AlertTriangle className="mx-auto h-12 w-12 mb-4" />
+            <h3 className="text-lg font-semibold mb-2">Error loading system health</h3>
+            <p className="text-muted-foreground">{error}</p>
+          </div>
+        ) : healthMetrics ? (
+          <div className="grid gap-4">
+            <div className="flex items-center justify-between rounded-md border p-4">
+              <div className="flex items-center space-x-3">
+                {getStatusIcon(healthMetrics.overallStatus)}
+                <div>
+                  <p className="font-medium">Overall Status</p>
+                  <p className="text-sm text-muted-foreground capitalize">{healthMetrics.overallStatus}</p>
                 </div>
-                <Progress value={metric.uptime} className="h-2" />
-                <p className="text-xs text-muted-foreground">{metric.description}</p>
               </div>
-            )
-          })}
-        </div>
+              <Badge variant={healthMetrics.overallStatus === "healthy" ? "default" : "destructive"}>
+                {healthMetrics.overallStatus.toUpperCase()}
+              </Badge>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex items-center space-x-3 rounded-md border p-3">
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-medium">Uptime</p>
+                  <p className="text-xs text-muted-foreground">{healthMetrics.uptimePercentage}%</p>
+                </div>
+              </div>
+              <div className="flex items-center space-x-3 rounded-md border p-3">
+                <Zap className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-medium">Avg. Response Time</p>
+                  <p className="text-xs text-muted-foreground">{healthMetrics.avgResponseTimeMs}ms</p>
+                </div>
+              </div>
+              <div className="flex items-center space-x-3 rounded-md border p-3">
+                <Bot className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-medium">Active Agents</p>
+                  <p className="text-xs text-muted-foreground">{healthMetrics.activeAgents}</p>
+                </div>
+              </div>
+              <div className="flex items-center space-x-3 rounded-md border p-3">
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-medium">Last Updated</p>
+                  <p className="text-xs text-muted-foreground">{healthMetrics.lastUpdated}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   )

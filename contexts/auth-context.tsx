@@ -2,24 +2,7 @@
 
 import type React from "react"
 
-import { createContext, useContext, useEffect, useState, useCallback } from "react"
-
-export interface Agent {
-  id: string
-  name: string
-  provider: string
-  model: string
-  status: "active" | "inactive" | "paused" | "error"
-  endpoint: string
-  connectedAt: string
-  lastActive: string
-  usage: {
-    requests: number
-    tokensUsed: number
-    estimatedCost: number
-  }
-  lastStatusChange?: string
-}
+import { createContext, useContext, useEffect, useState } from "react"
 
 export interface User {
   id: string
@@ -28,6 +11,7 @@ export interface User {
   avatar?: string
   role: "admin" | "developer" | "analyst" | "viewer"
   organization: string
+  connectedAgents: string[]
   permissions: string[]
 }
 
@@ -37,12 +21,11 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<void>
   signOut: () => void
   switchUserType: (userType: string) => void
-  // No longer directly managing agents in context, they are fetched from API
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-// Demo users with different roles and permissions
+// Demo users with different roles and connected agents
 const demoUsers = {
   "admin@granular.ai": {
     id: "admin-1",
@@ -51,16 +34,8 @@ const demoUsers = {
     avatar: "/placeholder-user.jpg",
     role: "admin" as const,
     organization: "Granular AI",
-    permissions: [
-      "manage_agents",
-      "view_analytics",
-      "manage_users",
-      "manage_policies",
-      "view_audit_logs",
-      "test_agents",
-      "view_reports",
-      "view_dashboard",
-    ],
+    connectedAgents: ["openai-gpt4o-001", "anthropic-claude3-001", "groq-llama3-001", "replit-agent-001"],
+    permissions: ["manage_agents", "view_analytics", "manage_users", "manage_policies", "view_audit_logs"],
   },
   "dev@company.com": {
     id: "dev-1",
@@ -69,7 +44,8 @@ const demoUsers = {
     avatar: "/placeholder-user.jpg",
     role: "developer" as const,
     organization: "TechCorp Inc",
-    permissions: ["manage_agents", "view_analytics", "test_agents", "view_dashboard"],
+    connectedAgents: ["openai-gpt4o-001", "replit-agent-001"],
+    permissions: ["manage_agents", "view_analytics", "test_agents"],
   },
   "analyst@startup.io": {
     id: "analyst-1",
@@ -78,7 +54,8 @@ const demoUsers = {
     avatar: "/placeholder-user.jpg",
     role: "analyst" as const,
     organization: "StartupAI",
-    permissions: ["view_analytics", "view_reports", "view_dashboard"],
+    connectedAgents: ["anthropic-claude3-001"],
+    permissions: ["view_analytics", "view_reports"],
   },
   "viewer@enterprise.com": {
     id: "viewer-1",
@@ -87,6 +64,7 @@ const demoUsers = {
     avatar: "/placeholder-user.jpg",
     role: "viewer" as const,
     organization: "Enterprise Corp",
+    connectedAgents: [],
     permissions: ["view_dashboard"],
   },
 }
@@ -104,13 +82,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(false)
   }, [])
 
-  const signIn = useCallback(async (email: string, password: string) => {
+  const signIn = async (email: string, password: string) => {
     setIsLoading(true)
 
-    // Simulate API call for authentication
-    await new Promise((resolve) => setTimeout(resolve, 500))
+    // Simulate API call
+    await new Promise((resolve) => setTimeout(resolve, 1000))
 
-    const userData = demoUsers[email as keyof typeof demoUsers]
+    const userData = demoUsers[email]
     if (userData && password === "demo123") {
       setUser(userData)
       localStorage.setItem("granular_user", JSON.stringify(userData))
@@ -119,14 +97,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     setIsLoading(false)
-  }, [])
+  }
 
-  const signOut = useCallback(() => {
+  const signOut = () => {
     setUser(null)
     localStorage.removeItem("granular_user")
-  }, [])
+  }
 
-  const switchUserType = useCallback((userType: string) => {
+  const switchUserType = (userType: string) => {
     const userEmails = {
       admin: "admin@granular.ai",
       developer: "dev@company.com",
@@ -134,13 +112,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       viewer: "viewer@enterprise.com",
     }
 
-    const email = userEmails[userType as keyof typeof userEmails]
-    if (email && demoUsers[email as keyof typeof demoUsers]) {
-      const userData = demoUsers[email as keyof typeof demoUsers]
+    const email = userEmails[userType]
+    if (email && demoUsers[email]) {
+      const userData = demoUsers[email]
       setUser(userData)
       localStorage.setItem("granular_user", JSON.stringify(userData))
     }
-  }, [])
+  }
 
   return (
     <AuthContext.Provider value={{ user, isLoading, signIn, signOut, switchUserType }}>{children}</AuthContext.Provider>

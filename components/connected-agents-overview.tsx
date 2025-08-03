@@ -1,63 +1,58 @@
 "use client"
 
-import { useAuth, type Agent } from "@/contexts/auth-context"
+import { useAuth } from "@/contexts/auth-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Bot, Brain, Code, Zap, Plus, ArrowRight, Loader2, AlertTriangle } from "lucide-react"
+import { Bot, Brain, Code, Zap, Plus, ArrowRight } from "lucide-react"
 import Link from "next/link"
-import { useEffect, useState } from "react"
 
-// Map provider names to Lucide icons
-const providerIcons = {
-  OpenAI: Brain,
-  Anthropic: Bot,
-  Groq: Zap,
-  Replit: Code,
+const agentDetails = {
+  "openai-gpt4o-001": {
+    name: "GPT-4o Enterprise",
+    provider: "OpenAI",
+    model: "gpt-4o",
+    icon: Brain,
+    status: "active",
+    usage: "1,247 requests today",
+  },
+  "anthropic-claude3-001": {
+    name: "Claude 3 Opus",
+    provider: "Anthropic",
+    model: "claude-3-opus",
+    icon: Bot,
+    status: "active",
+    usage: "892 requests today",
+  },
+  "groq-llama3-001": {
+    name: "Llama 3 70B",
+    provider: "Groq",
+    model: "llama3-70b",
+    icon: Zap,
+    status: "inactive",
+    usage: "456 requests today",
+  },
+  "replit-agent-001": {
+    name: "Replit Agent",
+    provider: "Replit",
+    model: "replit-agent",
+    icon: Code,
+    status: "active",
+    usage: "234 requests today",
+  },
 }
 
 export function ConnectedAgentsOverview() {
   const { user } = useAuth()
-  const [connectedAgents, setConnectedAgents] = useState<Agent[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  const fetchAgents = async () => {
-    if (!user) {
-      setIsLoading(false)
-      return
-    }
-    setIsLoading(true)
-    setError(null)
-    try {
-      const response = await fetch("/api/agents", {
-        headers: {
-          "X-User-ID": user.id, // Pass user ID for server-side filtering
-        },
-      })
-      if (response.ok) {
-        const data = await response.json()
-        setConnectedAgents(data.agents)
-      } else {
-        setError("Failed to load agents.")
-        setConnectedAgents([])
-      }
-    } catch (err) {
-      setError("Error fetching agents.")
-      setConnectedAgents([])
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    fetchAgents()
-    // Optionally refetch agents periodically or on specific events
-    const interval = setInterval(fetchAgents, 30000) // Refetch every 30 seconds
-    return () => clearInterval(interval)
-  }, [user])
 
   if (!user) return null
+
+  const connectedAgents = user.connectedAgents
+    .map((id) => ({
+      id,
+      ...agentDetails[id],
+    }))
+    .filter(Boolean)
 
   const hasPermission = user.permissions.includes("manage_agents")
 
@@ -82,21 +77,7 @@ export function ConnectedAgentsOverview() {
         )}
       </CardHeader>
       <CardContent>
-        {isLoading ? (
-          <div className="text-center py-8">
-            <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary mb-4" />
-            <p className="text-muted-foreground">Loading agents...</p>
-          </div>
-        ) : error ? (
-          <div className="text-center py-8 text-red-500">
-            <AlertTriangle className="mx-auto h-12 w-12 mb-4" />
-            <h3 className="text-lg font-semibold mb-2">Error loading agents</h3>
-            <p className="text-muted-foreground">{error}</p>
-            <Button onClick={fetchAgents} className="mt-4">
-              Retry
-            </Button>
-          </div>
-        ) : connectedAgents.length === 0 ? (
+        {connectedAgents.length === 0 ? (
           <div className="text-center py-8">
             <Bot className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-semibold mb-2">No agents connected</h3>
@@ -117,7 +98,7 @@ export function ConnectedAgentsOverview() {
         ) : (
           <div className="space-y-4">
             {connectedAgents.map((agent) => {
-              const Icon = providerIcons[agent.provider as keyof typeof providerIcons] || Bot
+              const Icon = agent.icon
               return (
                 <div key={agent.id} className="flex items-center justify-between p-3 border rounded-lg">
                   <div className="flex items-center space-x-3">
@@ -135,7 +116,7 @@ export function ConnectedAgentsOverview() {
                     <Badge variant={agent.status === "active" ? "default" : "secondary"} className="mb-1">
                       {agent.status}
                     </Badge>
-                    <div className="text-xs text-muted-foreground">{agent.usage.requests} requests today</div>
+                    <div className="text-xs text-muted-foreground">{agent.usage}</div>
                   </div>
                 </div>
               )

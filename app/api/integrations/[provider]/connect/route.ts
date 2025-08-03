@@ -1,23 +1,45 @@
 import { type NextRequest, NextResponse } from "next/server"
 
+const OAUTH_CONFIGS = {
+  openai: {
+    authUrl: "https://platform.openai.com/oauth/authorize",
+    clientId: "demo_openai_client_id",
+    scope: "api.read api.write",
+  },
+  anthropic: {
+    authUrl: "https://console.anthropic.com/oauth/authorize",
+    clientId: "demo_anthropic_client_id",
+    scope: "api.read api.write",
+  },
+  replit: {
+    authUrl: "https://replit.com/oauth/authorize",
+    clientId: "demo_replit_client_id",
+    scope: "agent.read agent.write",
+  },
+  groq: {
+    authUrl: "https://console.groq.com/oauth/authorize",
+    clientId: "demo_groq_client_id",
+    scope: "api.read api.write",
+  },
+}
+
 export async function POST(request: NextRequest, { params }: { params: { provider: string } }) {
   const { provider } = params
-  const { redirectUri } = await request.json()
-  const userId = request.headers.get("X-User-ID")
 
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!OAUTH_CONFIGS[provider]) {
+    return NextResponse.json({ error: "Unsupported provider" }, { status: 400 })
   }
 
-  // Simulate OAuth flow initiation
-  // In a real application, this would redirect to the OAuth provider's authorization URL
-  // and include client_id, scope, redirect_uri, and state parameters.
-  // For this demo, we'll just return a mock redirect URL that points back to our callback.
+  const config = OAUTH_CONFIGS[provider]
+  const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/integrations/${provider}/callback`
+  const state = Math.random().toString(36).substring(7)
 
-  const mockAuthUrl = `${redirectUri}?code=mock_auth_code_${provider}&state=mock_state_${userId}`
+  // In a real implementation, you would:
+  // 1. Store the state in a secure session/database
+  // 2. Use actual OAuth client IDs from environment variables
+  // 3. Handle PKCE for security
 
-  return NextResponse.json({
-    message: `Simulating OAuth connection for ${provider}. Redirecting to: ${mockAuthUrl}`,
-    redirectUrl: mockAuthUrl, // This would be the actual redirect to the OAuth provider
-  })
+  const authUrl = `${config.authUrl}?client_id=${config.clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(config.scope)}&state=${state}&response_type=code`
+
+  return NextResponse.json({ authUrl })
 }

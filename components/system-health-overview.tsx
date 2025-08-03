@@ -1,82 +1,64 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Activity, CheckCircle, AlertTriangle, XCircle, Loader2 } from "lucide-react"
-import { useEffect, useState } from "react"
-
-interface SystemHealthData {
-  status: "healthy" | "degraded" | "critical"
-  message: string
-  lastChecked: string
-}
+import { Button } from "@/components/ui/button"
+import { PlusCircle, Activity } from "lucide-react"
 
 export function SystemHealthOverview() {
-  const [healthData, setHealthData] = useState<SystemHealthData | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [agentStats, setAgentStats] = useState({
+    totalAgents: 0,
+    activeAgents: 0,
+    agentsWithAlerts: 0,
+    agentsInReview: 0,
+  })
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const fetchHealth = async () => {
-      setIsLoading(true)
-      setError(null)
-      try {
-        // Simulate fetching real-time system health data
-        // In a real application, this would be an API call to a monitoring service
-        const mockHealth: SystemHealthData = {
-          status: "healthy",
-          message: "All core services are operational.",
-          lastChecked: new Date().toLocaleTimeString(),
-        }
-
-        // Simulate occasional degraded or critical status
-        const random = Math.random()
-        if (random < 0.05) {
-          // 5% chance of critical
-          mockHealth.status = "critical"
-          mockHealth.message = "Critical service outage detected. Immediate attention required."
-        } else if (random < 0.15) {
-          // 10% chance of degraded
-          mockHealth.status = "degraded"
-          mockHealth.message = "Some services are experiencing minor issues."
-        }
-
-        setHealthData(mockHealth)
-      } catch (err) {
-        setError("Failed to fetch system health data.")
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    fetchHealth()
-    const interval = setInterval(fetchHealth, 15000) // Refresh every 15 seconds
-    return () => clearInterval(interval)
+    loadAgentStats()
   }, [])
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "healthy":
-        return <CheckCircle className="h-6 w-6 text-green-500" />
-      case "degraded":
-        return <AlertTriangle className="h-6 w-6 text-yellow-500" />
-      case "critical":
-        return <XCircle className="h-6 w-6 text-red-500" />
-      default:
-        return <Activity className="h-6 w-6 text-muted-foreground" />
+  const loadAgentStats = async () => {
+    try {
+      const response = await fetch("/api/agents")
+      if (response.ok) {
+        const data = await response.json()
+        const agents = data.agents || []
+
+        setAgentStats({
+          totalAgents: agents.length,
+          activeAgents: agents.filter((a) => a.status === "active").length,
+          agentsWithAlerts: agents.filter((a) => a.status === "warning" || a.usage?.errorRate > 5).length,
+          agentsInReview: agents.filter((a) => a.status === "inactive" || a.status === "testing").length,
+        })
+      }
+    } catch (error) {
+      console.error("Failed to load agent stats:", error)
+    } finally {
+      setLoading(false)
     }
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "healthy":
-        return "text-green-600 dark:text-green-400"
-      case "degraded":
-        return "text-yellow-600 dark:text-yellow-400"
-      case "critical":
-        return "text-red-600 dark:text-red-400"
-      default:
-        return "text-muted-foreground"
-    }
+  if (loading) {
+    return (
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">System Health Overview</CardTitle>
+          <Activity className="h-4 w-4 text-muted-foreground animate-pulse" />
+        </CardHeader>
+        <CardContent>
+          <div className="animate-pulse">
+            <div className="h-8 bg-muted rounded mb-2"></div>
+            <div className="h-4 bg-muted rounded mb-4"></div>
+            <div className="space-y-2">
+              <div className="h-4 bg-muted rounded"></div>
+              <div className="h-4 bg-muted rounded"></div>
+              <div className="h-4 bg-muted rounded"></div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    )
   }
 
   return (
@@ -86,25 +68,36 @@ export function SystemHealthOverview() {
         <Activity className="h-4 w-4 text-muted-foreground" />
       </CardHeader>
       <CardContent>
-        {isLoading ? (
-          <div className="flex items-center justify-center h-24">
-            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+        <div className="text-2xl font-bold">{agentStats.activeAgents}</div>
+        <p className="text-xs text-muted-foreground">
+          {agentStats.activeAgents} of {agentStats.totalAgents} agents active
+        </p>
+        <div className="mt-4 space-y-2">
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-muted-foreground">Total Agents</span>
+            <span className="text-sm font-medium">{agentStats.totalAgents}</span>
           </div>
-        ) : error ? (
-          <div className="text-center text-red-500 py-4">
-            <AlertTriangle className="mx-auto h-8 w-8 mb-2" />
-            <p className="text-sm">{error}</p>
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-muted-foreground">Active Agents</span>
+            <span className="text-sm font-medium text-green-600">{agentStats.activeAgents}</span>
           </div>
-        ) : healthData ? (
-          <>
-            <div className={`text-2xl font-bold ${getStatusColor(healthData.status)} flex items-center gap-2`}>
-              {getStatusIcon(healthData.status)}
-              {healthData.status.charAt(0).toUpperCase() + healthData.status.slice(1)}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">{healthData.message}</p>
-            <p className="text-xs text-muted-foreground mt-2">Last checked: {healthData.lastChecked}</p>
-          </>
-        ) : null}
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-muted-foreground">Agents with Alerts</span>
+            <span className="text-sm font-medium text-yellow-600">{agentStats.agentsWithAlerts}</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-muted-foreground">Agents in Review</span>
+            <span className="text-sm font-medium text-red-600">{agentStats.agentsInReview}</span>
+          </div>
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <Button size="sm" onClick={() => (window.location.href = "/agent-management")}>
+            <PlusCircle className="mr-2 h-4 w-4" /> Manage
+          </Button>
+          <Button size="sm" variant="outline" onClick={loadAgentStats}>
+            <Activity className="mr-2 h-4 w-4" /> Refresh
+          </Button>
+        </div>
       </CardContent>
     </Card>
   )

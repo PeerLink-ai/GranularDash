@@ -1,111 +1,71 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { sql } from "@/lib/db"
-import { getUser } from "@/lib/auth"
-import { logActivity } from "@/lib/activity-logger"
-import { randomBytes } from "crypto"
+import { neon } from "@neondatabase/serverless"
+import { generateApiKey, generateWebhookSecret } from "@/lib/crypto"
+
+const sql = neon(process.env.DATABASE_URL!)
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await getUser(request)
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
     const body = await request.json()
-    const { name, description, type, environment, framework, language, organization } = body
+    const { name, description, type, environment } = body
 
     if (!name || !type) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
+      return NextResponse.json({ error: "Name and type are required" }, { status: 400 })
     }
 
     // Generate unique identifiers
-    const agentId = `agent_${randomBytes(16).toString("hex")}`
-    const apiKey = `ak_${randomBytes(32).toString("hex")}`
-    const webhookSecret = `ws_${randomBytes(24).toString("hex")}`
+    const agentId = `agent_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    const apiKey = generateApiKey()
+    const webhookSecret = generateWebhookSecret()
 
     // Create the agent record
-    const [newAgent] = await sql`
+    await sql`
       INSERT INTO connected_agents (
         id,
-        user_id,
-        agent_id,
         name,
-        provider,
-        model,
+        description,
+        type,
+        environment,
         status,
-        endpoint,
-        connected_at,
-        last_active,
-        usage_requests,
-        usage_tokens_used,
-        usage_estimated_cost,
-        api_key_encrypted,
-        configuration,
-        health_status,
-        last_health_check,
-        metadata
+        api_key,
+        webhook_secret,
+        created_at,
+        updated_at
       ) VALUES (
-        ${randomBytes(16).toString("hex")},
-        ${user.id},
         ${agentId},
         ${name},
-        'custom',
+        ${description},
         ${type},
-        'pending',
-        'custom',
-        NOW(),
-        NULL,
-        0,
-        0,
-        0.0,
+        ${environment},
+        'active',
         ${apiKey},
-        ${JSON.stringify({
-          description,
-          environment,
-          framework,
-          language,
-          webhook_secret: webhookSecret,
-        })},
-        'unknown',
-        NULL,
-        ${JSON.stringify({
-          type,
-          environment,
-          framework,
-          language,
-          created_via: "dashboard",
-        })}
+        ${webhookSecret},
+        NOW(),
+        NOW()
       )
-      RETURNING *
     `
 
-    // Log the activity
-    await logActivity({
-      userId: user.id,
-      organization: user.organization,
-      action: `Registered new agent: ${name}`,
-      resourceType: "agent",
-      resourceId: agentId,
-      description: `Successfully registered ${type} agent for ${environment} environment`,
-      status: "success",
-    })
+    // Create webhook URL
+    const webhookUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/webhooks/${agentId}`
 
-    // Return agent details with credentials
     return NextResponse.json({
-      id: newAgent.id,
-      agent_id: agentId,
-      name,
-      type,
-      status: "pending",
-      api_key: apiKey,
-      webhook_secret: webhookSecret,
-      environment,
-      framework,
-      language,
-      created_at: newAgent.connected_at,
+      success: true,
+      agent: {
+        id: agentId,
+        name,
+        type,
+        environment,
+        status: "active",
+      },
+      credentials: {
+        apiKey,
+        webhookUrl,
+        webhookSecret,
+      },
     })
   } catch (error) {
-    console.error("Failed to register agent:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    console.error("Error registering agent:", error)
+    return NextResponse.json({ error: "Failed to register agent" }, { status: 500 })
   }
 }
+</merged_code>

@@ -1,50 +1,43 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { sql } from "@/lib/db"
-import { getUser } from "@/lib/auth"
+import { neon } from "@neondatabase/serverless"
+
+const sql = neon(process.env.DATABASE_URL!)
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const user = await getUser(request)
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
     const { id } = params
     const { searchParams } = new URL(request.url)
     const limit = Number.parseInt(searchParams.get("limit") || "50")
     const offset = Number.parseInt(searchParams.get("offset") || "0")
 
-    // Get logs for the agent
     const logs = await sql`
       SELECT 
-        al.*,
-        ca.name as agent_name
-      FROM agent_logs al
-      JOIN connected_agents ca ON al.agent_id = ca.agent_id
-      WHERE al.agent_id = ${id}
-      AND ca.user_id = ${user.id}
-      ORDER BY al.timestamp DESC
-      LIMIT ${limit}
-      OFFSET ${offset}
+        id, interaction_type, input_data, output_data, metadata, 
+        timestamp, created_at
+      FROM agent_logs 
+      WHERE agent_id = ${id}
+      ORDER BY timestamp DESC
+      LIMIT ${limit} OFFSET ${offset}
     `
 
-    // Get total count
-    const [{ count }] = await sql`
-      SELECT COUNT(*) as count
-      FROM agent_logs al
-      JOIN connected_agents ca ON al.agent_id = ca.agent_id
-      WHERE al.agent_id = ${id}
-      AND ca.user_id = ${user.id}
+    const violations = await sql`
+      SELECT 
+        v.id, v.violation_type, v.severity, v.description, v.detected_at,
+        l.interaction_type
+      FROM policy_violations v
+      JOIN agent_logs l ON v.log_id = l.id
+      WHERE v.agent_id = ${id}
+      ORDER BY v.detected_at DESC
+      LIMIT 20
     `
 
     return NextResponse.json({
       logs,
-      total: Number.parseInt(count),
-      limit,
-      offset,
+      violations,
+      total: logs.length,
     })
   } catch (error) {
-    console.error("Failed to fetch agent logs:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    console.error("Error fetching agent logs:", error)
+    return NextResponse.json({ error: "Failed to fetch agent logs" }, { status: 500 })
   }
 }

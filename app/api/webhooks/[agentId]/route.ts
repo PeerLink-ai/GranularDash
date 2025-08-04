@@ -1,112 +1,52 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { sql } from "@/lib/db"
-import { createHmac } from "crypto"
+import { neon } from "@neondatabase/serverless"
+import crypto from "crypto"
+
+const sql = neon(process.env.DATABASE_URL!)
 
 export async function POST(request: NextRequest, { params }: { params: { agentId: string } }) {
   try {
     const { agentId } = params
+    const body = await request.text()
+    const signature = request.headers.get("x-webhook-signature")
 
-    // Get agent and webhook secret
+    if (!signature) {
+      return NextResponse.json({ error: "Missing webhook signature" }, { status: 401 })
+    }
+
+    // Get agent and verify signature
     const [agent] = await sql`
-      SELECT * FROM connected_agents 
-      WHERE agent_id = ${agentId}
-      AND status != 'inactive'
+      SELECT webhook_secret FROM connected_agents WHERE id = ${agentId}
     `
 
     if (!agent) {
       return NextResponse.json({ error: "Agent not found" }, { status: 404 })
     }
 
-    const configuration = JSON.parse(agent.configuration || "{}")
-    const webhookSecret = configuration.webhook_secret
+    const expectedSignature = crypto.createHmac("sha256", agent.webhook_secret).update(body).digest("hex")
 
-    if (!webhookSecret) {
-      return NextResponse.json({ error: "Webhook not configured" }, { status: 400 })
-    }
-
-    // Verify webhook signature
-    const signature = request.headers.get("x-webhook-signature")
-    const body = await request.text()
-
-    if (signature) {
-      const expectedSignature = createHmac("sha256", webhookSecret).update(body).digest("hex")
-
-      if (signature !== `sha256=${expectedSignature}`) {
-        return NextResponse.json({ error: "Invalid signature" }, { status: 401 })
-      }
+    if (signature !== expectedSignature) {
+      return NextResponse.json({ error: "Invalid webhook signature" }, { status: 401 })
     }
 
     const data = JSON.parse(body)
-    const { event_type, timestamp, data: eventData } = data
 
-    if (!event_type || !eventData) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
-    }
+    // Process webhook data similar to API ingestion
+    const logId = `log_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
-    // Store the webhook event
     await sql`
       INSERT INTO agent_logs (
-        id,
-        agent_id,
-        user_id,
-        log_level,
-        message,
-        details,
-        timestamp
+        id, agent_id, interaction_type, input_data, output_data, 
+        metadata, timestamp, created_at
       ) VALUES (
-        ${crypto.randomUUID()},
-        ${agentId},
-        ${agent.user_id},
-        'info',
-        ${`Webhook ${event_type}: ${eventData.prompt ? eventData.prompt.substring(0, 100) : "Event received"}`},
-        ${JSON.stringify({
-          event_type,
-          data: eventData,
-          timestamp: timestamp || new Date().toISOString(),
-          source: "webhook",
-        })},
-        ${timestamp ? new Date(timestamp) : new Date()}
+        ${logId}, ${agentId}, ${data.interaction_type}, ${data.input}, ${data.output},
+        ${JSON.stringify(data.metadata || {})}, ${data.timestamp || new Date().toISOString()}, NOW()
       )
     `
 
-    // Update metrics
-    await sql`
-      INSERT INTO agent_metrics (
-        id,
-        agent_id,
-        user_id,
-        metric_type,
-        value,
-        timestamp,
-        metadata
-      ) VALUES (
-        ${crypto.randomUUID()},
-        ${agentId},
-        ${agent.user_id},
-        'request',
-        1,
-        NOW(),
-        ${JSON.stringify({ event_type, source: "webhook" })}
-      )
-    `
-
-    // Update agent status
-    await sql`
-      UPDATE connected_agents 
-      SET 
-        last_active = NOW(),
-        usage_requests = usage_requests + 1,
-        health_status = 'healthy',
-        last_health_check = NOW()
-      WHERE agent_id = ${agentId}
-    `
-
-    return NextResponse.json({
-      success: true,
-      message: "Webhook processed successfully",
-    })
+    return NextResponse.json({ success: true, log_id: logId })
   } catch (error) {
-    console.error("Webhook processing error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    console.error("Error processing webhook:", error)
+    return NextResponse.json({ error: "Failed to process webhook" }, { status: 500 })
   }
 }

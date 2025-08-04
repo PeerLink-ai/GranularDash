@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS agent_logs (
   metadata JSONB DEFAULT '{}',
   timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  FOREIGN KEY (agent_id) REFERENCES connected_agents(id) ON DELETE CASCADE
+  FOREIGN KEY (agent_id) REFERENCES connected_agents(agent_id) ON DELETE CASCADE
 );
 
 -- Create index for efficient querying
@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS agent_metrics (
   avg_response_time FLOAT DEFAULT 0,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  FOREIGN KEY (agent_id) REFERENCES connected_agents(id) ON DELETE CASCADE,
+  FOREIGN KEY (agent_id) REFERENCES connected_agents(agent_id) ON DELETE CASCADE,
   UNIQUE(agent_id, date)
 );
 
@@ -38,11 +38,12 @@ CREATE TABLE IF NOT EXISTS policy_violations (
   log_id VARCHAR(255),
   violation_type VARCHAR(100) NOT NULL,
   severity VARCHAR(20) NOT NULL CHECK (severity IN ('low', 'medium', 'high', 'critical')),
-  description TEXT,
+  description TEXT NOT NULL,
   detected_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   resolved_at TIMESTAMP WITH TIME ZONE,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  FOREIGN KEY (agent_id) REFERENCES connected_agents(id) ON DELETE CASCADE,
+  status VARCHAR(20) DEFAULT 'open' CHECK (status IN ('open', 'resolved', 'ignored')),
+  metadata JSONB DEFAULT '{}',
+  FOREIGN KEY (agent_id) REFERENCES connected_agents(agent_id) ON DELETE CASCADE,
   FOREIGN KEY (log_id) REFERENCES agent_logs(id) ON DELETE SET NULL
 );
 
@@ -50,6 +51,7 @@ CREATE TABLE IF NOT EXISTS policy_violations (
 CREATE INDEX IF NOT EXISTS idx_policy_violations_agent_id ON policy_violations(agent_id);
 CREATE INDEX IF NOT EXISTS idx_policy_violations_severity ON policy_violations(severity);
 CREATE INDEX IF NOT EXISTS idx_policy_violations_detected_at ON policy_violations(detected_at DESC);
+CREATE INDEX IF NOT EXISTS idx_policy_violations_status ON policy_violations(status);
 
 -- Compliance reports table (remains unchanged)
 CREATE TABLE IF NOT EXISTS compliance_reports (
@@ -77,7 +79,7 @@ CREATE TABLE IF NOT EXISTS security_threats (
   detected_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   resolved_at TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  FOREIGN KEY (agent_id) REFERENCES connected_agents(id) ON DELETE SET NULL
+  FOREIGN KEY (agent_id) REFERENCES connected_agents(agent_id) ON DELETE SET NULL
 );
 
 -- Governance policies table (remains unchanged)
@@ -117,9 +119,12 @@ CREATE INDEX IF NOT EXISTS idx_agent_metrics_agent_id ON agent_metrics(agent_id)
 CREATE INDEX IF NOT EXISTS idx_agent_metrics_date ON agent_metrics(date);
 CREATE INDEX IF NOT EXISTS idx_agent_metrics_updated_at ON agent_metrics(updated_at);
 
-CREATE INDEX IF NOT EXISTS idx_policy_violations_agent_id ON policy_violations(agent_id);
-CREATE INDEX IF NOT EXISTS idx_policy_violations_status ON policy_violations(severity);
-
 CREATE INDEX IF NOT EXISTS idx_security_threats_agent_id ON security_threats(agent_id);
 CREATE INDEX IF NOT EXISTS idx_security_threats_status ON security_threats(severity);
-</merged_code>
+
+-- Update connected_agents table to ensure all required columns exist
+ALTER TABLE connected_agents 
+ADD COLUMN IF NOT EXISTS api_key_encrypted VARCHAR(255),
+ADD COLUMN IF NOT EXISTS configuration JSONB DEFAULT '{}',
+ADD COLUMN IF NOT EXISTS health_status VARCHAR(50) DEFAULT 'unknown',
+ADD COLUMN IF NOT EXISTS last_health_check TIMESTAMP WITH TIME ZONE;

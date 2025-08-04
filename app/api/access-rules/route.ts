@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
       ORDER BY created_at DESC
     `
 
-    return NextResponse.json({ rules })
+    return NextResponse.json({ rules: rules || [] })
   } catch (error) {
     console.error("Error fetching access rules:", error)
     return NextResponse.json({ rules: [] })
@@ -50,9 +50,13 @@ export async function POST(request: NextRequest) {
 
     const { name, resource, role, permission, status, description } = await request.json()
 
+    if (!name || !resource || !role || !permission) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
+    }
+
     const rule = await sql`
       INSERT INTO access_rules (user_id, organization, name, resource, role, permission, status, description)
-      VALUES (${user.id}, ${user.organization}, ${name}, ${resource}, ${role}, ${permission}, ${status}, ${description || null})
+      VALUES (${user.id}, ${user.organization}, ${name}, ${resource}, ${role}, ${permission}, ${status || "active"}, ${description || null})
       RETURNING *
     `
 

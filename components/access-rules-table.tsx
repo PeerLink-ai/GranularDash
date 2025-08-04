@@ -60,10 +60,15 @@ export function AccessRulesTable() {
       const response = await fetch(`/api/access-rules?organization=${user?.organization}`)
       if (response.ok) {
         const data = await response.json()
-        setRules(data.rules || [])
+        // Ensure rules is always an array
+        setRules(Array.isArray(data.rules) ? data.rules : [])
+      } else {
+        console.error("Failed to fetch rules:", response.statusText)
+        setRules([])
       }
     } catch (error) {
       console.error("Error fetching access rules:", error)
+      setRules([])
       toast({
         title: "Error",
         description: "Failed to load access rules",
@@ -93,13 +98,14 @@ export function AccessRulesTable() {
         resetForm()
         fetchRules()
       } else {
-        throw new Error("Failed to create rule")
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to create rule")
       }
     } catch (error) {
       console.error("Error creating access rule:", error)
       toast({
         title: "Error",
-        description: "Failed to create access rule",
+        description: error instanceof Error ? error.message : "Failed to create access rule",
         variant: "destructive",
       })
     }
@@ -126,19 +132,24 @@ export function AccessRulesTable() {
         resetForm()
         fetchRules()
       } else {
-        throw new Error("Failed to update rule")
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to update rule")
       }
     } catch (error) {
       console.error("Error updating access rule:", error)
       toast({
         title: "Error",
-        description: "Failed to update access rule",
+        description: error instanceof Error ? error.message : "Failed to update access rule",
         variant: "destructive",
       })
     }
   }
 
   const handleDeleteRule = async (ruleId: string) => {
+    if (!confirm("Are you sure you want to delete this access rule?")) {
+      return
+    }
+
     try {
       const response = await fetch(`/api/access-rules/${ruleId}`, {
         method: "DELETE",
@@ -151,13 +162,14 @@ export function AccessRulesTable() {
         })
         fetchRules()
       } else {
-        throw new Error("Failed to delete rule")
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to delete rule")
       }
     } catch (error) {
       console.error("Error deleting access rule:", error)
       toast({
         title: "Error",
-        description: "Failed to delete access rule",
+        description: error instanceof Error ? error.message : "Failed to delete access rule",
         variant: "destructive",
       })
     }
@@ -186,15 +198,21 @@ export function AccessRulesTable() {
     })
   }
 
-  const filteredRules = rules.filter(
-    (rule) =>
-      rule.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      rule.resource.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      rule.role.toLowerCase().includes(searchTerm.toLowerCase()),
-  )
+  const filteredRules = Array.isArray(rules)
+    ? rules.filter(
+        (rule) =>
+          rule.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          rule.resource.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          rule.role.toLowerCase().includes(searchTerm.toLowerCase()),
+      )
+    : []
 
   if (loading) {
-    return <div>Loading access rules...</div>
+    return (
+      <div className="flex items-center justify-center h-32">
+        <div className="animate-pulse text-muted-foreground">Loading access rules...</div>
+      </div>
+    )
   }
 
   return (
@@ -231,6 +249,7 @@ export function AccessRulesTable() {
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   className="col-span-3"
+                  placeholder="Rule name"
                 />
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
@@ -242,6 +261,7 @@ export function AccessRulesTable() {
                   value={formData.resource}
                   onChange={(e) => setFormData({ ...formData, resource: e.target.value })}
                   className="col-span-3"
+                  placeholder="Resource name"
                 />
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
@@ -257,6 +277,7 @@ export function AccessRulesTable() {
                     <SelectItem value="developer">Developer</SelectItem>
                     <SelectItem value="analyst">Analyst</SelectItem>
                     <SelectItem value="viewer">Viewer</SelectItem>
+                    <SelectItem value="ai-agent">AI Agent</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -306,6 +327,7 @@ export function AccessRulesTable() {
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   className="col-span-3"
+                  placeholder="Optional description"
                 />
               </div>
             </div>
@@ -318,11 +340,15 @@ export function AccessRulesTable() {
 
       {filteredRules.length === 0 ? (
         <div className="text-center py-8">
-          <p className="text-muted-foreground mb-4">No access rules found</p>
-          <Button onClick={() => setIsCreateDialogOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Create your first access rule
-          </Button>
+          <p className="text-muted-foreground mb-4">
+            {searchTerm ? "No access rules match your search" : "No access rules found"}
+          </p>
+          {!searchTerm && (
+            <Button onClick={() => setIsCreateDialogOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Create your first access rule
+            </Button>
+          )}
         </div>
       ) : (
         <Table>
@@ -407,6 +433,7 @@ export function AccessRulesTable() {
                     <SelectItem value="developer">Developer</SelectItem>
                     <SelectItem value="analyst">Analyst</SelectItem>
                     <SelectItem value="viewer">Viewer</SelectItem>
+                    <SelectItem value="ai-agent">AI Agent</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

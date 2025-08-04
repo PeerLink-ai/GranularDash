@@ -37,7 +37,16 @@ export default function AccessControlPage() {
       const response = await fetch(`/api/access-control/metrics?organization=${user?.organization}`)
       if (response.ok) {
         const data = await response.json()
-        setMetrics(data.metrics)
+        setMetrics(
+          data.metrics || {
+            totalRules: 0,
+            activeRules: 0,
+            lastModified: null,
+            deniedAttempts: 0,
+          },
+        )
+      } else {
+        console.error("Failed to fetch metrics:", response.statusText)
       }
     } catch (error) {
       console.error("Error fetching metrics:", error)
@@ -52,7 +61,11 @@ export default function AccessControlPage() {
   }
 
   if (!user) {
-    return <div>Please sign in to access this page.</div>
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-muted-foreground">Please sign in to access this page.</div>
+      </div>
+    )
   }
 
   return (

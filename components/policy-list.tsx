@@ -58,10 +58,15 @@ export function PolicyList() {
       const response = await fetch(`/api/policies?organization=${user?.organization}`)
       if (response.ok) {
         const data = await response.json()
-        setPolicies(data.policies || [])
+        // Ensure policies is always an array
+        setPolicies(Array.isArray(data.policies) ? data.policies : [])
+      } else {
+        console.error("Failed to fetch policies:", response.statusText)
+        setPolicies([])
       }
     } catch (error) {
       console.error("Error fetching policies:", error)
+      setPolicies([])
       toast({
         title: "Error",
         description: "Failed to load policies",
@@ -91,13 +96,14 @@ export function PolicyList() {
         resetForm()
         fetchPolicies()
       } else {
-        throw new Error("Failed to create policy")
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to create policy")
       }
     } catch (error) {
       console.error("Error creating policy:", error)
       toast({
         title: "Error",
-        description: "Failed to create policy",
+        description: error instanceof Error ? error.message : "Failed to create policy",
         variant: "destructive",
       })
     }
@@ -124,19 +130,24 @@ export function PolicyList() {
         resetForm()
         fetchPolicies()
       } else {
-        throw new Error("Failed to update policy")
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to update policy")
       }
     } catch (error) {
       console.error("Error updating policy:", error)
       toast({
         title: "Error",
-        description: "Failed to update policy",
+        description: error instanceof Error ? error.message : "Failed to update policy",
         variant: "destructive",
       })
     }
   }
 
   const handleDeletePolicy = async (policyId: string) => {
+    if (!confirm("Are you sure you want to delete this policy?")) {
+      return
+    }
+
     try {
       const response = await fetch(`/api/policies/${policyId}`, {
         method: "DELETE",
@@ -149,13 +160,14 @@ export function PolicyList() {
         })
         fetchPolicies()
       } else {
-        throw new Error("Failed to delete policy")
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to delete policy")
       }
     } catch (error) {
       console.error("Error deleting policy:", error)
       toast({
         title: "Error",
-        description: "Failed to delete policy",
+        description: error instanceof Error ? error.message : "Failed to delete policy",
         variant: "destructive",
       })
     }
@@ -182,14 +194,20 @@ export function PolicyList() {
     })
   }
 
-  const filteredPolicies = policies.filter(
-    (policy) =>
-      policy.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      policy.category.toLowerCase().includes(searchTerm.toLowerCase()),
-  )
+  const filteredPolicies = Array.isArray(policies)
+    ? policies.filter(
+        (policy) =>
+          policy.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          policy.category.toLowerCase().includes(searchTerm.toLowerCase()),
+      )
+    : []
 
   if (loading) {
-    return <div>Loading policies...</div>
+    return (
+      <div className="flex items-center justify-center h-32">
+        <div className="animate-pulse text-muted-foreground">Loading policies...</div>
+      </div>
+    )
   }
 
   return (
@@ -226,6 +244,7 @@ export function PolicyList() {
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   className="col-span-3"
+                  placeholder="Policy name"
                 />
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
@@ -257,6 +276,7 @@ export function PolicyList() {
                   value={formData.version}
                   onChange={(e) => setFormData({ ...formData, version: e.target.value })}
                   className="col-span-3"
+                  placeholder="1.0"
                 />
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
@@ -288,6 +308,7 @@ export function PolicyList() {
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   className="col-span-3"
+                  placeholder="Policy description"
                 />
               </div>
             </div>
@@ -301,11 +322,15 @@ export function PolicyList() {
       {filteredPolicies.length === 0 ? (
         <div className="text-center py-8">
           <FileText className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-          <p className="text-muted-foreground mb-4">No policies found</p>
-          <Button onClick={() => setIsCreateDialogOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Create your first policy
-          </Button>
+          <p className="text-muted-foreground mb-4">
+            {searchTerm ? "No policies match your search" : "No policies found"}
+          </p>
+          {!searchTerm && (
+            <Button onClick={() => setIsCreateDialogOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Create your first policy
+            </Button>
+          )}
         </div>
       ) : (
         <Table>

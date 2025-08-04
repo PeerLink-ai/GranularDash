@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
       ORDER BY created_at DESC
     `
 
-    return NextResponse.json({ policies })
+    return NextResponse.json({ policies: policies || [] })
   } catch (error) {
     console.error("Error fetching policies:", error)
     return NextResponse.json({ policies: [] })
@@ -50,9 +50,13 @@ export async function POST(request: NextRequest) {
 
     const { name, category, version, description, status } = await request.json()
 
+    if (!name || !category) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
+    }
+
     const policy = await sql`
       INSERT INTO policies (user_id, organization, name, category, version, description, status)
-      VALUES (${user.id}, ${user.organization}, ${name}, ${category}, ${version}, ${description || null}, ${status})
+      VALUES (${user.id}, ${user.organization}, ${name}, ${category}, ${version || "1.0"}, ${description || null}, ${status || "draft"})
       RETURNING *
     `
 

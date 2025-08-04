@@ -1,62 +1,55 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getUserBySession } from "@/lib/auth"
-import { sql } from "@/lib/db"
+import { neon } from "@neondatabase/serverless"
+
+const sql = neon(process.env.DATABASE_URL!)
 
 export async function GET(request: NextRequest) {
   try {
-    const sessionToken = request.cookies.get("session")?.value
+    // Get user session from cookie
+    const sessionToken = request.cookies.get("session-token")?.value
 
     if (!sessionToken) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const user = await getUserBySession(sessionToken)
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const { searchParams } = new URL(request.url)
-    const organization = searchParams.get("organization")
-
-    if (!organization || organization !== user.organization) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    }
-
-    // Get policies metrics
-    const policiesCount = await sql`
-      SELECT 
-        COUNT(*) as total_policies,
-        COUNT(*) FILTER (WHERE status = 'active') as active_policies,
-        MAX(updated_at) as last_updated
-      FROM policies 
-      WHERE organization = ${organization}
+    // Get user from session
+    const userResult = await sql`
+      SELECT id, organization_id FROM users WHERE session_token = ${sessionToken}
     `
 
-    // Get violations count
-    const violationsCount = await sql`
-      SELECT COUNT(*) as violations
-      FROM policy_violations 
-      WHERE organization = ${organization}
-      AND created_at >= NOW() - INTERVAL '30 days'
-    `
+    if (userResult.length === 0) {
+      return NextResponse.json({ error: "Invalid session" }, { status: 401 })
+    }
+
+    const user = userResult[0]
+
+    // Get policy metrics for the user's organization
+    const [totalPolicies, activePolicies, violations, complianceRate] = await Promise.all([
+      sql`SELECT COUNT(*) as count FROM policies WHERE organization_id = ${user.organization_id}`,
+      sql`SELECT COUNT(*) as count FROM policies WHERE organization_id = ${user.organization_id} AND status = 'active'`,
+      sql`SELECT COUNT(*) as count FROM policy_violations WHERE organization_id = ${user.organization_id} AND created_at >= NOW() - INTERVAL '30 days'`,
+      sql`
+        SELECT 
+          CASE 
+            WHEN COUNT(*) = 0 THEN 100
+            ELSE ROUND((COUNT(*) FILTER (WHERE status = 'resolved') * 100.0 / COUNT(*)), 1)
+          END as rate
+        FROM policy_violations 
+        WHERE organization_id = ${user.organization_id} 
+        AND created_at >= NOW() - INTERVAL '30 days'
+      `,
+    ])
 
     const metrics = {
-      totalPolicies: Number.parseInt(policiesCount[0]?.total_policies || "0"),
-      activePolicies: Number.parseInt(policiesCount[0]?.active_policies || "0"),
-      lastUpdated: policiesCount[0]?.last_updated || null,
-      violations: Number.parseInt(violationsCount[0]?.violations || "0"),
+      totalPolicies: Number.parseInt(totalPolicies[0]?.count || "0"),
+      activePolicies: Number.parseInt(activePolicies[0]?.count || "0"),
+      recentViolations: Number.parseInt(violations[0]?.count || "0"),
+      complianceRate: Number.parseFloat(complianceRate[0]?.rate || "100"),
     }
 
-    return NextResponse.json({ metrics })
+    return NextResponse.json(metrics)
   } catch (error) {
     console.error("Error fetching policy metrics:", error)
-    return NextResponse.json({
-      metrics: {
-        totalPolicies: 0,
-        activePolicies: 0,
-        lastUpdated: null,
-        violations: 0,
-      },
-    })
+    return NextResponse.json({ error: "Failed to fetch policy metrics" }, { status: 500 })
   }
 }

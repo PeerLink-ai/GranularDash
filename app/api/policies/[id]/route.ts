@@ -1,90 +1,113 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getUserBySession } from "@/lib/auth"
-import { sql } from "@/lib/db"
+import { neon } from "@neondatabase/serverless"
+
+const sql = neon(process.env.DATABASE_URL!)
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const sessionToken = request.cookies.get("session")?.value
+    // Get user session from cookie
+    const sessionToken = request.cookies.get("session-token")?.value
 
     if (!sessionToken) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const user = await getUserBySession(sessionToken)
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const policy = await sql`
-      SELECT * FROM policies 
-      WHERE id = ${params.id} AND organization = ${user.organization}
+    // Get user from session
+    const userResult = await sql`
+      SELECT id, organization_id FROM users WHERE session_token = ${sessionToken}
     `
 
-    if (policy.length === 0) {
+    if (userResult.length === 0) {
+      return NextResponse.json({ error: "Invalid session" }, { status: 401 })
+    }
+
+    const user = userResult[0]
+
+    // Fetch specific policy
+    const result = await sql`
+      SELECT * FROM policies 
+      WHERE id = ${params.id} AND organization_id = ${user.organization_id}
+    `
+
+    if (result.length === 0) {
       return NextResponse.json({ error: "Policy not found" }, { status: 404 })
     }
 
-    return NextResponse.json({ policy: policy[0] })
+    return NextResponse.json(result[0])
   } catch (error) {
     console.error("Error fetching policy:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json({ error: "Failed to fetch policy" }, { status: 500 })
   }
 }
 
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const sessionToken = request.cookies.get("session")?.value
+    // Get user session from cookie
+    const sessionToken = request.cookies.get("session-token")?.value
 
     if (!sessionToken) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const user = await getUserBySession(sessionToken)
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    // Get user from session
+    const userResult = await sql`
+      SELECT id, organization_id FROM users WHERE session_token = ${sessionToken}
+    `
+
+    if (userResult.length === 0) {
+      return NextResponse.json({ error: "Invalid session" }, { status: 401 })
     }
 
-    const { name, category, version, description, status } = await request.json()
+    const user = userResult[0]
+    const body = await request.json()
 
-    if (!name || !category) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
-    }
+    const { name, type, description, rules, severity, status } = body
 
-    const policy = await sql`
+    // Update policy
+    const result = await sql`
       UPDATE policies 
-      SET name = ${name}, category = ${category}, version = ${version}, 
-          description = ${description}, status = ${status}
-      WHERE id = ${params.id} AND organization = ${user.organization}
+      SET name = ${name}, type = ${type}, description = ${description}, 
+          rules = ${JSON.stringify(rules)}, severity = ${severity}, 
+          status = ${status}, updated_at = NOW()
+      WHERE id = ${params.id} AND organization_id = ${user.organization_id}
       RETURNING *
     `
 
-    if (policy.length === 0) {
+    if (result.length === 0) {
       return NextResponse.json({ error: "Policy not found" }, { status: 404 })
     }
 
-    return NextResponse.json({ policy: policy[0] })
+    return NextResponse.json(result[0])
   } catch (error) {
     console.error("Error updating policy:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json({ error: "Failed to update policy" }, { status: 500 })
   }
 }
 
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const sessionToken = request.cookies.get("session")?.value
+    // Get user session from cookie
+    const sessionToken = request.cookies.get("session-token")?.value
 
     if (!sessionToken) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const user = await getUserBySession(sessionToken)
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    // Get user from session
+    const userResult = await sql`
+      SELECT id, organization_id FROM users WHERE session_token = ${sessionToken}
+    `
+
+    if (userResult.length === 0) {
+      return NextResponse.json({ error: "Invalid session" }, { status: 401 })
     }
 
+    const user = userResult[0]
+
+    // Delete policy
     const result = await sql`
       DELETE FROM policies 
-      WHERE id = ${params.id} AND organization = ${user.organization}
+      WHERE id = ${params.id} AND organization_id = ${user.organization_id}
       RETURNING id
     `
 
@@ -92,9 +115,9 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
       return NextResponse.json({ error: "Policy not found" }, { status: 404 })
     }
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ message: "Policy deleted successfully" })
   } catch (error) {
     console.error("Error deleting policy:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json({ error: "Failed to delete policy" }, { status: 500 })
   }
 }

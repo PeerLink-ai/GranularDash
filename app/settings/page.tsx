@@ -1,6 +1,7 @@
 "use client"
 
 import { useSettings } from "@/contexts/settings-context"
+import { useAuth } from "@/contexts/auth-context"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -12,7 +13,8 @@ import { Slider } from "@/components/ui/slider"
 import { Checkbox } from "@/components/ui/checkbox"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Laptop, Smartphone, Tablet } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { Laptop, Smartphone, Tablet, Building2, Users, Shield } from "lucide-react"
 import { useState } from "react"
 import { toast } from "sonner"
 
@@ -31,7 +33,14 @@ const defaultAvatars = [
 
 export default function SettingsPage() {
   const { settings, updateSettings, updateNotificationSettings, updatePrivacySettings } = useSettings()
+  const { user } = useAuth()
   const [selectedAvatar, setSelectedAvatar] = useState(settings.avatar)
+  const [organizationSettings, setOrganizationSettings] = useState({
+    name: user?.organization || "",
+    industry: "Technology",
+    size: "10-50",
+    complianceLevel: "standard",
+  })
 
   const handleSaveAccount = () => {
     updateSettings({
@@ -42,6 +51,11 @@ export default function SettingsPage() {
       timezone: settings.timezone,
     })
     toast.success("Account settings saved successfully")
+  }
+
+  const handleSaveOrganization = () => {
+    // In a real app, this would update the organization in the database
+    toast.success("Organization settings saved successfully")
   }
 
   const handleSaveNotifications = () => {
@@ -58,8 +72,9 @@ export default function SettingsPage() {
     <div className="container mx-auto py-10">
       <h1 className="text-3xl font-bold mb-6">Settings</h1>
       <Tabs defaultValue="account" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="account">Account</TabsTrigger>
+          <TabsTrigger value="organization">Organization</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
           <TabsTrigger value="preferences">Preferences</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
@@ -70,14 +85,14 @@ export default function SettingsPage() {
           <Card>
             <CardHeader>
               <CardTitle>Account Settings</CardTitle>
-              <CardDescription>Manage your account information</CardDescription>
+              <CardDescription>Manage your personal account information</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-4">
                 <Label>Current Avatar</Label>
                 <div className="flex items-center space-x-4">
                   <Avatar className="h-20 w-20">
-                    <AvatarImage src={selectedAvatar} alt={settings.fullName} />
+                    <AvatarImage src={selectedAvatar || "/placeholder.svg"} alt={settings.fullName} />
                     <AvatarFallback>
                       {settings.fullName
                         .split(" ")
@@ -85,6 +100,13 @@ export default function SettingsPage() {
                         .join("")}
                     </AvatarFallback>
                   </Avatar>
+                  <div>
+                    <p className="font-medium">{user?.name}</p>
+                    <p className="text-sm text-muted-foreground">{user?.email}</p>
+                    <Badge variant="secondary" className="mt-1">
+                      {user?.role}
+                    </Badge>
+                  </div>
                 </div>
                 <Label>Choose a new avatar</Label>
                 <div className="flex gap-4 overflow-x-auto pb-2">
@@ -96,7 +118,11 @@ export default function SettingsPage() {
                       }`}
                       onClick={() => setSelectedAvatar(avatar)}
                     >
-                      <AvatarImage src={avatar} alt={`Avatar ${index + 1}`} className="object-cover" />
+                      <AvatarImage
+                        src={avatar || "/placeholder.svg"}
+                        alt={`Avatar ${index + 1}`}
+                        className="object-cover"
+                      />
                       <AvatarFallback>{index + 1}</AvatarFallback>
                     </Avatar>
                   ))}
@@ -171,6 +197,137 @@ export default function SettingsPage() {
             </CardContent>
             <CardFooter>
               <Button onClick={handleSaveAccount}>Save Account Settings</Button>
+            </CardFooter>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="organization">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Building2 className="h-5 w-5" />
+                Organization Settings
+              </CardTitle>
+              <CardDescription>Manage settings for {user?.organization} organization</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="org-name">Organization Name</Label>
+                  <Input
+                    id="org-name"
+                    value={organizationSettings.name}
+                    onChange={(e) => setOrganizationSettings((prev) => ({ ...prev, name: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="industry">Industry</Label>
+                  <Select
+                    value={organizationSettings.industry}
+                    onValueChange={(value) => setOrganizationSettings((prev) => ({ ...prev, industry: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select Industry" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="technology">Technology</SelectItem>
+                      <SelectItem value="finance">Finance</SelectItem>
+                      <SelectItem value="healthcare">Healthcare</SelectItem>
+                      <SelectItem value="education">Education</SelectItem>
+                      <SelectItem value="retail">Retail</SelectItem>
+                      <SelectItem value="manufacturing">Manufacturing</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="org-size">Organization Size</Label>
+                  <Select
+                    value={organizationSettings.size}
+                    onValueChange={(value) => setOrganizationSettings((prev) => ({ ...prev, size: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select Size" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1-10">1-10 employees</SelectItem>
+                      <SelectItem value="10-50">10-50 employees</SelectItem>
+                      <SelectItem value="50-200">50-200 employees</SelectItem>
+                      <SelectItem value="200-1000">200-1000 employees</SelectItem>
+                      <SelectItem value="1000+">1000+ employees</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="compliance-level">Compliance Level</Label>
+                  <Select
+                    value={organizationSettings.complianceLevel}
+                    onValueChange={(value) => setOrganizationSettings((prev) => ({ ...prev, complianceLevel: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select Level" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="basic">Basic</SelectItem>
+                      <SelectItem value="standard">Standard</SelectItem>
+                      <SelectItem value="enterprise">Enterprise</SelectItem>
+                      <SelectItem value="government">Government</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <h4 className="font-medium flex items-center gap-2">
+                  <Users className="h-4 w-4" />
+                  Team Members
+                </h4>
+                <div className="border rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-sm text-muted-foreground">Users in {user?.organization}</span>
+                    <Badge variant="secondary">1 member</Badge>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src={user?.avatar || "/placeholder.svg"} />
+                      <AvatarFallback>{user?.name?.charAt(0)}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">{user?.name}</p>
+                      <p className="text-xs text-muted-foreground">{user?.email}</p>
+                    </div>
+                    <Badge variant="outline">{user?.role}</Badge>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <h4 className="font-medium flex items-center gap-2">
+                  <Shield className="h-4 w-4" />
+                  Security & Compliance
+                </h4>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="require-2fa">Require 2FA for all users</Label>
+                    <Switch id="require-2fa" />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="audit-logging">Enhanced audit logging</Label>
+                    <Switch id="audit-logging" defaultChecked />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="data-retention">Extended data retention</Label>
+                    <Switch id="data-retention" />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="sso-required">SSO required</Label>
+                    <Switch id="sso-required" />
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+            <CardFooter>
+              <Button onClick={handleSaveOrganization}>Save Organization Settings</Button>
             </CardFooter>
           </Card>
         </TabsContent>

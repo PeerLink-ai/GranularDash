@@ -1,68 +1,50 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getUserBySession } from "@/lib/auth"
 import { sql } from "@/lib/db"
+import { getUser } from "@/lib/auth"
 
 export async function GET(request: NextRequest) {
   try {
-    const sessionToken = request.cookies.get("session")?.value
-
-    if (!sessionToken) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const user = await getUserBySession(sessionToken)
+    const user = await getUser(request)
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { searchParams } = new URL(request.url)
-    const organization = searchParams.get("organization")
-
-    if (!organization || organization !== user.organization) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    }
-
     const rules = await sql`
       SELECT * FROM access_rules 
-      WHERE organization = ${organization}
+      WHERE organization = ${user.organization}
       ORDER BY created_at DESC
     `
 
     return NextResponse.json({ rules: rules || [] })
   } catch (error) {
-    console.error("Error fetching access rules:", error)
-    return NextResponse.json({ rules: [] })
+    console.error("Failed to fetch access rules:", error)
+    return NextResponse.json({ rules: [] }, { status: 500 })
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const sessionToken = request.cookies.get("session")?.value
-
-    if (!sessionToken) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const user = await getUserBySession(sessionToken)
+    const user = await getUser(request)
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { name, resource, role, permission, status, description } = await request.json()
+    const { name, description, resource_type, permissions, conditions, status } = await request.json()
 
-    if (!name || !resource || !role || !permission) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
-    }
-
-    const rule = await sql`
-      INSERT INTO access_rules (user_id, organization, name, resource, role, permission, status, description)
-      VALUES (${user.id}, ${user.organization}, ${name}, ${resource}, ${role}, ${permission}, ${status || "active"}, ${description || null})
-      RETURNING *
+    const [rule] = await sql`
+      INSERT INTO access_rules (
+        user_id, organization, name, description, resource_type, 
+        permissions, conditions, status, created_at, updated_at
+      ) VALUES (
+        ${user.id}, ${user.organization}, ${name}, ${description}, ${resource_type},
+        ${JSON.stringify(permissions)}, ${JSON.stringify(conditions)}, ${status || "active"},
+        NOW(), NOW()
+      ) RETURNING *
     `
 
-    return NextResponse.json({ rule: rule[0] })
+    return NextResponse.json({ rule })
   } catch (error) {
-    console.error("Error creating access rule:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    console.error("Failed to create access rule:", error)
+    return NextResponse.json({ error: "Failed to create rule" }, { status: 500 })
   }
 }

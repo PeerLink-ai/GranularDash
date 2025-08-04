@@ -1,60 +1,45 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { AccessRulesTable } from "@/components/access-rules-table"
-import { Shield, Users, AlertTriangle, Plus, Activity } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
-import { toast } from "@/hooks/use-toast"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { AccessRulesTable } from "@/components/access-rules-table"
+import { Shield, Users, Lock, Activity } from "lucide-react"
 
-interface AccessControlMetrics {
+interface AccessMetrics {
   totalRules: number
   activeRules: number
-  lastModified: string | null
-  deniedAttempts: number
+  recentActivity: number
+  complianceScore: number
 }
 
 export default function AccessControlPage() {
   const { user } = useAuth()
-  const [metrics, setMetrics] = useState<AccessControlMetrics>({
+  const [metrics, setMetrics] = useState<AccessMetrics>({
     totalRules: 0,
     activeRules: 0,
-    lastModified: null,
-    deniedAttempts: 0,
+    recentActivity: 0,
+    complianceScore: 0,
   })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (user?.organization) {
+    if (user) {
       fetchMetrics()
     }
   }, [user])
 
   const fetchMetrics = async () => {
     try {
-      const response = await fetch(`/api/access-control/metrics?organization=${user?.organization}`)
+      const response = await fetch("/api/access-control/metrics")
       if (response.ok) {
         const data = await response.json()
-        setMetrics(
-          data.metrics || {
-            totalRules: 0,
-            activeRules: 0,
-            lastModified: null,
-            deniedAttempts: 0,
-          },
-        )
+        setMetrics(data)
       } else {
         console.error("Failed to fetch metrics:", response.statusText)
       }
     } catch (error) {
-      console.error("Error fetching metrics:", error)
-      toast({
-        title: "Error",
-        description: "Failed to load access control metrics",
-        variant: "destructive",
-      })
+      console.error("Failed to fetch metrics:", error)
     } finally {
       setLoading(false)
     }
@@ -63,23 +48,24 @@ export default function AccessControlPage() {
   if (!user) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-muted-foreground">Please sign in to access this page.</div>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-      <div className="flex items-center justify-between space-y-2">
-        <h2 className="text-3xl font-bold tracking-tight">Access Control</h2>
-        <div className="flex items-center space-x-2">
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            Add Rule
-          </Button>
-        </div>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Access Control</h1>
+        <p className="text-muted-foreground">
+          Manage access rules and permissions for your {user.organization} organization.
+        </p>
       </div>
 
+      {/* Metrics Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -88,89 +74,46 @@ export default function AccessControlPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{loading ? "..." : metrics.totalRules}</div>
-            <p className="text-xs text-muted-foreground">{metrics.activeRules} active rules</p>
+            <p className="text-xs text-muted-foreground">Access control rules defined</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Active Rules</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
+            <Lock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{loading ? "..." : metrics.activeRules}</div>
-            <p className="text-xs text-muted-foreground">Currently enforced</p>
+            <p className="text-xs text-muted-foreground">Currently enforced rules</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Last Modified</CardTitle>
+            <CardTitle className="text-sm font-medium">Recent Activity</CardTitle>
             <Activity className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {loading ? "..." : metrics.lastModified ? new Date(metrics.lastModified).toLocaleDateString() : "Never"}
-            </div>
-            <p className="text-xs text-muted-foreground">Most recent update</p>
+            <div className="text-2xl font-bold">{loading ? "..." : metrics.recentActivity}</div>
+            <p className="text-xs text-muted-foreground">Access events (24h)</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Denied Attempts</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Compliance Score</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{loading ? "..." : metrics.deniedAttempts}</div>
-            <p className="text-xs text-muted-foreground">Last 24 hours</p>
+            <div className="text-2xl font-bold">{loading ? "..." : `${metrics.complianceScore}%`}</div>
+            <p className="text-xs text-muted-foreground">Overall compliance rating</p>
           </CardContent>
         </Card>
       </div>
 
-      <Tabs defaultValue="rules" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="rules">Access Rules</TabsTrigger>
-          <TabsTrigger value="permissions">Permissions</TabsTrigger>
-          <TabsTrigger value="audit">Audit Log</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="rules" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Access Rules</CardTitle>
-              <CardDescription>Manage access control rules for AI agents and resources</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <AccessRulesTable />
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="permissions" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Permission Matrix</CardTitle>
-              <CardDescription>View and manage permissions across different roles and resources</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-8 text-muted-foreground">Permission matrix coming soon...</div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="audit" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Access Audit Log</CardTitle>
-              <CardDescription>Track access attempts and rule violations</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-8 text-muted-foreground">No access attempts logged yet</div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+      {/* Access Rules Table */}
+      <AccessRulesTable />
     </div>
   )
 }

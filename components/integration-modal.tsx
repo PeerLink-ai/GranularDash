@@ -1,227 +1,551 @@
 "use client"
 
 import { useState } from "react"
-import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { useToast } from "@/hooks/use-toast"
-import { Bot, Zap, Code, Brain, Sparkles, CheckCircle, ExternalLink } from "lucide-react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Textarea } from "@/components/ui/textarea"
+import { Bot, Copy, Key, Code, Webhook, X, CheckCircle, AlertCircle, ExternalLink } from "lucide-react"
+import { toast } from "sonner"
+import { useAuth } from "@/contexts/auth-context"
 
-const integrations = [
-  {
-    id: "openai",
-    name: "OpenAI",
-    description: "Connect GPT-4, GPT-3.5, and other OpenAI models with OAuth",
-    icon: Brain,
-    status: "available",
-    features: ["GPT-4o", "GPT-4", "GPT-3.5-turbo", "DALL-E", "Whisper"],
-    color: "bg-green-500",
-    oauthUrl: "https://platform.openai.com/oauth/authorize",
-  },
-  {
-    id: "anthropic",
-    name: "Anthropic",
-    description: "Connect Claude 3 models with secure OAuth integration",
-    icon: Bot,
-    status: "available",
-    features: ["Claude 3 Opus", "Claude 3 Sonnet", "Claude 3 Haiku"],
-    color: "bg-orange-500",
-    oauthUrl: "https://console.anthropic.com/oauth/authorize",
-  },
-  {
-    id: "replit",
-    name: "Replit",
-    description: "Connect Replit AI agents and code execution environments",
-    icon: Code,
-    status: "available",
-    features: ["Code Generation", "Code Execution", "Replit Agent"],
-    color: "bg-blue-500",
-    oauthUrl: "https://replit.com/oauth/authorize",
-  },
-  {
-    id: "groq",
-    name: "Groq",
-    description: "Ultra-fast inference with Llama and Mixtral models",
-    icon: Zap,
-    status: "available",
-    features: ["Llama 3", "Mixtral 8x7B", "Gemma 7B"],
-    color: "bg-purple-500",
-    oauthUrl: "https://console.groq.com/oauth/authorize",
-  },
-  {
-    id: "google",
-    name: "Google AI",
-    description: "Connect Gemini Pro and other Google AI models",
-    icon: Sparkles,
-    status: "coming-soon",
-    features: ["Gemini Pro", "PaLM 2", "Bard"],
-    color: "bg-yellow-500",
-    oauthUrl: null,
-  },
-]
+interface IntegrationModalProps {
+  isOpen: boolean
+  onOpenChange: (open: boolean) => void
+  onAgentConnected?: () => void
+}
 
-export function IntegrationModal({ isOpen, onOpenChange }) {
-  const [connecting, setConnecting] = useState<string | null>(null)
-  const { toast } = useToast()
+export function IntegrationModal({ isOpen, onOpenChange, onAgentConnected }: IntegrationModalProps) {
+  const { user } = useAuth()
+  const [step, setStep] = useState<"setup" | "integration" | "success">("setup")
+  const [isCreating, setIsCreating] = useState(false)
+  const [agentData, setAgentData] = useState({
+    name: "",
+    description: "",
+    type: "",
+    environment: "production",
+    framework: "",
+    language: "",
+  })
+  const [createdAgent, setCreatedAgent] = useState<any>(null)
 
-  const handleConnect = async (integration) => {
-    if (integration.status === "coming-soon") return
+  const handleClose = () => {
+    setStep("setup")
+    setAgentData({ name: "", description: "", type: "", environment: "production", framework: "", language: "" })
+    setCreatedAgent(null)
+    onOpenChange(false)
+  }
 
-    setConnecting(integration.id)
+  const handleCreateAgent = async () => {
+    if (!agentData.name || !agentData.type) {
+      toast.error("Please fill in all required fields")
+      return
+    }
 
+    setIsCreating(true)
     try {
-      // Start OAuth flow
-      const response = await fetch(`/api/integrations/${integration.id}/connect`, {
+      const response = await fetch("/api/agents/register", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...agentData,
+          organization: user?.organization,
+        }),
       })
 
       if (response.ok) {
-        const { authUrl } = await response.json()
-
-        // Open OAuth popup
-        const popup = window.open(
-          authUrl,
-          "oauth",
-          "width=600,height=700,scrollbars=yes,resizable=yes,left=" +
-            (window.screen.width / 2 - 300) +
-            ",top=" +
-            (window.screen.height / 2 - 350),
-        )
-
-        // Listen for OAuth completion
-        const checkClosed = setInterval(() => {
-          if (popup?.closed) {
-            clearInterval(checkClosed)
-            setConnecting(null)
-
-            // Check if connection was successful
-            setTimeout(() => {
-              toast({
-                title: "Agent Connected!",
-                description: `Successfully connected ${integration.name} agent`,
-              })
-              onOpenChange(false)
-              // Refresh the page to show new agents
-              window.location.reload()
-            }, 500)
-          }
-        }, 1000)
-
-        // Handle popup blocked
-        if (!popup || popup.closed) {
-          throw new Error("Popup blocked")
-        }
+        const agent = await response.json()
+        setCreatedAgent(agent)
+        setStep("integration")
+        toast.success("Agent registered successfully!")
       } else {
-        throw new Error("Failed to initiate OAuth")
+        throw new Error("Failed to register agent")
       }
     } catch (error) {
-      console.error("Connection failed:", error)
-      toast({
-        title: "Connection Failed",
-        description:
-          error.message === "Popup blocked"
-            ? "Please allow popups for this site and try again"
-            : "Failed to connect agent. Please try again.",
-        variant: "destructive",
-      })
-      setConnecting(null)
+      toast.error("Failed to register agent")
+    } finally {
+      setIsCreating(false)
     }
+  }
+
+  const copyToClipboard = (text: string, label: string) => {
+    navigator.clipboard.writeText(text)
+    toast.success(`${label} copied to clipboard`)
+  }
+
+  const handleComplete = () => {
+    onAgentConnected?.()
+    handleClose()
   }
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Connect AI Agents</DialogTitle>
-          <DialogDescription>
-            Choose from our supported AI providers. We'll securely connect using OAuth - no API keys needed!
-          </DialogDescription>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader className="flex flex-row items-center justify-between">
+          <div>
+            <DialogTitle className="flex items-center gap-2 text-xl">
+              <Bot className="h-6 w-6" />
+              Register AI Agent for Monitoring
+            </DialogTitle>
+            <DialogDescription className="text-base mt-2">
+              Register your AI agent with <strong>{user?.organization}</strong> to enable compliance monitoring, audit
+              logging, and governance oversight.
+            </DialogDescription>
+          </div>
+          <Button variant="ghost" size="sm" onClick={handleClose}>
+            <X className="h-4 w-4" />
+          </Button>
         </DialogHeader>
 
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {integrations.map((integration) => {
-            const Icon = integration.icon
-            const isConnecting = connecting === integration.id
-            const isComingSoon = integration.status === "coming-soon"
-
-            return (
-              <Card key={integration.id} className="relative hover:shadow-md transition-shadow">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <div className={`p-2 rounded-lg ${integration.color} text-white`}>
-                        <Icon className="h-4 w-4" />
-                      </div>
-                      <CardTitle className="text-lg">{integration.name}</CardTitle>
-                    </div>
-                    {isComingSoon ? (
-                      <Badge variant="secondary">Coming Soon</Badge>
-                    ) : (
-                      <Badge variant="outline" className="text-green-600 border-green-200">
-                        <CheckCircle className="h-3 w-3 mr-1" />
-                        OAuth Ready
-                      </Badge>
-                    )}
-                  </div>
-                  <CardDescription>{integration.description}</CardDescription>
-                </CardHeader>
-
-                <CardContent className="space-y-4">
+        {step === "setup" && (
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Agent Information</CardTitle>
+                <CardDescription>
+                  Provide details about your AI agent for proper monitoring and compliance
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
-                    <p className="text-sm font-medium">Available Models:</p>
-                    <div className="flex flex-wrap gap-1">
-                      {integration.features.map((feature) => (
-                        <Badge key={feature} variant="outline" className="text-xs">
-                          {feature}
-                        </Badge>
-                      ))}
-                    </div>
+                    <Label htmlFor="agent-name">
+                      Agent Name <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      id="agent-name"
+                      value={agentData.name}
+                      onChange={(e) => setAgentData((prev) => ({ ...prev, name: e.target.value }))}
+                      placeholder="Customer Support Bot"
+                    />
                   </div>
-
                   <div className="space-y-2">
-                    <Button
-                      className="w-full"
-                      onClick={() => handleConnect(integration)}
-                      disabled={isConnecting || isComingSoon}
+                    <Label htmlFor="agent-type">
+                      Agent Type <span className="text-red-500">*</span>
+                    </Label>
+                    <Select
+                      value={agentData.type}
+                      onValueChange={(value) => setAgentData((prev) => ({ ...prev, type: value }))}
                     >
-                      {isConnecting ? (
-                        <>
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                          Connecting...
-                        </>
-                      ) : isComingSoon ? (
-                        "Coming Soon"
-                      ) : (
-                        <>
-                          <ExternalLink className="mr-2 h-4 w-4" />
-                          Connect {integration.name}
-                        </>
-                      )}
-                    </Button>
-
-                    {!isComingSoon && (
-                      <p className="text-xs text-muted-foreground text-center">Secure OAuth - No API keys required</p>
-                    )}
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select agent type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="chatbot">Chatbot</SelectItem>
+                        <SelectItem value="assistant">AI Assistant</SelectItem>
+                        <SelectItem value="analyzer">Content Analyzer</SelectItem>
+                        <SelectItem value="generator">Content Generator</SelectItem>
+                        <SelectItem value="classifier">Text Classifier</SelectItem>
+                        <SelectItem value="translator">Language Translator</SelectItem>
+                        <SelectItem value="summarizer">Document Summarizer</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
-                </CardContent>
-              </Card>
-            )
-          })}
-        </div>
+                </div>
 
-        <div className="mt-6 p-4 bg-muted rounded-lg">
-          <h4 className="font-medium mb-2">How it works:</h4>
-          <ol className="text-sm text-muted-foreground space-y-1">
-            <li>1. Click "Connect" to open the provider's OAuth page</li>
-            <li>2. Sign in to your provider account and authorize Granular</li>
-            <li>3. Your agent will be automatically configured and ready to use</li>
-            <li>4. No API keys to manage - everything is handled securely</li>
-          </ol>
-        </div>
+                <div className="space-y-2">
+                  <Label htmlFor="description">Description</Label>
+                  <Textarea
+                    id="description"
+                    value={agentData.description}
+                    onChange={(e) => setAgentData((prev) => ({ ...prev, description: e.target.value }))}
+                    placeholder="Describe what your AI agent does and its primary use cases..."
+                    rows={3}
+                  />
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="environment">Environment</Label>
+                    <Select
+                      value={agentData.environment}
+                      onValueChange={(value) => setAgentData((prev) => ({ ...prev, environment: value }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="development">Development</SelectItem>
+                        <SelectItem value="staging">Staging</SelectItem>
+                        <SelectItem value="production">Production</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="framework">Framework/Platform</Label>
+                    <Select
+                      value={agentData.framework}
+                      onValueChange={(value) => setAgentData((prev) => ({ ...prev, framework: value }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select framework" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="openai">OpenAI API</SelectItem>
+                        <SelectItem value="langchain">LangChain</SelectItem>
+                        <SelectItem value="llamaindex">LlamaIndex</SelectItem>
+                        <SelectItem value="anthropic">Anthropic Claude</SelectItem>
+                        <SelectItem value="huggingface">Hugging Face</SelectItem>
+                        <SelectItem value="custom">Custom Implementation</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="language">Programming Language</Label>
+                    <Select
+                      value={agentData.language}
+                      onValueChange={(value) => setAgentData((prev) => ({ ...prev, language: value }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select language" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="python">Python</SelectItem>
+                        <SelectItem value="javascript">JavaScript</SelectItem>
+                        <SelectItem value="typescript">TypeScript</SelectItem>
+                        <SelectItem value="java">Java</SelectItem>
+                        <SelectItem value="csharp">C#</SelectItem>
+                        <SelectItem value="go">Go</SelectItem>
+                        <SelectItem value="rust">Rust</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="flex justify-end">
+              <Button onClick={handleCreateAgent} disabled={isCreating} size="lg">
+                {isCreating ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Creating Agent...
+                  </>
+                ) : (
+                  <>
+                    <Bot className="mr-2 h-4 w-4" />
+                    Register Agent
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {step === "integration" && createdAgent && (
+          <div className="space-y-6">
+            <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-lg">
+              <CheckCircle className="h-6 w-6 text-green-600" />
+              <div>
+                <h3 className="font-semibold text-green-800">Agent Registered Successfully!</h3>
+                <p className="text-sm text-green-700">
+                  {createdAgent.name} is now registered. Follow the integration steps below to start monitoring.
+                </p>
+              </div>
+            </div>
+
+            <Tabs defaultValue="api-key" className="space-y-4">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="api-key">API Key Integration</TabsTrigger>
+                <TabsTrigger value="webhook">Webhook Integration</TabsTrigger>
+                <TabsTrigger value="sdk">SDK Integration</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="api-key" className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Key className="h-5 w-5" />
+                      API Key Integration
+                    </CardTitle>
+                    <CardDescription>
+                      Use this API key to send logs and metrics from your agent to our monitoring system
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <Label>Agent ID</Label>
+                      <div className="flex items-center gap-2">
+                        <Input value={createdAgent.agent_id} readOnly className="font-mono" />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => copyToClipboard(createdAgent.agent_id, "Agent ID")}
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>API Key</Label>
+                      <div className="flex items-center gap-2">
+                        <Input value={createdAgent.api_key} readOnly className="font-mono" type="password" />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => copyToClipboard(createdAgent.api_key, "API Key")}
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Monitoring Endpoint</Label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          value={`${process.env.NEXT_PUBLIC_APP_URL || "https://your-domain.com"}/api/monitoring/ingest`}
+                          readOnly
+                          className="font-mono"
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            copyToClipboard(
+                              `${process.env.NEXT_PUBLIC_APP_URL || "https://your-domain.com"}/api/monitoring/ingest`,
+                              "Endpoint URL",
+                            )
+                          }
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="bg-muted p-4 rounded-lg">
+                      <h4 className="font-medium mb-2">Example Usage (Python)</h4>
+                      <pre className="text-sm bg-black text-green-400 p-3 rounded overflow-x-auto">
+                        {`import requests
+import json
+
+# Log an AI interaction
+def log_interaction(prompt, response, metadata=None):
+    payload = {
+        "agent_id": "${createdAgent.agent_id}",
+        "event_type": "interaction",
+        "data": {
+            "prompt": prompt,
+            "response": response,
+            "metadata": metadata or {}
+        }
+    }
+    
+    headers = {
+        "Authorization": "Bearer ${createdAgent.api_key}",
+        "Content-Type": "application/json"
+    }
+    
+    response = requests.post(
+        "${process.env.NEXT_PUBLIC_APP_URL || "https://your-domain.com"}/api/monitoring/ingest",
+        headers=headers,
+        json=payload
+    )
+    
+    return response.json()
+
+# Example usage
+log_interaction(
+    prompt="What is the weather today?",
+    response="I don't have access to real-time weather data.",
+    metadata={"user_id": "user123", "session_id": "sess456"}
+)`}
+                      </pre>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="webhook" className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Webhook className="h-5 w-5" />
+                      Webhook Integration
+                    </CardTitle>
+                    <CardDescription>
+                      Configure your agent to send real-time events via webhooks for immediate monitoring
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <Label>Webhook URL</Label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          value={`${process.env.NEXT_PUBLIC_APP_URL || "https://your-domain.com"}/api/webhooks/${createdAgent.agent_id}`}
+                          readOnly
+                          className="font-mono"
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            copyToClipboard(
+                              `${process.env.NEXT_PUBLIC_APP_URL || "https://your-domain.com"}/api/webhooks/${createdAgent.agent_id}`,
+                              "Webhook URL",
+                            )
+                          }
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Webhook Secret</Label>
+                      <div className="flex items-center gap-2">
+                        <Input value={createdAgent.webhook_secret} readOnly className="font-mono" type="password" />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => copyToClipboard(createdAgent.webhook_secret, "Webhook Secret")}
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="bg-muted p-4 rounded-lg">
+                      <h4 className="font-medium mb-2">Webhook Payload Example</h4>
+                      <pre className="text-sm bg-black text-green-400 p-3 rounded overflow-x-auto">
+                        {`{
+  "event_type": "interaction",
+  "timestamp": "2024-01-15T10:30:00Z",
+  "agent_id": "${createdAgent.agent_id}",
+  "data": {
+    "prompt": "User input or query",
+    "response": "AI agent response",
+    "metadata": {
+      "user_id": "user123",
+      "session_id": "sess456",
+      "model": "gpt-4",
+      "tokens_used": 150,
+      "response_time_ms": 1200
+    }
+  }
+}`}
+                      </pre>
+                    </div>
+
+                    <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
+                      <div className="flex items-start gap-2">
+                        <AlertCircle className="h-5 w-5 text-yellow-600 mt-0.5" />
+                        <div>
+                          <h4 className="font-medium text-yellow-800">Security Note</h4>
+                          <p className="text-sm text-yellow-700">
+                            Always validate webhook signatures using the provided secret to ensure data integrity and
+                            security.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="sdk" className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Code className="h-5 w-5" />
+                      SDK Integration
+                    </CardTitle>
+                    <CardDescription>
+                      Use our SDK for seamless integration with automatic logging and monitoring
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-3">
+                        <h4 className="font-medium">Python SDK</h4>
+                        <div className="bg-black text-green-400 p-3 rounded text-sm">
+                          <div>pip install ai-governance-sdk</div>
+                        </div>
+                        <div className="bg-muted p-3 rounded text-sm">
+                          <pre>{`from ai_governance import GovernanceClient
+
+client = GovernanceClient(
+    agent_id="${createdAgent.agent_id}",
+    api_key="${createdAgent.api_key}"
+)
+
+# Automatic logging wrapper
+@client.monitor
+def my_ai_function(prompt):
+    # Your AI logic here
+    return "AI response"
+
+# Manual logging
+client.log_interaction(
+    prompt="Hello",
+    response="Hi there!",
+    metadata={"user": "john"}
+)`}</pre>
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        <h4 className="font-medium">JavaScript SDK</h4>
+                        <div className="bg-black text-green-400 p-3 rounded text-sm">
+                          <div>npm install @ai-governance/sdk</div>
+                        </div>
+                        <div className="bg-muted p-3 rounded text-sm">
+                          <pre>{`import { GovernanceClient } from '@ai-governance/sdk';
+
+const client = new GovernanceClient({
+  agentId: '${createdAgent.agent_id}',
+  apiKey: '${createdAgent.api_key}'
+});
+
+// Log interactions
+await client.logInteraction({
+  prompt: 'Hello',
+  response: 'Hi there!',
+  metadata: { user: 'john' }
+});`}</pre>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
+                      <div className="flex items-start gap-2">
+                        <ExternalLink className="h-5 w-5 text-blue-600 mt-0.5" />
+                        <div>
+                          <h4 className="font-medium text-blue-800">Documentation</h4>
+                          <p className="text-sm text-blue-700 mb-2">
+                            Visit our documentation for detailed integration guides and examples.
+                          </p>
+                          <Button variant="outline" size="sm" asChild>
+                            <a href="/docs/integration" target="_blank" rel="noreferrer">
+                              View Documentation
+                            </a>
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
+
+            <div className="flex justify-between">
+              <Button variant="outline" onClick={() => setStep("setup")}>
+                Back
+              </Button>
+              <Button onClick={handleComplete} size="lg">
+                Complete Setup
+              </Button>
+            </div>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   )

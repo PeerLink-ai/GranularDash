@@ -1,63 +1,128 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { sql } from "@/lib/db"
+import { getUser } from "@/lib/auth"
+import { logActivity } from "@/lib/activity-logger"
+import jwt from "jsonwebtoken"
 
-// Mock database - same as above
-const connectedAgents = [
-  {
-    id: "openai-gpt4o-001",
-    name: "GPT-4o Enterprise",
-    provider: "OpenAI",
-    model: "gpt-4o",
-    status: "active",
-    endpoint: "https://api.openai.com/v1/chat/completions",
-    connectedAt: "2024-01-15T10:30:00Z",
-    lastActive: "2 hours ago",
-    usage: {
-      requests: 1247,
-      tokensUsed: 45230,
-      estimatedCost: 12.45,
-    },
-  },
-  {
-    id: "anthropic-claude3-001",
-    name: "Claude 3 Opus",
-    provider: "Anthropic",
-    model: "claude-3-opus",
-    status: "active",
-    endpoint: "https://api.anthropic.com/v1/messages",
-    connectedAt: "2024-01-14T15:20:00Z",
-    lastActive: "1 hour ago",
-    usage: {
-      requests: 892,
-      tokensUsed: 32100,
-      estimatedCost: 8.9,
-    },
-  },
-  {
-    id: "groq-llama3-001",
-    name: "Llama 3 70B",
-    provider: "Groq",
-    model: "llama3-70b",
-    status: "inactive",
-    endpoint: "https://api.groq.com/openai/v1/chat/completions",
-    connectedAt: "2024-01-13T09:15:00Z",
-    lastActive: "1 day ago",
-    usage: {
-      requests: 456,
-      tokensUsed: 18900,
-      estimatedCost: 2.3,
-    },
-  },
-]
+const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key"
+
+export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    // Get auth token from cookies
+    const token = request.cookies.get("auth-token")?.value
+
+    if (!token) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    // Verify token
+    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string }
+
+    // Get agent
+    const agents = await sql`
+      SELECT ca.*, u.name as owner_name
+      FROM connected_agents ca
+      LEFT JOIN users u ON ca.user_id = u.id
+      WHERE ca.id = ${params.id}
+    `
+
+    if (agents.length === 0) {
+      return NextResponse.json({ error: "Agent not found" }, { status: 404 })
+    }
+
+    const agent = agents[0]
+
+    return NextResponse.json({ agent })
+  } catch (error) {
+    console.error("Agent fetch error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  }
+}
+
+export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const user = await getUser(request)
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const { id } = params
+    const body = await request.json()
+    const { name, status, endpoint } = body
+
+    // Update agent
+    const [updatedAgent] = await sql`
+      UPDATE connected_agents 
+      SET 
+        name = COALESCE(${name}, name),
+        status = COALESCE(${status}, status),
+        endpoint = COALESCE(${endpoint}, endpoint),
+        updated_at = NOW()
+      WHERE id = ${id} AND user_id = ${user.id}
+      RETURNING *
+    `
+
+    if (!updatedAgent) {
+      return NextResponse.json({ error: "Agent not found" }, { status: 404 })
+    }
+
+    // Log the activity
+    await logActivity({
+      userId: user.id,
+      organization: user.organization,
+      action: "Agent updated",
+      resourceType: "agent",
+      resourceId: updatedAgent.id,
+      description: `Updated agent: ${updatedAgent.name}`,
+      status: "success",
+    })
+
+    return NextResponse.json({ agent: updatedAgent })
+  } catch (error) {
+    console.error("Agent update error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  }
+}
 
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
-  const { id } = params
+  try {
+    const user = await getUser(request)
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
 
-  const agentIndex = connectedAgents.findIndex((agent) => agent.id === id)
-  if (agentIndex === -1) {
-    return NextResponse.json({ error: "Agent not found" }, { status: 404 })
+    const { id } = params
+
+    // Get agent details before deletion
+    const [agent] = await sql`
+      SELECT * FROM connected_agents 
+      WHERE agent_id = ${id} AND user_id = ${user.id}
+    `
+
+    if (!agent) {
+      return NextResponse.json({ error: "Agent not found" }, { status: 404 })
+    }
+
+    // Delete the agent
+    await sql`
+      DELETE FROM connected_agents 
+      WHERE agent_id = ${id} AND user_id = ${user.id}
+    `
+
+    // Log the activity
+    await logActivity({
+      userId: user.id,
+      organization: user.organization,
+      action: `Disconnected ${agent.name} agent`,
+      resourceType: "agent",
+      resourceId: id,
+      description: `Removed ${agent.provider} ${agent.model} agent connection`,
+      status: "warning",
+    })
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error("Failed to delete agent:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
-
-  connectedAgents.splice(agentIndex, 1)
-
-  return NextResponse.json({ success: true })
 }

@@ -1,109 +1,144 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Search } from "lucide-react"
 import { AuditLogDetailsModal } from "./audit-log-details-modal"
+import { useAuth } from "@/contexts/auth-context"
 
-const initialAuditLogs = [
-  {
-    id: "AL001",
-    timestamp: "2023-07-25 14:30:00",
-    userOrAgent: "AdminUser",
-    action: "Policy Update",
-    resource: "Data Privacy Policy",
-    status: "Success",
-    ipAddress: "192.168.1.100",
-    details: "Updated policy rules for GDPR compliance.",
-  },
-  {
-    id: "AL002",
-    timestamp: "2023-07-25 10:15:00",
-    userOrAgent: "AI-Finance-001",
-    action: "Data Access",
-    resource: "Financial Records",
-    status: "Failed",
-    ipAddress: "10.0.0.5",
-    details: "Attempted to access restricted financial data without proper credentials.",
-  },
-  {
-    id: "AL003",
-    timestamp: "2023-07-24 16:00:00",
-    userOrAgent: "System",
-    action: "Agent Deployment",
-    resource: "AI-HR-002",
-    status: "Success",
-    ipAddress: "N/A",
-    details: "New HR agent deployed to production environment.",
-  },
-  {
-    id: "AL004",
-    timestamp: "2023-07-24 09:45:00",
-    userOrAgent: "UserJane",
-    action: "Login",
-    resource: "Dashboard",
-    status: "Success",
-    ipAddress: "203.0.113.45",
-    details: "User successfully logged in.",
-  },
-  {
-    id: "AL005",
-    timestamp: "2023-07-23 11:20:00",
-    userOrAgent: "AI-Marketing-006",
-    action: "Content Generation",
-    resource: "Marketing Campaign A",
-    status: "Success",
-    ipAddress: "172.16.0.1",
-    details: "Generated marketing content for Q3 campaign.",
-  },
-]
+interface AuditLog {
+  id: string
+  user_id: string
+  organization: string
+  action: string
+  resource_type: string
+  resource_id?: string
+  details: Record<string, any>
+  ip_address?: string
+  user_agent?: string
+  timestamp: string
+}
 
 export function AuditLogTable() {
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [selectedLog, setSelectedLog] = useState(null)
+  const { user } = useAuth()
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([])
+  const [filteredLogs, setFilteredLogs] = useState<AuditLog[]>([])
+  const [searchTerm, setSearchTerm] = useState("")
+  const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null)
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false)
+  const [loading, setLoading] = useState(true)
 
-  const handleViewDetails = (log) => {
+  useEffect(() => {
+    if (user?.organization) {
+      fetchAuditLogs()
+    }
+  }, [user])
+
+  useEffect(() => {
+    const filtered = auditLogs.filter(
+      (log) =>
+        log.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        log.resource_type.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (log.resource_id && log.resource_id.toLowerCase().includes(searchTerm.toLowerCase())),
+    )
+    setFilteredLogs(filtered)
+  }, [auditLogs, searchTerm])
+
+  const fetchAuditLogs = async () => {
+    try {
+      const response = await fetch(`/api/audit-logs?organization=${user?.organization}`)
+      if (response.ok) {
+        const data = await response.json()
+        setAuditLogs(data)
+      }
+    } catch (error) {
+      console.error("Failed to fetch audit logs:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleViewDetails = (log: AuditLog) => {
     setSelectedLog(log)
-    setIsModalOpen(true)
+    setIsDetailsModalOpen(true)
+  }
+
+  if (loading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Audit Logs</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-center h-32">
+            <div className="animate-pulse text-muted-foreground">Loading audit logs...</div>
+          </div>
+        </CardContent>
+      </Card>
+    )
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Audit Logs</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Timestamp</TableHead>
-              <TableHead>User/Agent</TableHead>
-              <TableHead>Action</TableHead>
-              <TableHead>Resource</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {initialAuditLogs.map((log) => (
-              <TableRow key={log.id}>
-                <TableCell>{log.timestamp}</TableCell>
-                <TableCell>{log.userOrAgent}</TableCell>
-                <TableCell>{log.action}</TableCell>
-                <TableCell>{log.resource}</TableCell>
-                <TableCell>{log.status}</TableCell>
-                <TableCell className="text-right">
-                  <Button variant="outline" size="sm" onClick={() => handleViewDetails(log)}>
-                    View Details
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent>
-      <AuditLogDetailsModal isOpen={isModalOpen} onOpenChange={setIsModalOpen} log={selectedLog} />
-    </Card>
+    <>
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle>Audit Logs</CardTitle>
+          <div className="relative w-full max-w-sm">
+            <Input
+              placeholder="Search logs..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-8"
+            />
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          </div>
+        </CardHeader>
+        <CardContent>
+          {filteredLogs.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              {auditLogs.length === 0
+                ? "No audit logs found. Activity will appear here as you use the system."
+                : "No logs match your search criteria."}
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Timestamp</TableHead>
+                  <TableHead>Action</TableHead>
+                  <TableHead>Resource Type</TableHead>
+                  <TableHead>Resource ID</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredLogs.map((log) => (
+                  <TableRow key={log.id}>
+                    <TableCell>{new Date(log.timestamp).toLocaleString()}</TableCell>
+                    <TableCell className="font-medium">{log.action}</TableCell>
+                    <TableCell>{log.resource_type}</TableCell>
+                    <TableCell>{log.resource_id || "-"}</TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="outline" size="sm" onClick={() => handleViewDetails(log)}>
+                        View Details
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <AuditLogDetailsModal
+        log={selectedLog}
+        isOpen={isDetailsModalOpen}
+        onClose={() => setIsDetailsModalOpen(false)}
+      />
+    </>
   )
 }

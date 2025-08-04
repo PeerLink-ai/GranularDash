@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { createContext, useContext, useEffect, useState } from "react"
 
 export interface User {
@@ -11,117 +10,137 @@ export interface User {
   avatar?: string
   role: "admin" | "developer" | "analyst" | "viewer"
   organization: string
-  connectedAgents: string[]
   permissions: string[]
+  connectedAgents: any[]
+  onboarding_completed: boolean
+  created_at: string
+  last_login?: string
 }
 
 interface AuthContextType {
   user: User | null
   isLoading: boolean
   signIn: (email: string, password: string) => Promise<void>
-  signOut: () => void
-  switchUserType: (userType: string) => void
+  signUp: (email: string, password: string, name: string, organization: string, role?: string) => Promise<void>
+  signOut: () => Promise<void>
+  completeOnboarding: () => Promise<void>
+  refreshUser: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
-
-// Demo users with different roles and connected agents
-const demoUsers = {
-  "admin@granular.ai": {
-    id: "admin-1",
-    email: "admin@granular.ai",
-    name: "Sarah Chen",
-    avatar: "/placeholder-user.jpg",
-    role: "admin" as const,
-    organization: "Granular AI",
-    connectedAgents: ["openai-gpt4o-001", "anthropic-claude3-001", "groq-llama3-001", "replit-agent-001"],
-    permissions: ["manage_agents", "view_analytics", "manage_users", "manage_policies", "view_audit_logs"],
-  },
-  "dev@company.com": {
-    id: "dev-1",
-    email: "dev@company.com",
-    name: "Alex Rodriguez",
-    avatar: "/placeholder-user.jpg",
-    role: "developer" as const,
-    organization: "TechCorp Inc",
-    connectedAgents: ["openai-gpt4o-001", "replit-agent-001"],
-    permissions: ["manage_agents", "view_analytics", "test_agents"],
-  },
-  "analyst@startup.io": {
-    id: "analyst-1",
-    email: "analyst@startup.io",
-    name: "Jordan Kim",
-    avatar: "/placeholder-user.jpg",
-    role: "analyst" as const,
-    organization: "StartupAI",
-    connectedAgents: ["anthropic-claude3-001"],
-    permissions: ["view_analytics", "view_reports"],
-  },
-  "viewer@enterprise.com": {
-    id: "viewer-1",
-    email: "viewer@enterprise.com",
-    name: "Morgan Taylor",
-    avatar: "/placeholder-user.jpg",
-    role: "viewer" as const,
-    organization: "Enterprise Corp",
-    connectedAgents: [],
-    permissions: ["view_dashboard"],
-  },
-}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    // Check for existing session
-    const savedUser = localStorage.getItem("granular_user")
-    if (savedUser) {
-      setUser(JSON.parse(savedUser))
-    }
-    setIsLoading(false)
+    checkAuth()
   }, [])
+
+  const checkAuth = async () => {
+    try {
+      const response = await fetch("/api/auth/me")
+      if (response.ok) {
+        const data = await response.json()
+        setUser(data.user)
+      }
+    } catch (error) {
+      console.error("Auth check failed:", error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   const signIn = async (email: string, password: string) => {
     setIsLoading(true)
+    try {
+      const response = await fetch("/api/auth/signin", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
+      })
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || "Sign in failed")
+      }
 
-    const userData = demoUsers[email]
-    if (userData && password === "demo123") {
-      setUser(userData)
-      localStorage.setItem("granular_user", JSON.stringify(userData))
-    } else {
-      throw new Error("Invalid credentials")
+      const data = await response.json()
+      setUser(data.user)
+    } finally {
+      setIsLoading(false)
     }
-
-    setIsLoading(false)
   }
 
-  const signOut = () => {
-    setUser(null)
-    localStorage.removeItem("granular_user")
+  const signUp = async (email: string, password: string, name: string, organization: string, role = "viewer") => {
+    setIsLoading(true)
+    try {
+      const response = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password, name, organization, role }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || "Sign up failed")
+      }
+
+      const data = await response.json()
+      setUser(data.user)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  const switchUserType = (userType: string) => {
-    const userEmails = {
-      admin: "admin@granular.ai",
-      developer: "dev@company.com",
-      analyst: "analyst@startup.io",
-      viewer: "viewer@enterprise.com",
+  const signOut = async () => {
+    try {
+      await fetch("/api/auth/signout", {
+        method: "POST",
+      })
+    } catch (error) {
+      console.error("Sign out error:", error)
+    } finally {
+      setUser(null)
     }
+  }
 
-    const email = userEmails[userType]
-    if (email && demoUsers[email]) {
-      const userData = demoUsers[email]
-      setUser(userData)
-      localStorage.setItem("granular_user", JSON.stringify(userData))
+  const completeOnboarding = async () => {
+    try {
+      const response = await fetch("/api/auth/onboarding", {
+        method: "POST",
+      })
+
+      if (response.ok) {
+        setUser((prev) => (prev ? { ...prev, onboarding_completed: true } : null))
+      }
+    } catch (error) {
+      console.error("Complete onboarding error:", error)
     }
+  }
+
+  const refreshUser = async () => {
+    await checkAuth()
   }
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, signIn, signOut, switchUserType }}>{children}</AuthContext.Provider>
+    <AuthContext.Provider
+      value={{
+        user,
+        isLoading,
+        signIn,
+        signUp,
+        signOut,
+        completeOnboarding,
+        refreshUser,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
   )
 }
 

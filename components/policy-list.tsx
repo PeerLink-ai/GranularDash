@@ -1,322 +1,444 @@
 "use client"
 
-import { useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useState, useEffect } from "react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { MoreHorizontal, PlusCircle } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
+  DialogTrigger,
 } from "@/components/ui/dialog"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { Plus, Edit, Trash2, Search, FileText } from "lucide-react"
+import { useAuth } from "@/contexts/auth-context"
+import { toast } from "@/hooks/use-toast"
 
-const initialPolicies = [
-  {
-    id: "P001",
-    name: "Data Privacy Policy",
-    category: "Compliance",
-    version: "1.0",
-    lastUpdated: "2023-07-20",
-    description: "Governs the collection, storage, and processing of personal data in accordance with GDPR and CCPA.",
-  },
-  {
-    id: "P002",
-    name: "Ethical AI Use Policy",
-    category: "Ethics",
-    version: "1.1",
-    lastUpdated: "2023-07-15",
-    description:
-      "Outlines principles for responsible AI development and deployment, focusing on fairness, transparency, and accountability.",
-  },
-  {
-    id: "P003",
-    name: "Financial Transaction Monitoring",
-    category: "Security",
-    version: "1.0",
-    lastUpdated: "2023-07-10",
-    description: "Rules for real-time monitoring of financial transactions to detect and prevent fraud.",
-  },
-  {
-    id: "P004",
-    name: "Agent Deployment Guidelines",
-    category: "Operations",
-    version: "1.2",
-    lastUpdated: "2023-07-22",
-    description: "Procedures and requirements for deploying new AI agents into production environments.",
-  },
-]
+interface Policy {
+  id: string
+  name: string
+  category: string
+  version: string
+  description?: string
+  status: "active" | "inactive" | "draft"
+  created_at: string
+  updated_at: string
+}
 
 export function PolicyList() {
-  const [policies, setPolicies] = useState(initialPolicies)
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
-  const [isViewModalOpen, setIsViewModalOpen] = useState(false)
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false)
-  const [selectedPolicy, setSelectedPolicy] = useState(null)
-  const [editFormData, setEditFormData] = useState({ id: "", name: "", category: "", version: "", description: "" })
-  const [addFormData, setAddFormData] = useState({
+  const { user } = useAuth()
+  const [policies, setPolicies] = useState<Policy[]>([])
+  const [loading, setLoading] = useState(true)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [editingPolicy, setEditingPolicy] = useState<Policy | null>(null)
+  const [formData, setFormData] = useState({
     name: "",
     category: "",
-    version: "",
+    version: "1.0",
     description: "",
+    status: "draft" as "active" | "inactive" | "draft",
   })
 
-  const handleEditClick = (policy) => {
-    setSelectedPolicy(policy)
-    setEditFormData({
-      id: policy.id,
+  useEffect(() => {
+    if (user?.organization) {
+      fetchPolicies()
+    }
+  }, [user])
+
+  const fetchPolicies = async () => {
+    try {
+      const response = await fetch(`/api/policies?organization=${user?.organization}`)
+      if (response.ok) {
+        const data = await response.json()
+        setPolicies(data.policies || [])
+      }
+    } catch (error) {
+      console.error("Error fetching policies:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load policies",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCreatePolicy = async () => {
+    try {
+      const response = await fetch("/api/policies", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      })
+
+      if (response.ok) {
+        toast({
+          title: "Success",
+          description: "Policy created successfully",
+        })
+        setIsCreateDialogOpen(false)
+        resetForm()
+        fetchPolicies()
+      } else {
+        throw new Error("Failed to create policy")
+      }
+    } catch (error) {
+      console.error("Error creating policy:", error)
+      toast({
+        title: "Error",
+        description: "Failed to create policy",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleUpdatePolicy = async () => {
+    if (!editingPolicy) return
+
+    try {
+      const response = await fetch(`/api/policies/${editingPolicy.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      })
+
+      if (response.ok) {
+        toast({
+          title: "Success",
+          description: "Policy updated successfully",
+        })
+        setEditingPolicy(null)
+        resetForm()
+        fetchPolicies()
+      } else {
+        throw new Error("Failed to update policy")
+      }
+    } catch (error) {
+      console.error("Error updating policy:", error)
+      toast({
+        title: "Error",
+        description: "Failed to update policy",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleDeletePolicy = async (policyId: string) => {
+    try {
+      const response = await fetch(`/api/policies/${policyId}`, {
+        method: "DELETE",
+      })
+
+      if (response.ok) {
+        toast({
+          title: "Success",
+          description: "Policy deleted successfully",
+        })
+        fetchPolicies()
+      } else {
+        throw new Error("Failed to delete policy")
+      }
+    } catch (error) {
+      console.error("Error deleting policy:", error)
+      toast({
+        title: "Error",
+        description: "Failed to delete policy",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const resetForm = () => {
+    setFormData({
+      name: "",
+      category: "",
+      version: "1.0",
+      description: "",
+      status: "draft",
+    })
+  }
+
+  const openEditDialog = (policy: Policy) => {
+    setEditingPolicy(policy)
+    setFormData({
       name: policy.name,
       category: policy.category,
       version: policy.version,
-      description: policy.description,
+      description: policy.description || "",
+      status: policy.status,
     })
-    setIsEditModalOpen(true)
   }
 
-  const handleViewDetails = (policy) => {
-    setSelectedPolicy(policy)
-    setIsViewModalOpen(true)
-  }
+  const filteredPolicies = policies.filter(
+    (policy) =>
+      policy.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      policy.category.toLowerCase().includes(searchTerm.toLowerCase()),
+  )
 
-  const handleSavePolicy = () => {
-    setPolicies(
-      policies.map((p) =>
-        p.id === editFormData.id ? { ...p, ...editFormData, lastUpdated: new Date().toISOString().split("T")[0] } : p,
-      ),
-    )
-    setIsEditModalOpen(false)
-  }
-
-  const handleDeletePolicy = (policyId) => {
-    setPolicies(policies.filter((p) => p.id !== policyId))
-  }
-
-  const handleAddPolicy = () => {
-    const newPolicyId = `P${String(policies.length + 1).padStart(3, "0")}`
-    const newPolicy = {
-      id: newPolicyId,
-      ...addFormData,
-      lastUpdated: new Date().toISOString().split("T")[0],
-    }
-    setPolicies([...policies, newPolicy])
-    setAddFormData({ name: "", category: "", version: "", description: "" })
-    setIsAddModalOpen(false)
+  if (loading) {
+    return <div>Loading policies...</div>
   }
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-2xl font-bold">Policy List</CardTitle>
-        <Button size="sm" onClick={() => setIsAddModalOpen(true)}>
-          <PlusCircle className="mr-2 h-4 w-4" />
-          Add Policy
-        </Button>
-      </CardHeader>
-      <CardContent>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-2">
+          <Search className="h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search policies..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="max-w-sm"
+          />
+        </div>
+        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+          <DialogTrigger asChild>
+            <Button onClick={resetForm}>
+              <Plus className="mr-2 h-4 w-4" />
+              Create Policy
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Create Policy</DialogTitle>
+              <DialogDescription>Create a new governance policy for your AI agents.</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="name" className="text-right">
+                  Name
+                </Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="category" className="text-right">
+                  Category
+                </Label>
+                <Select
+                  value={formData.category}
+                  onValueChange={(value) => setFormData({ ...formData, category: value })}
+                >
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Security">Security</SelectItem>
+                    <SelectItem value="Compliance">Compliance</SelectItem>
+                    <SelectItem value="Ethics">Ethics</SelectItem>
+                    <SelectItem value="Operations">Operations</SelectItem>
+                    <SelectItem value="Data Privacy">Data Privacy</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="version" className="text-right">
+                  Version
+                </Label>
+                <Input
+                  id="version"
+                  value={formData.version}
+                  onChange={(e) => setFormData({ ...formData, version: e.target.value })}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="status" className="text-right">
+                  Status
+                </Label>
+                <Select
+                  value={formData.status}
+                  onValueChange={(value: "active" | "inactive" | "draft") =>
+                    setFormData({ ...formData, status: value })
+                  }
+                >
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="draft">Draft</SelectItem>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="inactive">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="description" className="text-right">
+                  Description
+                </Label>
+                <Textarea
+                  id="description"
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  className="col-span-3"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button onClick={handleCreatePolicy}>Create Policy</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {filteredPolicies.length === 0 ? (
+        <div className="text-center py-8">
+          <FileText className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+          <p className="text-muted-foreground mb-4">No policies found</p>
+          <Button onClick={() => setIsCreateDialogOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Create your first policy
+          </Button>
+        </div>
+      ) : (
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>ID</TableHead>
               <TableHead>Name</TableHead>
               <TableHead>Category</TableHead>
               <TableHead>Version</TableHead>
-              <TableHead>Last Updated</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Created</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {policies.map((policy) => (
+            {filteredPolicies.map((policy) => (
               <TableRow key={policy.id}>
-                <TableCell className="font-medium">{policy.id}</TableCell>
-                <TableCell>{policy.name}</TableCell>
+                <TableCell className="font-medium">{policy.name}</TableCell>
                 <TableCell>{policy.category}</TableCell>
                 <TableCell>{policy.version}</TableCell>
-                <TableCell>{policy.lastUpdated}</TableCell>
+                <TableCell>
+                  <Badge
+                    variant={
+                      policy.status === "active" ? "default" : policy.status === "draft" ? "secondary" : "outline"
+                    }
+                  >
+                    {policy.status}
+                  </Badge>
+                </TableCell>
+                <TableCell>{new Date(policy.created_at).toLocaleDateString()}</TableCell>
                 <TableCell className="text-right">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" className="h-8 w-8 p-0">
-                        <span className="sr-only">Open menu</span>
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => handleViewDetails(policy)}>View Details</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleEditClick(policy)}>Edit</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleDeletePolicy(policy.id)}>Delete</DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  <div className="flex items-center justify-end space-x-2">
+                    <Button variant="ghost" size="sm" onClick={() => openEditDialog(policy)}>
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => handleDeletePolicy(policy.id)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
-      </CardContent>
+      )}
 
-      {/* Add Policy Modal */}
-      <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Add New Policy</DialogTitle>
-            <DialogDescription>Enter the details for the new policy.</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="add-name" className="text-right">
-                Name
-              </Label>
-              <Input
-                id="add-name"
-                value={addFormData.name}
-                onChange={(e) => setAddFormData({ ...addFormData, name: e.target.value })}
-                className="col-span-3"
-              />
+      {editingPolicy && (
+        <Dialog open={!!editingPolicy} onOpenChange={() => setEditingPolicy(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Policy</DialogTitle>
+              <DialogDescription>Update the policy settings and content.</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-name" className="text-right">
+                  Name
+                </Label>
+                <Input
+                  id="edit-name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-category" className="text-right">
+                  Category
+                </Label>
+                <Select
+                  value={formData.category}
+                  onValueChange={(value) => setFormData({ ...formData, category: value })}
+                >
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Security">Security</SelectItem>
+                    <SelectItem value="Compliance">Compliance</SelectItem>
+                    <SelectItem value="Ethics">Ethics</SelectItem>
+                    <SelectItem value="Operations">Operations</SelectItem>
+                    <SelectItem value="Data Privacy">Data Privacy</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-version" className="text-right">
+                  Version
+                </Label>
+                <Input
+                  id="edit-version"
+                  value={formData.version}
+                  onChange={(e) => setFormData({ ...formData, version: e.target.value })}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-status" className="text-right">
+                  Status
+                </Label>
+                <Select
+                  value={formData.status}
+                  onValueChange={(value: "active" | "inactive" | "draft") =>
+                    setFormData({ ...formData, status: value })
+                  }
+                >
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="draft">Draft</SelectItem>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="inactive">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-description" className="text-right">
+                  Description
+                </Label>
+                <Textarea
+                  id="edit-description"
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  className="col-span-3"
+                />
+              </div>
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="add-category" className="text-right">
-                Category
-              </Label>
-              <Input
-                id="add-category"
-                value={addFormData.category}
-                onChange={(e) => setAddFormData({ ...addFormData, category: e.target.value })}
-                className="col-span-3"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="add-version" className="text-right">
-                Version
-              </Label>
-              <Input
-                id="add-version"
-                value={addFormData.version}
-                onChange={(e) => setAddFormData({ ...addFormData, version: e.target.value })}
-                className="col-span-3"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-start gap-4">
-              <Label htmlFor="add-description" className="text-right">
-                Description
-              </Label>
-              <Textarea
-                id="add-description"
-                value={addFormData.description}
-                onChange={(e) => setAddFormData({ ...addFormData, description: e.target.value })}
-                className="col-span-3"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button type="submit" onClick={handleAddPolicy}>
-              Create Policy
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Edit Policy Modal */}
-      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Edit Policy</DialogTitle>
-            <DialogDescription>Make changes to the policy details.</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="name" className="text-right">
-                Name
-              </Label>
-              <Input
-                id="name"
-                value={editFormData.name}
-                onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
-                className="col-span-3"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="category" className="text-right">
-                Category
-              </Label>
-              <Input
-                id="category"
-                value={editFormData.category}
-                onChange={(e) => setEditFormData({ ...editFormData, category: e.target.value })}
-                className="col-span-3"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="version" className="text-right">
-                Version
-              </Label>
-              <Input
-                id="version"
-                value={editFormData.version}
-                onChange={(e) => setEditFormData({ ...editFormData, version: e.target.value })}
-                className="col-span-3"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-start gap-4">
-              <Label htmlFor="description" className="text-right">
-                Description
-              </Label>
-              <Textarea
-                id="description"
-                value={editFormData.description}
-                onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
-                className="col-span-3"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button type="submit" onClick={handleSavePolicy}>
-              Save changes
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* View Policy Details Modal */}
-      <Dialog open={isViewModalOpen} onOpenChange={setIsViewModalOpen}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>Policy Details: {selectedPolicy?.name}</DialogTitle>
-            <DialogDescription>Comprehensive information about the selected policy.</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4 text-sm">
-            <div className="grid grid-cols-2 gap-1">
-              <span className="font-medium">ID:</span>
-              <span>{selectedPolicy?.id}</span>
-            </div>
-            <div className="grid grid-cols-2 gap-1">
-              <span className="font-medium">Category:</span>
-              <span>{selectedPolicy?.category}</span>
-            </div>
-            <div className="grid grid-cols-2 gap-1">
-              <span className="font-medium">Version:</span>
-              <span>{selectedPolicy?.version}</span>
-            </div>
-            <div className="grid grid-cols-2 gap-1">
-              <span className="font-medium">Last Updated:</span>
-              <span>{selectedPolicy?.lastUpdated}</span>
-            </div>
-            {selectedPolicy?.description && (
-              <>
-                <div className="col-span-2">
-                  <span className="font-medium">Description:</span>
-                  <p className="text-muted-foreground mt-1">{selectedPolicy.description}</p>
-                </div>
-              </>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
-    </Card>
+            <DialogFooter>
+              <Button onClick={handleUpdatePolicy}>Update Policy</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+    </div>
   )
 }

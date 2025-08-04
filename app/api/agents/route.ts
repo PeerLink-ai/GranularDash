@@ -1,78 +1,73 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { sql } from "@/lib/db"
+import { getUser } from "@/lib/auth"
+import { logActivity } from "@/lib/activity-logger"
 
-// Mock database - in real implementation, use actual database
-const connectedAgents = [
-  {
-    id: "openai-gpt4o-001",
-    name: "GPT-4o Enterprise",
-    provider: "OpenAI",
-    model: "gpt-4o",
-    status: "active",
-    endpoint: "https://api.openai.com/v1/chat/completions",
-    connectedAt: "2024-01-15T10:30:00Z",
-    lastActive: "2 hours ago",
-    usage: {
-      requests: 1247,
-      tokensUsed: 45230,
-      estimatedCost: 12.45,
-    },
-  },
-  {
-    id: "anthropic-claude3-001",
-    name: "Claude 3 Opus",
-    provider: "Anthropic",
-    model: "claude-3-opus",
-    status: "active",
-    endpoint: "https://api.anthropic.com/v1/messages",
-    connectedAt: "2024-01-14T15:20:00Z",
-    lastActive: "1 hour ago",
-    usage: {
-      requests: 892,
-      tokensUsed: 32100,
-      estimatedCost: 8.9,
-    },
-  },
-  {
-    id: "groq-llama3-001",
-    name: "Llama 3 70B",
-    provider: "Groq",
-    model: "llama3-70b",
-    status: "inactive",
-    endpoint: "https://api.groq.com/openai/v1/chat/completions",
-    connectedAt: "2024-01-13T09:15:00Z",
-    lastActive: "1 day ago",
-    usage: {
-      requests: 456,
-      tokensUsed: 18900,
-      estimatedCost: 2.3,
-    },
-  },
-]
+export async function GET(request: NextRequest) {
+  try {
+    const user = await getUser(request)
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
 
-export async function GET() {
-  return NextResponse.json({ agents: connectedAgents })
+    const agents = await sql`
+      SELECT * FROM connected_agents 
+      WHERE user_id = ${user.id}
+      ORDER BY connected_at DESC
+    `
+
+    return NextResponse.json({ agents })
+  } catch (error) {
+    console.error("Failed to fetch agents:", error)
+    return NextResponse.json({ agents: [] })
+  }
 }
 
 export async function POST(request: NextRequest) {
-  const body = await request.json()
+  try {
+    const user = await getUser(request)
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
 
-  const newAgent = {
-    id: `${body.provider.toLowerCase()}-${Date.now()}`,
-    name: body.name,
-    provider: body.provider,
-    model: body.model,
-    status: "active",
-    endpoint: body.endpoint,
-    connectedAt: new Date().toISOString(),
-    lastActive: "Just now",
-    usage: {
-      requests: 0,
-      tokensUsed: 0,
-      estimatedCost: 0,
-    },
+    const body = await request.json()
+    const { name, provider, model, endpoint, apiKey, configuration = {} } = body
+
+    if (!name || !provider || !model || !endpoint) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
+    }
+
+    const agentId = `${provider.toLowerCase()}-${model.toLowerCase()}-${Date.now()}`
+
+    // In a real implementation, encrypt the API key
+    const encryptedApiKey = apiKey ? btoa(apiKey) : null
+
+    const [newAgent] = await sql`
+      INSERT INTO connected_agents (
+        user_id, agent_id, name, provider, model, status, endpoint, 
+        connected_at, usage_requests, usage_tokens_used, usage_estimated_cost,
+        api_key_encrypted, configuration, health_status
+      ) VALUES (
+        ${user.id}, ${agentId}, ${name}, ${provider}, ${model}, 'active', ${endpoint},
+        NOW(), 0, 0, 0, ${encryptedApiKey}, ${JSON.stringify(configuration)}, 'unknown'
+      )
+      RETURNING *
+    `
+
+    // Log the activity
+    await logActivity({
+      userId: user.id,
+      organization: user.organization,
+      action: `Connected ${name} agent`,
+      resourceType: "agent",
+      resourceId: agentId,
+      description: `Successfully connected ${provider} ${model} agent`,
+      status: "success",
+    })
+
+    return NextResponse.json({ agent: newAgent })
+  } catch (error) {
+    console.error("Failed to create agent:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
-
-  connectedAgents.push(newAgent)
-
-  return NextResponse.json({ agent: newAgent })
 }

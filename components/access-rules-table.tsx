@@ -1,120 +1,330 @@
 "use client"
 
-import { useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useState, useEffect } from "react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { MoreHorizontal } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
+  DialogTrigger,
 } from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Plus, Edit, Trash2, Search } from "lucide-react"
+import { useAuth } from "@/contexts/auth-context"
+import { toast } from "@/hooks/use-toast"
 
-const initialRules = [
-  {
-    id: "AR001",
-    name: "Admin Access to Financial Data",
-    resource: "Financial Records",
-    role: "Admin",
-    permission: "Read/Write",
-    status: "Active",
-    lastModified: "2023-07-20",
-    description: "Allows administrators full access to financial databases.",
-  },
-  {
-    id: "AR002",
-    name: "HR Agent Data Access",
-    resource: "Employee Records",
-    role: "AI-HR-Agent",
-    permission: "Read-Only",
-    status: "Active",
-    lastModified: "2023-07-18",
-    description: "Grants HR AI agents read-only access to employee profiles for processing.",
-  },
-  {
-    id: "AR003",
-    name: "Marketing Content Approval",
-    resource: "Marketing Assets",
-    role: "Editor",
-    permission: "Approve",
-    status: "Inactive",
-    lastModified: "2023-07-15",
-    description: "Requires editor approval for all marketing content before publication.",
-  },
-  {
-    id: "AR004",
-    name: "External API Access",
-    resource: "External APIs",
-    role: "Developer",
-    permission: "Execute",
-    status: "Active",
-    lastModified: "2023-07-22",
-    description: "Permits developers to execute calls to approved external APIs.",
-  },
-]
+interface AccessRule {
+  id: string
+  name: string
+  resource: string
+  role: string
+  permission: string
+  status: "active" | "inactive"
+  description?: string
+  created_at: string
+  updated_at: string
+}
 
 export function AccessRulesTable() {
-  const [rules, setRules] = useState(initialRules)
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
-  const [isViewModalOpen, setIsViewModalOpen] = useState(false)
-  const [selectedRule, setSelectedRule] = useState(null)
-  const [editFormData, setEditFormData] = useState({
-    id: "",
+  const { user } = useAuth()
+  const [rules, setRules] = useState<AccessRule[]>([])
+  const [loading, setLoading] = useState(true)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [editingRule, setEditingRule] = useState<AccessRule | null>(null)
+  const [formData, setFormData] = useState({
     name: "",
     resource: "",
     role: "",
     permission: "",
-    status: "",
+    status: "active" as "active" | "inactive",
     description: "",
   })
 
-  const handleEditClick = (rule) => {
-    setSelectedRule(rule)
-    setEditFormData({
-      id: rule.id,
+  useEffect(() => {
+    if (user?.organization) {
+      fetchRules()
+    }
+  }, [user])
+
+  const fetchRules = async () => {
+    try {
+      const response = await fetch(`/api/access-rules?organization=${user?.organization}`)
+      if (response.ok) {
+        const data = await response.json()
+        setRules(data.rules || [])
+      }
+    } catch (error) {
+      console.error("Error fetching access rules:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load access rules",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCreateRule = async () => {
+    try {
+      const response = await fetch("/api/access-rules", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      })
+
+      if (response.ok) {
+        toast({
+          title: "Success",
+          description: "Access rule created successfully",
+        })
+        setIsCreateDialogOpen(false)
+        resetForm()
+        fetchRules()
+      } else {
+        throw new Error("Failed to create rule")
+      }
+    } catch (error) {
+      console.error("Error creating access rule:", error)
+      toast({
+        title: "Error",
+        description: "Failed to create access rule",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleUpdateRule = async () => {
+    if (!editingRule) return
+
+    try {
+      const response = await fetch(`/api/access-rules/${editingRule.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      })
+
+      if (response.ok) {
+        toast({
+          title: "Success",
+          description: "Access rule updated successfully",
+        })
+        setEditingRule(null)
+        resetForm()
+        fetchRules()
+      } else {
+        throw new Error("Failed to update rule")
+      }
+    } catch (error) {
+      console.error("Error updating access rule:", error)
+      toast({
+        title: "Error",
+        description: "Failed to update access rule",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleDeleteRule = async (ruleId: string) => {
+    try {
+      const response = await fetch(`/api/access-rules/${ruleId}`, {
+        method: "DELETE",
+      })
+
+      if (response.ok) {
+        toast({
+          title: "Success",
+          description: "Access rule deleted successfully",
+        })
+        fetchRules()
+      } else {
+        throw new Error("Failed to delete rule")
+      }
+    } catch (error) {
+      console.error("Error deleting access rule:", error)
+      toast({
+        title: "Error",
+        description: "Failed to delete access rule",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const resetForm = () => {
+    setFormData({
+      name: "",
+      resource: "",
+      role: "",
+      permission: "",
+      status: "active",
+      description: "",
+    })
+  }
+
+  const openEditDialog = (rule: AccessRule) => {
+    setEditingRule(rule)
+    setFormData({
       name: rule.name,
       resource: rule.resource,
       role: rule.role,
       permission: rule.permission,
       status: rule.status,
-      description: rule.description,
+      description: rule.description || "",
     })
-    setIsEditModalOpen(true)
   }
 
-  const handleViewDetails = (rule) => {
-    setSelectedRule(rule)
-    setIsViewModalOpen(true)
-  }
+  const filteredRules = rules.filter(
+    (rule) =>
+      rule.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      rule.resource.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      rule.role.toLowerCase().includes(searchTerm.toLowerCase()),
+  )
 
-  const handleSaveRule = () => {
-    setRules(
-      rules.map((r) =>
-        r.id === editFormData.id ? { ...r, ...editFormData, lastModified: new Date().toISOString().split("T")[0] } : r,
-      ),
-    )
-    setIsEditModalOpen(false)
-  }
-
-  const handleDeleteRule = (ruleId) => {
-    setRules(rules.filter((r) => r.id !== ruleId))
+  if (loading) {
+    return <div>Loading access rules...</div>
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Access Rules</CardTitle>
-      </CardHeader>
-      <CardContent>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-2">
+          <Search className="h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search rules..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="max-w-sm"
+          />
+        </div>
+        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+          <DialogTrigger asChild>
+            <Button onClick={resetForm}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Rule
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Create Access Rule</DialogTitle>
+              <DialogDescription>Define a new access control rule for AI agents and resources.</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="name" className="text-right">
+                  Name
+                </Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="resource" className="text-right">
+                  Resource
+                </Label>
+                <Input
+                  id="resource"
+                  value={formData.resource}
+                  onChange={(e) => setFormData({ ...formData, resource: e.target.value })}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="role" className="text-right">
+                  Role
+                </Label>
+                <Select value={formData.role} onValueChange={(value) => setFormData({ ...formData, role: value })}>
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue placeholder="Select role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="admin">Admin</SelectItem>
+                    <SelectItem value="developer">Developer</SelectItem>
+                    <SelectItem value="analyst">Analyst</SelectItem>
+                    <SelectItem value="viewer">Viewer</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="permission" className="text-right">
+                  Permission
+                </Label>
+                <Select
+                  value={formData.permission}
+                  onValueChange={(value) => setFormData({ ...formData, permission: value })}
+                >
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue placeholder="Select permission" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="read">Read</SelectItem>
+                    <SelectItem value="write">Write</SelectItem>
+                    <SelectItem value="execute">Execute</SelectItem>
+                    <SelectItem value="delete">Delete</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="status" className="text-right">
+                  Status
+                </Label>
+                <Select
+                  value={formData.status}
+                  onValueChange={(value: "active" | "inactive") => setFormData({ ...formData, status: value })}
+                >
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="inactive">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="description" className="text-right">
+                  Description
+                </Label>
+                <Textarea
+                  id="description"
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  className="col-span-3"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button onClick={handleCreateRule}>Create Rule</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {filteredRules.length === 0 ? (
+        <div className="text-center py-8">
+          <p className="text-muted-foreground mb-4">No access rules found</p>
+          <Button onClick={() => setIsCreateDialogOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Create your first access rule
+          </Button>
+        </div>
+      ) : (
         <Table>
           <TableHeader>
             <TableRow>
@@ -123,172 +333,138 @@ export function AccessRulesTable() {
               <TableHead>Role</TableHead>
               <TableHead>Permission</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>Last Modified</TableHead>
+              <TableHead>Created</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {rules.map((rule) => (
+            {filteredRules.map((rule) => (
               <TableRow key={rule.id}>
                 <TableCell className="font-medium">{rule.name}</TableCell>
                 <TableCell>{rule.resource}</TableCell>
                 <TableCell>{rule.role}</TableCell>
                 <TableCell>{rule.permission}</TableCell>
-                <TableCell>{rule.status}</TableCell>
-                <TableCell>{rule.lastModified}</TableCell>
+                <TableCell>
+                  <Badge variant={rule.status === "active" ? "default" : "secondary"}>{rule.status}</Badge>
+                </TableCell>
+                <TableCell>{new Date(rule.created_at).toLocaleDateString()}</TableCell>
                 <TableCell className="text-right">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" className="h-8 w-8 p-0">
-                        <span className="sr-only">Open menu</span>
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => handleViewDetails(rule)}>View Details</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleEditClick(rule)}>Edit</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleDeleteRule(rule.id)}>Delete</DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  <div className="flex items-center justify-end space-x-2">
+                    <Button variant="ghost" size="sm" onClick={() => openEditDialog(rule)}>
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => handleDeleteRule(rule.id)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
-      </CardContent>
+      )}
 
-      {/* Edit Access Rule Modal */}
-      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Edit Access Rule</DialogTitle>
-            <DialogDescription>Make changes to the access rule details.</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="name" className="text-right">
-                Name
-              </Label>
-              <Input
-                id="name"
-                value={editFormData.name}
-                onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
-                className="col-span-3"
-              />
+      {editingRule && (
+        <Dialog open={!!editingRule} onOpenChange={() => setEditingRule(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Access Rule</DialogTitle>
+              <DialogDescription>Update the access control rule settings.</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-name" className="text-right">
+                  Name
+                </Label>
+                <Input
+                  id="edit-name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-resource" className="text-right">
+                  Resource
+                </Label>
+                <Input
+                  id="edit-resource"
+                  value={formData.resource}
+                  onChange={(e) => setFormData({ ...formData, resource: e.target.value })}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-role" className="text-right">
+                  Role
+                </Label>
+                <Select value={formData.role} onValueChange={(value) => setFormData({ ...formData, role: value })}>
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="admin">Admin</SelectItem>
+                    <SelectItem value="developer">Developer</SelectItem>
+                    <SelectItem value="analyst">Analyst</SelectItem>
+                    <SelectItem value="viewer">Viewer</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-permission" className="text-right">
+                  Permission
+                </Label>
+                <Select
+                  value={formData.permission}
+                  onValueChange={(value) => setFormData({ ...formData, permission: value })}
+                >
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="read">Read</SelectItem>
+                    <SelectItem value="write">Write</SelectItem>
+                    <SelectItem value="execute">Execute</SelectItem>
+                    <SelectItem value="delete">Delete</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-status" className="text-right">
+                  Status
+                </Label>
+                <Select
+                  value={formData.status}
+                  onValueChange={(value: "active" | "inactive") => setFormData({ ...formData, status: value })}
+                >
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="inactive">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-description" className="text-right">
+                  Description
+                </Label>
+                <Textarea
+                  id="edit-description"
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  className="col-span-3"
+                />
+              </div>
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="resource" className="text-right">
-                Resource
-              </Label>
-              <Input
-                id="resource"
-                value={editFormData.resource}
-                onChange={(e) => setEditFormData({ ...editFormData, resource: e.target.value })}
-                className="col-span-3"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="role" className="text-right">
-                Role
-              </Label>
-              <Input
-                id="role"
-                value={editFormData.role}
-                onChange={(e) => setEditFormData({ ...editFormData, role: e.target.value })}
-                className="col-span-3"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="permission" className="text-right">
-                Permission
-              </Label>
-              <Input
-                id="permission"
-                value={editFormData.permission}
-                onChange={(e) => setEditFormData({ ...editFormData, permission: e.target.value })}
-                className="col-span-3"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="status" className="text-right">
-                Status
-              </Label>
-              <Select
-                value={editFormData.status}
-                onValueChange={(value) => setEditFormData({ ...editFormData, status: value })}
-              >
-                <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder="Select status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Active">Active</SelectItem>
-                  <SelectItem value="Inactive">Inactive</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-4 items-start gap-4">
-              <Label htmlFor="description" className="text-right">
-                Description
-              </Label>
-              <Textarea
-                id="description"
-                value={editFormData.description}
-                onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
-                className="col-span-3"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button type="submit" onClick={handleSaveRule}>
-              Save changes
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* View Access Rule Details Modal */}
-      <Dialog open={isViewModalOpen} onOpenChange={setIsViewModalOpen}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>Access Rule Details: {selectedRule?.name}</DialogTitle>
-            <DialogDescription>Comprehensive information about the selected access rule.</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4 text-sm">
-            <div className="grid grid-cols-2 gap-1">
-              <span className="font-medium">ID:</span>
-              <span>{selectedRule?.id}</span>
-            </div>
-            <div className="grid grid-cols-2 gap-1">
-              <span className="font-medium">Resource:</span>
-              <span>{selectedRule?.resource}</span>
-            </div>
-            <div className="grid grid-cols-2 gap-1">
-              <span className="font-medium">Role:</span>
-              <span>{selectedRule?.role}</span>
-            </div>
-            <div className="grid grid-cols-2 gap-1">
-              <span className="font-medium">Permission:</span>
-              <span>{selectedRule?.permission}</span>
-            </div>
-            <div className="grid grid-cols-2 gap-1">
-              <span className="font-medium">Status:</span>
-              <span>{selectedRule?.status}</span>
-            </div>
-            <div className="grid grid-cols-2 gap-1">
-              <span className="font-medium">Last Modified:</span>
-              <span>{selectedRule?.lastModified}</span>
-            </div>
-            {selectedRule?.description && (
-              <>
-                <div className="col-span-2">
-                  <span className="font-medium">Description:</span>
-                  <p className="text-muted-foreground mt-1">{selectedRule.description}</p>
-                </div>
-              </>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
-    </Card>
+            <DialogFooter>
+              <Button onClick={handleUpdateRule}>Update Rule</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+    </div>
   )
 }

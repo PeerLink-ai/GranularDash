@@ -11,91 +11,44 @@ import { MoreHorizontal, Bot, Brain, Code, Zap, Activity, Plus } from "lucide-re
 import { AgentDetailsModal } from "./agent-details-modal"
 import { AgentTestModal } from "./agent-test-modal"
 
-const allAgents = {
-  "openai-gpt4o-001": {
-    id: "openai-gpt4o-001",
-    name: "GPT-4o Enterprise",
-    provider: "OpenAI",
-    model: "gpt-4o",
-    status: "active",
-    endpoint: "https://api.openai.com/v1/chat/completions",
-    connectedAt: "2024-01-15T10:30:00Z",
-    lastActive: "2 hours ago",
-    usage: {
-      requests: 1247,
-      tokensUsed: 45230,
-      estimatedCost: 12.45,
-    },
-  },
-  "anthropic-claude3-001": {
-    id: "anthropic-claude3-001",
-    name: "Claude 3 Opus",
-    provider: "Anthropic",
-    model: "claude-3-opus",
-    status: "active",
-    endpoint: "https://api.anthropic.com/v1/messages",
-    connectedAt: "2024-01-14T15:20:00Z",
-    lastActive: "1 hour ago",
-    usage: {
-      requests: 892,
-      tokensUsed: 32100,
-      estimatedCost: 8.9,
-    },
-  },
-  "groq-llama3-001": {
-    id: "groq-llama3-001",
-    name: "Llama 3 70B",
-    provider: "Groq",
-    model: "llama3-70b",
-    status: "inactive",
-    endpoint: "https://api.groq.com/openai/v1/chat/completions",
-    connectedAt: "2024-01-13T09:15:00Z",
-    lastActive: "1 day ago",
-    usage: {
-      requests: 456,
-      tokensUsed: 18900,
-      estimatedCost: 2.3,
-    },
-  },
-  "replit-agent-001": {
-    id: "replit-agent-001",
-    name: "Replit Agent",
-    provider: "Replit",
-    model: "replit-agent",
-    status: "active",
-    endpoint: "https://api.replit.com/v1/agents",
-    connectedAt: "2024-01-12T14:45:00Z",
-    lastActive: "30 minutes ago",
-    usage: {
-      requests: 234,
-      tokensUsed: 12500,
-      estimatedCost: 1.8,
-    },
-  },
+interface Agent {
+  id: string
+  agent_id: string
+  name: string
+  provider: string
+  model: string
+  status: string
+  endpoint: string
+  connected_at: string
+  last_active?: string
+  usage_requests: number
+  usage_tokens_used: number
+  usage_estimated_cost: number
 }
 
 export function AgentList() {
   const { user } = useAuth()
-  const [agents, setAgents] = useState([])
+  const [agents, setAgents] = useState<Agent[]>([])
   const [loading, setLoading] = useState(true)
-  const [selectedAgent, setSelectedAgent] = useState(null)
+  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false)
   const [isTestModalOpen, setIsTestModalOpen] = useState(false)
 
   useEffect(() => {
-    loadAgents()
+    if (user) {
+      fetchAgents()
+    }
   }, [user])
 
-  const loadAgents = async () => {
-    if (!user) return
-
+  const fetchAgents = async () => {
     try {
-      // Filter agents based on user's connected agents
-      const userAgents = user.connectedAgents.map((id) => allAgents[id]).filter(Boolean)
-
-      setAgents(userAgents)
+      const response = await fetch("/api/agents")
+      if (response.ok) {
+        const data = await response.json()
+        setAgents(data.agents || [])
+      }
     } catch (error) {
-      console.error("Failed to load agents:", error)
+      console.error("Failed to fetch agents:", error)
     } finally {
       setLoading(false)
     }
@@ -129,22 +82,52 @@ export function AgentList() {
     }
   }
 
-  const handleViewDetails = (agent) => {
+  const formatLastActive = (lastActive?: string) => {
+    if (!lastActive) return "Never"
+
+    const date = new Date(lastActive)
+    const now = new Date()
+    const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60))
+
+    if (diffInMinutes < 60) {
+      return `${diffInMinutes} minutes ago`
+    } else if (diffInMinutes < 1440) {
+      return `${Math.floor(diffInMinutes / 60)} hours ago`
+    } else {
+      return `${Math.floor(diffInMinutes / 1440)} days ago`
+    }
+  }
+
+  const handleViewDetails = (agent: Agent) => {
     setSelectedAgent(agent)
     setIsDetailsModalOpen(true)
   }
 
-  const handleTestAgent = (agent) => {
+  const handleTestAgent = (agent: Agent) => {
     setSelectedAgent(agent)
     setIsTestModalOpen(true)
   }
 
   const handleToggleStatus = async (agentId: string, currentStatus: string) => {
     try {
+      setLoading(true)
       const newStatus = currentStatus === "active" ? "inactive" : "active"
-      setAgents(agents.map((agent) => (agent.id === agentId ? { ...agent, status: newStatus } : agent)))
+
+      const response = await fetch(`/api/agents/${agentId}/status`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ status: newStatus }),
+      })
+
+      if (response.ok) {
+        await fetchAgents()
+      }
     } catch (error) {
       console.error("Failed to toggle agent status:", error)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -152,9 +135,18 @@ export function AgentList() {
     if (!confirm("Are you sure you want to disconnect this agent?")) return
 
     try {
-      setAgents(agents.filter((agent) => agent.id !== agentId))
+      setLoading(true)
+      const response = await fetch(`/api/agents/${agentId}`, {
+        method: "DELETE",
+      })
+
+      if (response.ok) {
+        await fetchAgents()
+      }
     } catch (error) {
       console.error("Failed to delete agent:", error)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -186,7 +178,7 @@ export function AgentList() {
             <p className="text-muted-foreground mb-4">
               Connect your first AI agent to get started with automated governance and monitoring.
             </p>
-            <Button onClick={() => window.location.reload()}>
+            <Button onClick={() => (window.location.href = "/agent-management")}>
               <Plus className="mr-2 h-4 w-4" />
               Connect Agent
             </Button>
@@ -201,7 +193,7 @@ export function AgentList() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-xl font-semibold">Connected Agents ({agents.length})</CardTitle>
-          <Button variant="outline" size="sm" onClick={loadAgents}>
+          <Button variant="outline" size="sm" onClick={fetchAgents}>
             Refresh
           </Button>
         </CardHeader>
@@ -231,7 +223,7 @@ export function AgentList() {
                           </div>
                           <div>
                             <div className="font-medium">{agent.name}</div>
-                            <div className="text-sm text-muted-foreground">{agent.id}</div>
+                            <div className="text-sm text-muted-foreground">{agent.agent_id}</div>
                           </div>
                         </div>
                       </TableCell>
@@ -245,10 +237,10 @@ export function AgentList() {
                       <TableCell>
                         <div className="flex items-center space-x-1">
                           <Activity className="h-3 w-3" />
-                          <span className="text-sm">{agent.usage?.requests || 0} requests</span>
+                          <span className="text-sm">{agent.usage_requests || 0} requests</span>
                         </div>
                       </TableCell>
-                      <TableCell>{agent.lastActive || "Never"}</TableCell>
+                      <TableCell>{formatLastActive(agent.last_active)}</TableCell>
                       <TableCell className="text-right">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -260,10 +252,13 @@ export function AgentList() {
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={() => handleViewDetails(agent)}>View Details</DropdownMenuItem>
                             <DropdownMenuItem onClick={() => handleTestAgent(agent)}>Test Agent</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleToggleStatus(agent.id, agent.status)}>
+                            <DropdownMenuItem onClick={() => handleToggleStatus(agent.agent_id, agent.status)}>
                               {agent.status === "active" ? "Deactivate" : "Activate"}
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleDeleteAgent(agent.id)} className="text-red-600">
+                            <DropdownMenuItem
+                              onClick={() => handleDeleteAgent(agent.agent_id)}
+                              className="text-red-600"
+                            >
                               Disconnect
                             </DropdownMenuItem>
                           </DropdownMenuContent>

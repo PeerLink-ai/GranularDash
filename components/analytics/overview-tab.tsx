@@ -1,85 +1,52 @@
 "use client"
 
-import { useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { GovernanceOverviewCards } from "@/components/analytics/governance-overview-cards"
-import { AnomalyDetectionChart } from "@/components/analytics/anomaly-detection-chart"
-import { RecentPolicyViolations } from "@/components/analytics/recent-policy-violations"
-import { AgentDeploymentGrowth } from "@/components/analytics/agent-deployment-growth"
-import { TopPerformingAgents } from "@/components/analytics/top-performing-agents"
-import { AdminActivityLog } from "@/components/analytics/admin-activity-log"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { OverviewCards } from "./overview-cards"
+import { SecurityChart } from "./security-chart"
+import { TopAgents } from "./top-agents"
+import { SecurityActivity } from "./security-activity"
+import { Button } from "@/components/ui/button"
+import { Download } from "lucide-react"
+import { toast } from "sonner"
 
 export function OverviewTab() {
-  const [comparisonPeriod, setComparisonPeriod] = useState("previous_month")
+  const handleExport = async () => {
+    try {
+      const response = await fetch("/api/analytics/export")
+      if (response.ok) {
+        const blob = await response.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement("a")
+        a.style.display = "none"
+        a.href = url
+        a.download = `security-analytics-${new Date().toISOString().split("T")[0]}.csv`
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+        toast.success("Analytics data exported successfully")
+      } else {
+        toast.error("Failed to export analytics data")
+      }
+    } catch (error) {
+      console.error("Export error:", error)
+      toast.error("Failed to export analytics data")
+    }
+  }
 
   return (
     <>
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-2xl font-semibold">AI Governance Overview</h3>
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium">Compare to:</span>
-          <Select value={comparisonPeriod} onValueChange={setComparisonPeriod}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Select period" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="previous_month">Previous Month</SelectItem>
-              <SelectItem value="previous_quarter">Previous Quarter</SelectItem>
-              <SelectItem value="previous_year">Previous Year</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-medium">Security Overview</h3>
+        <Button onClick={handleExport} variant="outline" size="sm">
+          <Download className="mr-2 h-4 w-4" />
+          Export Data
+        </Button>
       </div>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <GovernanceOverviewCards comparisonPeriod={comparisonPeriod} />
+      <OverviewCards />
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+        <SecurityChart />
+        <TopAgents />
       </div>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7 mt-4">
-        <Card className="col-span-4">
-          <CardHeader>
-            <CardTitle className="text-xl font-semibold">Anomaly Detection Trends</CardTitle>
-          </CardHeader>
-          <CardContent className="pl-2">
-            <AnomalyDetectionChart comparisonPeriod={comparisonPeriod} />
-          </CardContent>
-        </Card>
-        <Card className="col-span-3">
-          <CardHeader>
-            <CardTitle className="text-xl font-semibold">Recent Policy Violations</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <RecentPolicyViolations />
-          </CardContent>
-        </Card>
-      </div>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7 mt-4">
-        <Card className="col-span-4">
-          <CardHeader>
-            <CardTitle className="text-xl font-semibold">Agent Deployment Growth</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <AgentDeploymentGrowth comparisonPeriod={comparisonPeriod} />
-          </CardContent>
-        </Card>
-        <Card className="col-span-3">
-          <CardHeader>
-            <CardTitle className="text-xl font-semibold">Top Performing Agents</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <TopPerformingAgents />
-          </CardContent>
-        </Card>
-      </div>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7 mt-4">
-        <Card className="col-span-4">
-          <CardHeader>
-            <CardTitle className="text-xl font-semibold">Admin Activity Log</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <AdminActivityLog />
-          </CardContent>
-        </Card>
-      </div>
+      <SecurityActivity />
     </>
   )
 }

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
@@ -16,22 +16,76 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
+import { useAuth } from "@/contexts/auth-context"
 
-const auditReadinessItems = [
-  { name: "GDPR Compliance", current: 85, target: 100 },
-  { name: "SOC 2 Readiness", current: 70, target: 90 },
-  { name: "Internal Audit Prep", current: 95, target: 100 },
-]
+interface AuditReadinessItem {
+  id: string
+  name: string
+  current: number
+  target: number
+  organization: string
+}
 
 export function AuditReadiness() {
+  const { user } = useAuth()
+  const [auditItems, setAuditItems] = useState<AuditReadinessItem[]>([])
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [newGoal, setNewGoal] = useState({ name: "", current: 0, target: 100 })
 
-  const handleAddGoal = () => {
-    // In a real application, you would add this to a state management system or send to a backend
-    console.log("Adding new audit goal:", newGoal)
-    setIsModalOpen(false)
-    setNewGoal({ name: "", current: 0, target: 100 }) // Reset form
+  useEffect(() => {
+    if (user?.organization) {
+      fetchAuditReadiness()
+    }
+  }, [user])
+
+  const fetchAuditReadiness = async () => {
+    try {
+      const response = await fetch(`/api/audit-readiness?organization=${user?.organization}`)
+      if (response.ok) {
+        const data = await response.json()
+        setAuditItems(data)
+      }
+    } catch (error) {
+      console.error("Failed to fetch audit readiness:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleAddGoal = async () => {
+    try {
+      const response = await fetch("/api/audit-readiness", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(newGoal),
+      })
+
+      if (response.ok) {
+        await fetchAuditReadiness() // Refresh the list
+        setIsModalOpen(false)
+        setNewGoal({ name: "", current: 0, target: 100 }) // Reset form
+      }
+    } catch (error) {
+      console.error("Failed to add audit goal:", error)
+    }
+  }
+
+  if (loading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-md font-medium">Audit Readiness</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-center h-32">
+            <div className="animate-pulse text-muted-foreground">Loading audit readiness...</div>
+          </div>
+        </CardContent>
+      </Card>
+    )
   }
 
   return (
@@ -97,23 +151,29 @@ export function AuditReadiness() {
         </Dialog>
       </CardHeader>
       <CardContent>
-        <div className="space-y-4">
-          {auditReadinessItems.map((goal) => {
-            const percentage = (goal.current / goal.target) * 100
-            return (
-              <div key={goal.name} className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>{goal.name}</span>
-                  <span>
-                    {goal.current}% / {goal.target}%
-                  </span>
+        {auditItems.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            No audit readiness goals found. Add your first goal to start tracking compliance progress.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {auditItems.map((goal) => {
+              const percentage = (goal.current / goal.target) * 100
+              return (
+                <div key={goal.id} className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span>{goal.name}</span>
+                    <span>
+                      {goal.current}% / {goal.target}%
+                    </span>
+                  </div>
+                  <Progress value={percentage} className="h-2" />
+                  <p className="text-xs text-right text-muted-foreground">{percentage.toFixed(1)}% complete</p>
                 </div>
-                <Progress value={percentage} className="h-2" />
-                <p className="text-xs text-right text-muted-foreground">{percentage.toFixed(1)}% complete</p>
-              </div>
-            )
-          })}
-        </div>
+              )
+            })}
+          </div>
+        )}
       </CardContent>
     </Card>
   )

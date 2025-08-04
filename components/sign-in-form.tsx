@@ -1,38 +1,34 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useAuth } from "@/contexts/auth-context"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2 } from "lucide-react"
+import { Loader2, Eye, EyeOff } from "lucide-react"
 
 const demoAccounts = [
   {
-    type: "admin",
     email: "admin@granular.ai",
     name: "Sarah Chen - Admin",
     description: "Full access to all features, multiple connected agents",
   },
   {
-    type: "developer",
     email: "dev@company.com",
     name: "Alex Rodriguez - Developer",
     description: "Agent management and testing capabilities",
   },
   {
-    type: "analyst",
     email: "analyst@startup.io",
     name: "Jordan Kim - Analyst",
     description: "Analytics and reporting access",
   },
   {
-    type: "viewer",
     email: "viewer@enterprise.com",
     name: "Morgan Taylor - Viewer",
     description: "Read-only dashboard access",
@@ -40,19 +36,36 @@ const demoAccounts = [
 ]
 
 export function SignInForm() {
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("demo123")
-  const [selectedDemo, setSelectedDemo] = useState("")
+  const [activeTab, setActiveTab] = useState("signin")
   const [isLoading, setIsLoading] = useState(false)
-  const { signIn, switchUserType } = useAuth()
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+
+  // Sign in form
+  const [signInData, setSignInData] = useState({
+    email: "",
+    password: "demo123",
+  })
+
+  // Sign up form
+  const [signUpData, setSignUpData] = useState({
+    email: "",
+    password: "",
+    confirmPassword: "",
+    name: "",
+    organization: "",
+    role: "viewer",
+  })
+
+  const { signIn, signUp } = useAuth()
   const { toast } = useToast()
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
 
     try {
-      await signIn(email, password)
+      await signIn(signInData.email, signInData.password)
       toast({
         title: "Welcome back!",
         description: "You have successfully signed in.",
@@ -60,7 +73,7 @@ export function SignInForm() {
     } catch (error) {
       toast({
         title: "Sign in failed",
-        description: "Please check your credentials and try again.",
+        description: error.message || "Please check your credentials and try again.",
         variant: "destructive",
       })
     } finally {
@@ -68,16 +81,63 @@ export function SignInForm() {
     }
   }
 
-  const handleDemoLogin = (userType: string) => {
+  const handleSignUp = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (signUpData.password !== signUpData.confirmPassword) {
+      toast({
+        title: "Password mismatch",
+        description: "Passwords do not match. Please try again.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (signUpData.password.length < 6) {
+      toast({
+        title: "Password too short",
+        description: "Password must be at least 6 characters long.",
+        variant: "destructive",
+      })
+      return
+    }
+
     setIsLoading(true)
-    setTimeout(() => {
-      switchUserType(userType)
+
+    try {
+      await signUp(signUpData.email, signUpData.password, signUpData.name, signUpData.organization, signUpData.role)
+      toast({
+        title: "Account created!",
+        description: "Welcome to Granular AI Governance Dashboard.",
+      })
+    } catch (error) {
+      toast({
+        title: "Sign up failed",
+        description: error.message || "Please try again.",
+        variant: "destructive",
+      })
+    } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleDemoLogin = async (email: string) => {
+    setIsLoading(true)
+    try {
+      await signIn(email, "demo123")
       toast({
         title: "Demo account loaded",
-        description: `Signed in as ${userType}`,
+        description: `Signed in successfully`,
       })
-    }, 500)
+    } catch (error) {
+      toast({
+        title: "Demo login failed",
+        description: error.message || "Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -90,81 +150,201 @@ export function SignInForm() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Sign In</CardTitle>
-            <CardDescription>Enter your credentials or try a demo account</CardDescription>
+            <CardTitle>Get Started</CardTitle>
+            <CardDescription>Sign in to your account or create a new one</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="Enter your email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="Enter your password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                />
-              </div>
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Sign In
-              </Button>
-            </form>
+          <CardContent>
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="signin">Sign In</TabsTrigger>
+                <TabsTrigger value="signup">Sign Up</TabsTrigger>
+              </TabsList>
 
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-background px-2 text-muted-foreground">Or try demo</span>
-              </div>
-            </div>
+              <TabsContent value="signin" className="space-y-4">
+                <form onSubmit={handleSignIn} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="signin-email">Email</Label>
+                    <Input
+                      id="signin-email"
+                      type="email"
+                      placeholder="Enter your email"
+                      value={signInData.email}
+                      onChange={(e) => setSignInData((prev) => ({ ...prev, email: e.target.value }))}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="signin-password">Password</Label>
+                    <div className="relative">
+                      <Input
+                        id="signin-password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Enter your password"
+                        value={signInData.password}
+                        onChange={(e) => setSignInData((prev) => ({ ...prev, password: e.target.value }))}
+                        required
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                        onClick={() => setShowPassword(!showPassword)}
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+                  <Button type="submit" className="w-full" disabled={isLoading}>
+                    {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Sign In
+                  </Button>
+                </form>
 
-            <div className="space-y-2">
-              <Label>Demo Accounts</Label>
-              <Select value={selectedDemo} onValueChange={setSelectedDemo}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a demo account" />
-                </SelectTrigger>
-                <SelectContent>
-                  {demoAccounts.map((account) => (
-                    <SelectItem key={account.type} value={account.type}>
-                      <div className="flex flex-col">
-                        <span className="font-medium">{account.name}</span>
-                        <span className="text-xs text-muted-foreground">{account.description}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {selectedDemo && (
-                <Button
-                  onClick={() => handleDemoLogin(selectedDemo)}
-                  className="w-full"
-                  variant="outline"
-                  disabled={isLoading}
-                >
-                  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Try {selectedDemo} Demo
-                </Button>
-              )}
-            </div>
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-background px-2 text-muted-foreground">Or try demo</span>
+                  </div>
+                </div>
 
-            <div className="text-xs text-muted-foreground text-center">
-              Demo password: <code className="bg-muted px-1 rounded">demo123</code>
-            </div>
+                <div className="space-y-2">
+                  <Label>Demo Accounts</Label>
+                  <div className="space-y-2">
+                    {demoAccounts.map((account) => (
+                      <Button
+                        key={account.email}
+                        onClick={() => handleDemoLogin(account.email)}
+                        className="w-full justify-start h-auto p-3"
+                        variant="outline"
+                        disabled={isLoading}
+                      >
+                        <div className="flex flex-col items-start">
+                          <span className="font-medium">{account.name}</span>
+                          <span className="text-xs text-muted-foreground">{account.description}</span>
+                        </div>
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="text-xs text-muted-foreground text-center">
+                  Demo password: <code className="bg-muted px-1 rounded">demo123</code>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="signup" className="space-y-4">
+                <form onSubmit={handleSignUp} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="signup-name">Full Name</Label>
+                      <Input
+                        id="signup-name"
+                        type="text"
+                        placeholder="John Doe"
+                        value={signUpData.name}
+                        onChange={(e) => setSignUpData((prev) => ({ ...prev, name: e.target.value }))}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="signup-organization">Organization</Label>
+                      <Input
+                        id="signup-organization"
+                        type="text"
+                        placeholder="Your Company"
+                        value={signUpData.organization}
+                        onChange={(e) => setSignUpData((prev) => ({ ...prev, organization: e.target.value }))}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="signup-email">Email</Label>
+                    <Input
+                      id="signup-email"
+                      type="email"
+                      placeholder="john@company.com"
+                      value={signUpData.email}
+                      onChange={(e) => setSignUpData((prev) => ({ ...prev, email: e.target.value }))}
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="signup-role">Role</Label>
+                    <Select
+                      value={signUpData.role}
+                      onValueChange={(value) => setSignUpData((prev) => ({ ...prev, role: value }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select your role" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="viewer">Viewer - Read-only access</SelectItem>
+                        <SelectItem value="analyst">Analyst - Analytics and reports</SelectItem>
+                        <SelectItem value="developer">Developer - Agent management</SelectItem>
+                        <SelectItem value="admin">Admin - Full access</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="signup-password">Password</Label>
+                    <div className="relative">
+                      <Input
+                        id="signup-password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Create a password"
+                        value={signUpData.password}
+                        onChange={(e) => setSignUpData((prev) => ({ ...prev, password: e.target.value }))}
+                        required
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                        onClick={() => setShowPassword(!showPassword)}
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="signup-confirm-password">Confirm Password</Label>
+                    <div className="relative">
+                      <Input
+                        id="signup-confirm-password"
+                        type={showConfirmPassword ? "text" : "password"}
+                        placeholder="Confirm your password"
+                        value={signUpData.confirmPassword}
+                        onChange={(e) => setSignUpData((prev) => ({ ...prev, confirmPassword: e.target.value }))}
+                        required
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      >
+                        {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <Button type="submit" className="w-full" disabled={isLoading}>
+                    {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Create Account
+                  </Button>
+                </form>
+              </TabsContent>
+            </Tabs>
           </CardContent>
         </Card>
       </div>

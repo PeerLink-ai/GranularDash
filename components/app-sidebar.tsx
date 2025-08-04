@@ -42,60 +42,51 @@ export function AppSidebar() {
   const { isMobile, toggleSidebar, state } = useSidebar()
   const { user } = useAuth()
 
+  // Don't render sidebar if user is not authenticated
   if (!user) return null
 
-  // Define navigation based on user permissions
-  const getNavigationForUser = () => {
-    const allNavigation = [
-      {
-        label: "Overview",
-        items: [
-          { title: "AI Governance Dashboard", href: "/", icon: Home, permission: "view_dashboard" },
-          { title: "Behavioral Analytics", href: "/analytics", icon: BarChart2, permission: "view_analytics" },
-        ],
-      },
-      {
-        label: "AI Operations",
-        items: [
-          { title: "Agent Management", href: "/agent-management", icon: Building2, permission: "manage_agents" },
-          { title: "Data & Model Lineage", href: "/data-model-lineage", icon: GitFork, permission: "view_analytics" },
-          { title: "Training & Simulation", href: "/training-simulation", icon: Video, permission: "test_agents" },
-        ],
-      },
-      {
-        label: "Governance & Compliance",
-        items: [
-          { title: "Policies & Rules", href: "/policies-rules", icon: Folder, permission: "manage_policies" },
-          { title: "Audit Logs", href: "/audit-logs", icon: FileText, permission: "view_audit_logs" },
-          { title: "Compliance Reports", href: "/compliance-reports", icon: Receipt, permission: "view_reports" },
-          { title: "Risk Management", href: "/risk-management", icon: Shield, permission: "view_reports" },
-          {
-            title: "Incident Response",
-            href: "/incident-response",
-            icon: MessageSquare,
-            permission: "manage_policies",
-          },
-        ],
-      },
-      {
-        label: "Access & Users",
-        items: [
-          { title: "Users & Roles", href: "/users-roles", icon: Users2, permission: "manage_users" },
-          { title: "Access Control", href: "/access-control", icon: Key, permission: "manage_users" },
-        ],
-      },
-    ]
-
-    // Filter navigation based on user permissions
-    return allNavigation
-      .map((group) => ({
-        ...group,
-        items: group.items.filter((item) => user.permissions.includes(item.permission)),
-      }))
-      .filter((group) => group.items.length > 0)
-  }
-
-  const navigationGroups = getNavigationForUser()
+  // All navigation items available to all authenticated users
+  const navigationGroups = [
+    {
+      label: "Overview",
+      items: [
+        { title: "AI Governance Dashboard", href: "/", icon: Home },
+        { title: "Behavioral Analytics", href: "/analytics", icon: BarChart2 },
+      ],
+    },
+    {
+      label: "AI Operations",
+      items: [
+        { title: "Agent Management", href: "/agent-management", icon: Building2 },
+        { title: "Data & Model Lineage", href: "/data-model-lineage", icon: GitFork },
+        { title: "Training & Simulation", href: "/training-simulation", icon: Video },
+      ],
+    },
+    {
+      label: "Governance & Compliance",
+      items: [
+        { title: "Policies & Rules", href: "/policies-rules", icon: Folder },
+        { title: "Audit Logs", href: "/audit-logs", icon: FileText },
+        { title: "Compliance Reports", href: "/compliance-reports", icon: Receipt },
+        { title: "Risk Management", href: "/risk-management", icon: Shield },
+        { title: "Incident Response", href: "/incident-response", icon: MessageSquare },
+      ],
+    },
+    {
+      label: "Access & Users",
+      items: [
+        { title: "Users & Roles", href: "/users-roles", icon: Users2 },
+        { title: "Access Control", href: "/access-control", icon: Key },
+      ],
+    },
+    {
+      label: "Financial",
+      items: [
+        { title: "Financial Goals", href: "/financial-goals", icon: Receipt },
+        { title: "Transactions", href: "/transactions", icon: FileText },
+      ],
+    },
+  ]
 
   const bottomNavigation = [
     { title: "Settings", href: "/settings", icon: Settings },

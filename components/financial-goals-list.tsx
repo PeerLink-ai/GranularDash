@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
@@ -17,89 +17,74 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { CalendarIcon } from "lucide-react"
+import { CalendarIcon, Plus } from "lucide-react"
 import { format } from "date-fns"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@/contexts/auth-context"
 
-type FinancialGoal = {
+interface FinancialGoal {
   id: string
+  user_id: string
   title: string
   category: string
-  targetAmount: number
-  currentAmount: number
-  dueDate: string
-  status: "In Progress" | "Completed" | "Pending" | "Delayed"
+  target_amount: number
+  current_amount: number
+  due_date?: string
+  status: "pending" | "in_progress" | "completed" | "delayed"
   notes?: string
+  created_at: string
+  updated_at: string
 }
 
-const initialGoals: FinancialGoal[] = [
-  {
-    id: "FG001",
-    title: "Emergency Fund",
-    category: "Savings",
-    targetAmount: 15000,
-    currentAmount: 10000,
-    dueDate: "2024-12-31",
-    status: "In Progress",
-    notes: "Aiming for 6 months of living expenses.",
-  },
-  {
-    id: "FG002",
-    title: "New Car Down Payment",
-    category: "Purchase",
-    targetAmount: 10000,
-    currentAmount: 2500,
-    dueDate: "2025-06-30",
-    status: "In Progress",
-    notes: "Looking at electric vehicles.",
-  },
-  {
-    id: "FG003",
-    title: "Student Loan Payoff",
-    category: "Debt",
-    targetAmount: 25000,
-    currentAmount: 25000,
-    dueDate: "2024-07-25",
-    status: "Completed",
-    notes: "Paid off ahead of schedule!",
-  },
-  {
-    id: "FG004",
-    title: "Retirement Savings Boost",
-    category: "Investment",
-    targetAmount: 5000,
-    currentAmount: 1000,
-    dueDate: "2024-12-31",
-    status: "Pending",
-    notes: "Increase 401k contributions.",
-  },
-]
-
 export function FinancialGoalsList() {
-  const [goals, setGoals] = useState(initialGoals)
+  const { user } = useAuth()
+  const [goals, setGoals] = useState<FinancialGoal[]>([])
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [selectedGoal, setSelectedGoal] = useState<FinancialGoal | null>(null)
-  const [editFormData, setEditFormData] = useState<Omit<FinancialGoal, "id">>({
-    title: "",
-    category: "",
-    targetAmount: 0,
-    currentAmount: 0,
-    dueDate: "",
-    status: "Pending",
-    notes: "",
-  })
+  const [loading, setLoading] = useState(true)
+  const [editFormData, setEditFormData] = useState<Omit<FinancialGoal, "id" | "user_id" | "created_at" | "updated_at">>(
+    {
+      title: "",
+      category: "",
+      target_amount: 0,
+      current_amount: 0,
+      due_date: "",
+      status: "pending",
+      notes: "",
+    },
+  )
+
+  useEffect(() => {
+    if (user) {
+      fetchGoals()
+    }
+  }, [user])
+
+  const fetchGoals = async () => {
+    try {
+      const response = await fetch("/api/financial-goals")
+      if (response.ok) {
+        const data = await response.json()
+        setGoals(data)
+      }
+    } catch (error) {
+      console.error("Failed to fetch financial goals:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const getStatusBadgeVariant = (status: FinancialGoal["status"]) => {
     switch (status) {
-      case "In Progress":
+      case "in_progress":
         return "default"
-      case "Completed":
-        return "success" // Assuming 'success' variant exists or use a custom class
-      case "Pending":
+      case "completed":
+        return "secondary" // Using secondary as success variant
+      case "pending":
         return "secondary"
-      case "Delayed":
+      case "delayed":
         return "destructive"
       default:
         return "outline"
@@ -112,9 +97,9 @@ export function FinancialGoalsList() {
       setEditFormData({
         title: goal.title,
         category: goal.category,
-        targetAmount: goal.targetAmount,
-        currentAmount: goal.currentAmount,
-        dueDate: goal.dueDate,
+        target_amount: goal.target_amount,
+        current_amount: goal.current_amount,
+        due_date: goal.due_date || "",
         status: goal.status,
         notes: goal.notes || "",
       })
@@ -122,77 +107,127 @@ export function FinancialGoalsList() {
       setEditFormData({
         title: "",
         category: "",
-        targetAmount: 0,
-        currentAmount: 0,
-        dueDate: "",
-        status: "Pending",
+        target_amount: 0,
+        current_amount: 0,
+        due_date: "",
+        status: "pending",
         notes: "",
       })
     }
     setIsEditModalOpen(true)
   }
 
-  const handleSaveGoal = () => {
-    if (selectedGoal) {
-      setGoals(goals.map((g) => (g.id === selectedGoal.id ? { ...g, ...editFormData } : g)))
-    } else {
-      const newGoal: FinancialGoal = {
-        ...editFormData,
-        id: `FG${Date.now()}`, // Simple unique ID
+  const handleSaveGoal = async () => {
+    try {
+      const url = selectedGoal ? `/api/financial-goals/${selectedGoal.id}` : "/api/financial-goals"
+      const method = selectedGoal ? "PUT" : "POST"
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(editFormData),
+      })
+
+      if (response.ok) {
+        await fetchGoals() // Refresh the list
+        setIsEditModalOpen(false)
+        setSelectedGoal(null)
       }
-      setGoals([...goals, newGoal])
+    } catch (error) {
+      console.error("Failed to save goal:", error)
     }
-    setIsEditModalOpen(false)
-    setSelectedGoal(null)
   }
 
-  const handleDeleteGoal = (goalId: string) => {
-    setGoals(goals.filter((g) => g.id !== goalId))
+  const handleDeleteGoal = async (goalId: string) => {
+    try {
+      const response = await fetch(`/api/financial-goals/${goalId}`, {
+        method: "DELETE",
+      })
+      if (response.ok) {
+        await fetchGoals() // Refresh the list
+      }
+    } catch (error) {
+      console.error("Failed to delete goal:", error)
+    }
+  }
+
+  if (loading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-xl font-semibold">Your Financial Goals</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-center h-32">
+            <div className="animate-pulse text-muted-foreground">Loading goals...</div>
+          </div>
+        </CardContent>
+      </Card>
+    )
   }
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-xl font-semibold">Your Financial Goals</CardTitle>
-        <Button onClick={() => handleEditClick()}>Add New Goal</Button>
-      </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Title</TableHead>
-              <TableHead>Category</TableHead>
-              <TableHead>Target</TableHead>
-              <TableHead>Current</TableHead>
-              <TableHead>Due Date</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {goals.map((goal) => (
-              <TableRow key={goal.id}>
-                <TableCell className="font-medium">{goal.title}</TableCell>
-                <TableCell>{goal.category}</TableCell>
-                <TableCell>${goal.targetAmount.toLocaleString()}</TableCell>
-                <TableCell>${goal.currentAmount.toLocaleString()}</TableCell>
-                <TableCell>{goal.dueDate}</TableCell>
-                <TableCell>
-                  <Badge variant={getStatusBadgeVariant(goal.status)}>{goal.status}</Badge>
-                </TableCell>
-                <TableCell className="text-right">
-                  <Button variant="outline" size="sm" onClick={() => handleEditClick(goal)}>
-                    Edit
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => handleDeleteGoal(goal.id)}>
-                    Delete
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent>
+    <>
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-xl font-semibold">Your Financial Goals</CardTitle>
+          <Button onClick={() => handleEditClick()}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add New Goal
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {goals.length === 0 ? (
+            <div className="text-center py-8">
+              <div className="text-muted-foreground mb-4">
+                No financial goals found. Create your first goal to start tracking your financial progress.
+              </div>
+              <Button variant="outline" onClick={() => handleEditClick()}>
+                <Plus className="h-4 w-4 mr-2" />
+                Create Your First Goal
+              </Button>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Title</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Target</TableHead>
+                  <TableHead>Current</TableHead>
+                  <TableHead>Due Date</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {goals.map((goal) => (
+                  <TableRow key={goal.id}>
+                    <TableCell className="font-medium">{goal.title}</TableCell>
+                    <TableCell>{goal.category}</TableCell>
+                    <TableCell>${goal.target_amount.toLocaleString()}</TableCell>
+                    <TableCell>${goal.current_amount.toLocaleString()}</TableCell>
+                    <TableCell>{goal.due_date ? new Date(goal.due_date).toLocaleDateString() : "-"}</TableCell>
+                    <TableCell>
+                      <Badge variant={getStatusBadgeVariant(goal.status)}>{goal.status}</Badge>
+                    </TableCell>
+                    <TableCell className="text-right space-x-2">
+                      <Button variant="outline" size="sm" onClick={() => handleEditClick(goal)}>
+                        Edit
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleDeleteGoal(goal.id)}>
+                        Delete
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Edit/Add Goal Modal */}
       <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
@@ -233,9 +268,9 @@ export function FinancialGoalsList() {
               <Input
                 id="targetAmount"
                 type="number"
-                value={editFormData.targetAmount}
+                value={editFormData.target_amount}
                 onChange={(e) =>
-                  setEditFormData({ ...editFormData, targetAmount: Number.parseFloat(e.target.value) || 0 })
+                  setEditFormData({ ...editFormData, target_amount: Number.parseFloat(e.target.value) || 0 })
                 }
                 className="col-span-3"
               />
@@ -247,9 +282,9 @@ export function FinancialGoalsList() {
               <Input
                 id="currentAmount"
                 type="number"
-                value={editFormData.currentAmount}
+                value={editFormData.current_amount}
                 onChange={(e) =>
-                  setEditFormData({ ...editFormData, currentAmount: Number.parseFloat(e.target.value) || 0 })
+                  setEditFormData({ ...editFormData, current_amount: Number.parseFloat(e.target.value) || 0 })
                 }
                 className="col-span-3"
               />
@@ -264,19 +299,19 @@ export function FinancialGoalsList() {
                     variant={"outline"}
                     className={cn(
                       "col-span-3 justify-start text-left font-normal",
-                      !editFormData.dueDate && "text-muted-foreground",
+                      !editFormData.due_date && "text-muted-foreground",
                     )}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {editFormData.dueDate ? format(new Date(editFormData.dueDate), "PPP") : <span>Pick a date</span>}
+                    {editFormData.due_date ? format(new Date(editFormData.due_date), "PPP") : <span>Pick a date</span>}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0">
                   <Calendar
                     mode="single"
-                    selected={editFormData.dueDate ? new Date(editFormData.dueDate) : undefined}
+                    selected={editFormData.due_date ? new Date(editFormData.due_date) : undefined}
                     onSelect={(date) =>
-                      setEditFormData({ ...editFormData, dueDate: date ? format(date, "yyyy-MM-dd") : "" })
+                      setEditFormData({ ...editFormData, due_date: date ? format(date, "yyyy-MM-dd") : "" })
                     }
                     initialFocus
                   />
@@ -295,10 +330,10 @@ export function FinancialGoalsList() {
                   <SelectValue placeholder="Select status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="In Progress">In Progress</SelectItem>
-                  <SelectItem value="Completed">Completed</SelectItem>
-                  <SelectItem value="Pending">Pending</SelectItem>
-                  <SelectItem value="Delayed">Delayed</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="in_progress">In Progress</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
+                  <SelectItem value="delayed">Delayed</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -321,6 +356,6 @@ export function FinancialGoalsList() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Card>
+    </>
   )
 }

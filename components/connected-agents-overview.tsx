@@ -1,110 +1,120 @@
 "use client"
 
-import { useAuth } from "@/contexts/auth-context"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
+import { useState, useEffect } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Bot, Brain, Code, Zap, Plus, ArrowRight } from "lucide-react"
-import Link from "next/link"
+import { Button } from "@/components/ui/button"
+import { Plus, Activity, AlertCircle, CheckCircle } from "lucide-react"
+import { ConnectAgentModal } from "./connect-agent-modal"
+import { useAuth } from "@/contexts/auth-context"
 
-const agentDetails = {
-  "openai-gpt4o-001": {
-    name: "GPT-4o Enterprise",
-    provider: "OpenAI",
-    model: "gpt-4o",
-    icon: Brain,
-    status: "active",
-    usage: "1,247 requests today",
-  },
-  "anthropic-claude3-001": {
-    name: "Claude 3 Opus",
-    provider: "Anthropic",
-    model: "claude-3-opus",
-    icon: Bot,
-    status: "active",
-    usage: "892 requests today",
-  },
-  "groq-llama3-001": {
-    name: "Llama 3 70B",
-    provider: "Groq",
-    model: "llama3-70b",
-    icon: Zap,
-    status: "inactive",
-    usage: "456 requests today",
-  },
-  "replit-agent-001": {
-    name: "Replit Agent",
-    provider: "Replit",
-    model: "replit-agent",
-    icon: Code,
-    status: "active",
-    usage: "234 requests today",
-  },
+interface ConnectedAgent {
+  user_id: string
+  agent_id: string
+  name: string
+  provider: string
+  model: string
+  status: "active" | "inactive" | "error"
+  endpoint: string
+  connected_at: string
+  last_active?: string
+  usage_requests: number
+  usage_tokens_used: number
+  usage_estimated_cost: number
 }
 
 export function ConnectedAgentsOverview() {
   const { user } = useAuth()
+  const [agents, setAgents] = useState<ConnectedAgent[]>([])
+  const [isConnectModalOpen, setIsConnectModalOpen] = useState(false)
+  const [loading, setLoading] = useState(true)
 
-  if (!user) return null
+  useEffect(() => {
+    if (user) {
+      fetchAgents()
+    }
+  }, [user])
 
-  const connectedAgents = user.connectedAgents
-    .map((id) => ({
-      id,
-      ...agentDetails[id],
-    }))
-    .filter(Boolean)
+  const fetchAgents = async () => {
+    try {
+      const response = await fetch("/api/agents")
+      if (response.ok) {
+        const data = await response.json()
+        setAgents(data)
+      }
+    } catch (error) {
+      console.error("Failed to fetch agents:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
-  const hasPermission = user.permissions.includes("manage_agents")
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "active":
+        return <CheckCircle className="h-4 w-4 text-green-500" />
+      case "inactive":
+        return <Activity className="h-4 w-4 text-yellow-500" />
+      case "error":
+        return <AlertCircle className="h-4 w-4 text-red-500" />
+      default:
+        return <Activity className="h-4 w-4 text-gray-500" />
+    }
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "active":
+        return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300"
+      case "inactive":
+        return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300"
+      case "error":
+        return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300"
+      default:
+        return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300"
+    }
+  }
+
+  if (loading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Connected Agents</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-center h-32">
+            <div className="animate-pulse text-muted-foreground">Loading agents...</div>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0">
-        <div>
-          <CardTitle>Connected Agents</CardTitle>
-          <CardDescription>
-            {connectedAgents.length > 0
-              ? `${connectedAgents.length} AI agents connected and monitored`
-              : "No agents connected yet"}
-          </CardDescription>
-        </div>
-        {hasPermission && (
-          <Link href="/agent-management">
-            <Button variant="outline" size="sm">
-              <Plus className="h-4 w-4 mr-2" />
-              Connect Agent
-            </Button>
-          </Link>
-        )}
-      </CardHeader>
-      <CardContent>
-        {connectedAgents.length === 0 ? (
-          <div className="text-center py-8">
-            <Bot className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No agents connected</h3>
-            <p className="text-muted-foreground mb-4">
-              {hasPermission
-                ? "Connect your first AI agent to start monitoring and governance."
-                : "Contact your administrator to connect AI agents."}
-            </p>
-            {hasPermission && (
-              <Link href="/agent-management">
-                <Button>
-                  Get Started
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </Link>
-            )}
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {connectedAgents.map((agent) => {
-              const Icon = agent.icon
-              return (
-                <div key={agent.id} className="flex items-center justify-between p-3 border rounded-lg">
+    <>
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-base font-semibold">Connected Agents</CardTitle>
+          <Button variant="outline" size="sm" onClick={() => setIsConnectModalOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Connect Agent
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {agents.length === 0 ? (
+            <div className="text-center py-8">
+              <div className="text-muted-foreground mb-4">No agents connected yet</div>
+              <Button variant="outline" onClick={() => setIsConnectModalOpen(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Connect Your First Agent
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {agents.map((agent) => (
+                <div key={agent.agent_id} className="flex items-center justify-between p-3 border rounded-lg">
                   <div className="flex items-center space-x-3">
-                    <div className="p-2 rounded-lg bg-muted">
-                      <Icon className="h-4 w-4" />
-                    </div>
+                    {getStatusIcon(agent.status)}
                     <div>
                       <div className="font-medium">{agent.name}</div>
                       <div className="text-sm text-muted-foreground">
@@ -112,27 +122,22 @@ export function ConnectedAgentsOverview() {
                       </div>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <Badge variant={agent.status === "active" ? "default" : "secondary"} className="mb-1">
-                      {agent.status}
-                    </Badge>
-                    <div className="text-xs text-muted-foreground">{agent.usage}</div>
+                  <div className="flex items-center space-x-2">
+                    <Badge className={getStatusColor(agent.status)}>{agent.status}</Badge>
+                    <div className="text-sm text-muted-foreground">{agent.usage_requests} requests</div>
                   </div>
                 </div>
-              )
-            })}
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-            {hasPermission && (
-              <Link href="/agent-management">
-                <Button variant="outline" className="w-full bg-transparent">
-                  View All Agents
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </Link>
-            )}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+      <ConnectAgentModal
+        isOpen={isConnectModalOpen}
+        onClose={() => setIsConnectModalOpen(false)}
+        onAgentConnected={fetchAgents}
+      />
+    </>
   )
 }

@@ -1,134 +1,227 @@
 "use client"
 
-import { useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Download, Printer } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { Download, FileText, Printer } from "lucide-react"
+import { toast } from "sonner"
 
-const reportTypes = [
-  "Compliance Audit Report",
-  "Agent Activity Log",
-  "Behavioral Anomaly Summary",
-  "Risk Assessment Report",
-  "Policy Adherence Report",
-  "Resource Utilization Report",
-]
-
-const dummyReportData = {
-  "Compliance Audit Report": [
-    { id: 1, metric: "Total Agents Audited", value: "750" },
-    { id: 2, metric: "Policies Reviewed", value: "45" },
-    { id: 3, metric: "Critical Violations", value: "3" },
-    { id: 4, metric: "Audit Readiness Score", value: "92%" },
-    { id: 5, metric: "Next Scheduled Audit", value: "Q4 2024" },
-  ],
-  "Agent Activity Log": [
-    { id: 1, metric: "Total Actions Recorded", value: "1,234,567" },
-    { id: 2, metric: "Unique Agents Active", value: "750" },
-    { id: 3, metric: "Average Actions per Agent", value: "1,646" },
-    { id: 4, metric: "Peak Activity Time", value: "10:00 AM UTC" },
-    { id: 5, metric: "Data Volume Processed", value: "500 GB" },
-  ],
-  "Behavioral Anomaly Summary": [
-    { id: 1, metric: "Total Anomalies Detected", value: "250" },
-    { id: 2, metric: "Resolved Anomalies", value: "220" },
-    { id: 3, metric: "Open Anomalies", value: "30" },
-    { id: 4, metric: "Goal Drift Incidents", value: "7" },
-    { id: 5, metric: "Collusion Attempts", value: "2" },
-  ],
-  "Risk Assessment Report": [
-    { id: 1, metric: "Overall Risk Score", value: "Low" },
-    { id: 2, metric: "High-Risk Agents", value: "5" },
-    { id: 3, metric: "Identified Vulnerabilities", value: "12" },
-    { id: 4, metric: "Mitigation Progress", value: "70%" },
-    { id: 5, metric: "Last Assessment Date", value: "2023-07-01" },
-  ],
-  "Policy Adherence Report": [
-    { id: 1, metric: "Overall Adherence Rate", value: "98.5%" },
-    { id: 2, metric: "Non-Compliant Agents", value: "12" },
-    { id: 3, metric: "Top Violated Policies", value: "Data Privacy, Ethical Use" },
-    { id: 4, metric: "Policy Enforcement Actions", value: "50" },
-    { id: 5, metric: "Policy Update Frequency", value: "Monthly" },
-  ],
-  "Resource Utilization Report": [
-    { id: 1, metric: "Total CPU Usage", value: "75%" },
-    { id: 2, metric: "Total Memory Usage", value: "60%" },
-    { id: 3, metric: "Network Throughput", value: "1.5 Gbps" },
-    { id: 4, metric: "Storage Consumption", value: "2 TB" },
-    { id: 5, metric: "Cost Efficiency", value: "High" },
-  ],
+interface Report {
+  id: string
+  type: string
+  title: string
+  status: "generating" | "completed" | "failed"
+  createdAt: string
 }
 
 export function ReportsTab() {
-  const [selectedReport, setSelectedReport] = useState(reportTypes[0])
+  const [reports, setReports] = useState<Report[]>([])
+  const [loading, setLoading] = useState(true)
+  const [generating, setGenerating] = useState(false)
+  const [selectedReportType, setSelectedReportType] = useState<string>("")
 
-  const handleGenerateReport = () => {
-    console.log(`Generating ${selectedReport} report...`)
+  useEffect(() => {
+    fetchReports()
+  }, [])
+
+  const fetchReports = async () => {
+    try {
+      const response = await fetch("/api/reports/list")
+      if (response.ok) {
+        const data = await response.json()
+        setReports(data)
+      }
+    } catch (error) {
+      console.error("Failed to fetch reports:", error)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const handleDownloadReport = () => {
-    console.log(`Downloading ${selectedReport} report...`)
+  const generateReport = async () => {
+    if (!selectedReportType) {
+      toast.error("Please select a report type")
+      return
+    }
+
+    setGenerating(true)
+    try {
+      const response = await fetch("/api/reports/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: selectedReportType }),
+      })
+
+      if (response.ok) {
+        toast.success("Report generation started")
+        fetchReports()
+        setSelectedReportType("")
+      } else {
+        toast.error("Failed to generate report")
+      }
+    } catch (error) {
+      console.error("Generate report error:", error)
+      toast.error("Failed to generate report")
+    } finally {
+      setGenerating(false)
+    }
   }
 
-  const handlePrintReport = () => {
-    console.log(`Printing ${selectedReport} report...`)
+  const downloadReport = async (reportId: string, reportType: string) => {
+    try {
+      const response = await fetch(`/api/reports/${reportType}/download?id=${reportId}`)
+      if (response.ok) {
+        const blob = await response.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement("a")
+        a.style.display = "none"
+        a.href = url
+        a.download = `${reportType}-report-${new Date().toISOString().split("T")[0]}.pdf`
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+        toast.success("Report downloaded successfully")
+      } else {
+        toast.error("Failed to download report")
+      }
+    } catch (error) {
+      console.error("Download error:", error)
+      toast.error("Failed to download report")
+    }
+  }
+
+  const printReport = async (reportId: string, reportType: string) => {
+    try {
+      const response = await fetch(`/api/reports/${reportType}?id=${reportId}`)
+      if (response.ok) {
+        const data = await response.json()
+        const printWindow = window.open("", "_blank")
+        if (printWindow) {
+          printWindow.document.write(`
+            <html>
+              <head>
+                <title>${data.title}</title>
+                <style>
+                  body { font-family: Arial, sans-serif; margin: 20px; }
+                  h1 { color: #333; }
+                  .meta { color: #666; margin-bottom: 20px; }
+                </style>
+              </head>
+              <body>
+                <h1>${data.title}</h1>
+                <div class="meta">Generated: ${new Date(data.createdAt).toLocaleString()}</div>
+                <div>${data.content || "Report content will be displayed here"}</div>
+              </body>
+            </html>
+          `)
+          printWindow.document.close()
+          printWindow.print()
+        }
+        toast.success("Report sent to printer")
+      } else {
+        toast.error("Failed to print report")
+      }
+    } catch (error) {
+      console.error("Print error:", error)
+      toast.error("Failed to print report")
+    }
   }
 
   return (
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle className="text-xl font-semibold">Generate Report</CardTitle>
+          <CardTitle>Generate Security Report</CardTitle>
+          <CardDescription>Create comprehensive security and compliance reports</CardDescription>
         </CardHeader>
-        <CardContent className="flex items-center space-x-4">
-          <Select value={selectedReport} onValueChange={setSelectedReport}>
-            <SelectTrigger className="w-[240px]">
-              <SelectValue placeholder="Select report type" />
-            </SelectTrigger>
-            <SelectContent>
-              {reportTypes.map((type) => (
-                <SelectItem key={type} value={type}>
-                  {type}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button onClick={handleGenerateReport}>Generate Report</Button>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-xl font-semibold">{selectedReport} Report</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Metric</TableHead>
-                <TableHead>Value</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {dummyReportData[selectedReport]?.map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell>{row.metric}</TableCell>
-                  <TableCell>{row.value}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          <div className="flex justify-end space-x-2 mt-4">
-            <Button variant="outline" onClick={handleDownloadReport}>
-              <Download className="mr-2 h-4 w-4" />
-              Download
-            </Button>
-            <Button variant="outline" onClick={handlePrintReport}>
-              <Printer className="mr-2 h-4 w-4" />
-              Print
+        <CardContent className="space-y-4">
+          <div className="flex space-x-2">
+            <Select value={selectedReportType} onValueChange={setSelectedReportType}>
+              <SelectTrigger className="flex-1">
+                <SelectValue placeholder="Select report type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="security-audit">Security Audit Report</SelectItem>
+                <SelectItem value="compliance-check">Compliance Check Report</SelectItem>
+                <SelectItem value="threat-analysis">Threat Analysis Report</SelectItem>
+                <SelectItem value="agent-security">Agent Security Report</SelectItem>
+                <SelectItem value="policy-violations">Policy Violations Report</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button onClick={generateReport} disabled={generating || !selectedReportType}>
+              <FileText className="mr-2 h-4 w-4" />
+              {generating ? "Generating..." : "Generate Report"}
             </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent Reports</CardTitle>
+          <CardDescription>Download or print previously generated reports</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="flex items-center justify-between p-4 border rounded">
+                  <div className="space-y-1">
+                    <div className="h-4 bg-muted rounded animate-pulse w-48" />
+                    <div className="h-3 bg-muted rounded animate-pulse w-32" />
+                  </div>
+                  <div className="flex space-x-2">
+                    <div className="h-8 w-20 bg-muted rounded animate-pulse" />
+                    <div className="h-8 w-16 bg-muted rounded animate-pulse" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : reports.length === 0 ? (
+            <div className="text-center text-muted-foreground py-8">
+              <FileText className="h-12 w-12 mx-auto mb-4" />
+              <p>No reports generated yet</p>
+              <p className="text-sm">Generate your first security report above</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {reports.map((report) => (
+                <div key={report.id} className="flex items-center justify-between p-4 border rounded">
+                  <div className="space-y-1">
+                    <p className="font-medium">{report.title}</p>
+                    <p className="text-sm text-muted-foreground">
+                      Generated: {new Date(report.createdAt).toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Badge
+                      variant={
+                        report.status === "completed"
+                          ? "default"
+                          : report.status === "failed"
+                            ? "destructive"
+                            : "secondary"
+                      }
+                    >
+                      {report.status}
+                    </Badge>
+                    {report.status === "completed" && (
+                      <>
+                        <Button variant="outline" size="sm" onClick={() => downloadReport(report.id, report.type)}>
+                          <Download className="h-4 w-4" />
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => printReport(report.id, report.type)}>
+                          <Printer className="h-4 w-4" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -1,25 +1,8 @@
 "use client"
-import Link from "next/link"
-import { usePathname } from "next/navigation"
-import {
-  Home,
-  BarChart2,
-  Building2,
-  Folder,
-  Receipt,
-  Users2,
-  Shield,
-  Settings,
-  HelpCircle,
-  Menu,
-  ChevronDown,
-  FileText,
-  Key,
-  MessageSquare,
-  Video,
-  GitFork,
-} from "lucide-react"
-import { Button } from "@/components/ui/button"
+
+import * as React from "react"
+import { BarChart3, Shield, Users, Settings, FileText, AlertTriangle, Activity, BookOpen, HelpCircle, Bot, Lock, TrendingUp, Database, Zap, Brain } from 'lucide-react'
+
 import {
   Sidebar,
   SidebarContent,
@@ -32,136 +15,115 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
-  useSidebar,
 } from "@/components/ui/sidebar"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { useAuth } from "@/contexts/auth-context"
 
-export function AppSidebar() {
-  const pathname = usePathname()
-  const { isMobile, toggleSidebar, state } = useSidebar()
-  const { user } = useAuth()
-
-  // Don't render sidebar if user is not authenticated
-  if (!user) return null
-
-  // All navigation items available to all authenticated users
-  const navigationGroups = [
+const data = {
+  navMain: [
     {
-      label: "Overview",
-      items: [
-        { title: "AI Governance Dashboard", href: "/", icon: Home },
-        { title: "Behavioral Analytics", href: "/analytics", icon: BarChart2 },
-      ],
+      title: "Dashboard",
+      url: "/",
+      icon: BarChart3,
     },
     {
-      label: "AI Operations",
-      items: [
-        { title: "Agent Management", href: "/agent-management", icon: Building2 },
-        { title: "Data & Model Lineage", href: "/data-model-lineage", icon: GitFork },
-        { title: "Training & Simulation", href: "/training-simulation", icon: Video },
-      ],
+      title: "Agent Management",
+      url: "/agent-management",
+      icon: Bot,
     },
     {
-      label: "Governance & Compliance",
-      items: [
-        { title: "Policies & Rules", href: "/policies-rules", icon: Folder },
-        { title: "Audit Logs", href: "/audit-logs", icon: FileText },
-        { title: "Compliance Reports", href: "/compliance-reports", icon: Receipt },
-        { title: "Risk Management", href: "/risk-management", icon: Shield },
-        { title: "Incident Response", href: "/incident-response", icon: MessageSquare },
-      ],
+      title: "Analytics",
+      url: "/analytics",
+      icon: TrendingUp,
     },
     {
-      label: "Access & Users",
-      items: [
-        { title: "Users & Roles", href: "/users-roles", icon: Users2 },
-        { title: "Access Control", href: "/access-control", icon: Key },
-      ],
+      title: "Access Control",
+      url: "/access-control",
+      icon: Lock,
     },
     {
-      label: "Financial",
-      items: [
-        { title: "Financial Goals", href: "/financial-goals", icon: Receipt },
-        { title: "Transactions", href: "/transactions", icon: FileText },
-      ],
+      title: "Policies & Rules",
+      url: "/policies-rules",
+      icon: Shield,
     },
-  ]
+    {
+      title: "Users & Roles",
+      url: "/users-roles",
+      icon: Users,
+    },
+    {
+      title: "Audit Logs",
+      url: "/audit-logs",
+      icon: FileText,
+    },
+    {
+      title: "Compliance Reports",
+      url: "/compliance-reports",
+      icon: FileText,
+    },
+    {
+      title: "Risk Management",
+      url: "/risk-management",
+      icon: AlertTriangle,
+    },
+    {
+      title: "Incident Response",
+      url: "/incident-response",
+      icon: Activity,
+    },
+    {
+      title: "Data Model Lineage",
+      url: "/data-model-lineage",
+      icon: Database,
+    },
+    {
+      title: "Training & Simulation",
+      url: "/training-simulation",
+      icon: Brain,
+    },
+    {
+      title: "Settings",
+      url: "/settings",
+      icon: Settings,
+    },
+    {
+      title: "Help",
+      url: "/help",
+      icon: HelpCircle,
+    },
+  ],
+}
 
-  const bottomNavigation = [
-    { title: "Settings", href: "/settings", icon: Settings },
-    { title: "Help", href: "/help", icon: HelpCircle },
-  ]
-
+export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
-    <Sidebar collapsible="icon" variant="sidebar">
+    <Sidebar variant="inset" {...props}>
       <SidebarHeader>
-        <div className="flex items-center justify-between w-full">
-          {state === "expanded" && (
-            <Link href="/" className="flex items-center font-semibold text-lg">
-              Granular
-            </Link>
-          )}
-          {!isMobile && (
-            <Button variant="ghost" size="sm" className="h-8 w-8" onClick={toggleSidebar} aria-label="Toggle sidebar">
-              <Menu className="h-4 w-4" />
-            </Button>
-          )}
+        <div className="flex items-center gap-2 px-4 py-2">
+          <Shield className="h-6 w-6" />
+          <span className="font-semibold">AI Governance</span>
         </div>
       </SidebarHeader>
       <SidebarContent>
-        {navigationGroups.map((group) => (
-          <Collapsible key={group.label} defaultOpen className="group/collapsible">
-            <SidebarGroup>
-              <SidebarGroupLabel asChild>
-                <CollapsibleTrigger className="flex items-center justify-between w-full px-2 py-1 text-sm font-medium text-sidebar-foreground/70 hover:text-sidebar-foreground transition-colors">
-                  <span>{group.label}</span>
-                  <ChevronDown className="ml-auto h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180" />
-                </CollapsibleTrigger>
-              </SidebarGroupLabel>
-              <CollapsibleContent>
-                <SidebarGroupContent className="px-0">
-                  <SidebarMenu>
-                    {group.items.map((item) => (
-                      <SidebarMenuItem key={item.title}>
-                        <SidebarMenuButton
-                          asChild
-                          isActive={pathname === item.href}
-                          tooltip={item.title}
-                          className="px-4 py-2 rounded-md hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground"
-                        >
-                          <Link href={item.href}>
-                            <item.icon className="h-4 w-4" />
-                            <span>{item.title}</span>
-                          </Link>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    ))}
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </CollapsibleContent>
-            </SidebarGroup>
-          </Collapsible>
-        ))}
+        <SidebarGroup>
+          <SidebarGroupLabel>Navigation</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {data.navMain.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton asChild>
+                    <a href={item.url}>
+                      <item.icon />
+                      <span>{item.title}</span>
+                    </a>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
-        <SidebarMenu>
-          {bottomNavigation.map((item) => (
-            <SidebarMenuItem key={item.title}>
-              <SidebarMenuButton
-                asChild
-                isActive={pathname === item.href}
-                tooltip={item.title}
-                className="px-4 py-2 rounded-md hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground"
-              >
-                <Link href={item.href}>
-                  <item.icon className="h-4 w-4" />
-                  <span>{item.title}</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          ))}
-        </SidebarMenu>
+        <div className="px-4 py-2 text-xs text-muted-foreground">
+          AI Agent Security & Governance Platform
+        </div>
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

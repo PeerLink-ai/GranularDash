@@ -1,34 +1,27 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { sql } from "@/lib/db"
+import { NextResponse } from 'next/server'
+import { getUser } from '@/lib/auth'
 
-export async function GET(request: NextRequest) {
+export const dynamic = 'force-dynamic'
+
+export async function GET() {
   try {
-    // Get user from session/auth - for now using placeholder
-    const organizationId = 1
+    const user = await getUser()
+    
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
-    // Query product performance data if it exists
-    const productData = await sql`
-      SELECT 
-        product_name as name,
-        SUM(amount) as revenue,
-        COUNT(*) as transactions
-      FROM transactions 
-      WHERE organization_id = (SELECT organization FROM users WHERE id = ${organizationId}) 
-        AND product_name IS NOT NULL
-      GROUP BY product_name
-      ORDER BY revenue DESC
-      LIMIT 5
-    `
+    // Mock top products data
+    const topProducts = [
+      { name: 'AI Agent Monitor Pro', sales: 1234, revenue: 45000 },
+      { name: 'Compliance Suite', sales: 987, revenue: 38000 },
+      { name: 'Security Dashboard', sales: 756, revenue: 29000 },
+      { name: 'Analytics Platform', sales: 543, revenue: 22000 },
+    ]
 
-    const formattedData = productData.map((row: any) => ({
-      name: row.name,
-      revenue: `$${Number(row.revenue).toLocaleString()}`,
-      growth: "+0%", // Would calculate from historical data
-    }))
-
-    return NextResponse.json(formattedData)
+    return NextResponse.json({ data: topProducts })
   } catch (error) {
-    console.error("Top products error:", error)
-    return NextResponse.json([])
+    console.error('Top products error:', error)
+    return NextResponse.json({ data: [] })
   }
 }

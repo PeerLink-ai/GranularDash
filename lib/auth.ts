@@ -1,195 +1,75 @@
-import bcrypt from "bcryptjs"
-import { sql } from "./db"
-import type { User, UserPermission, ConnectedAgent } from "./db"
+import { cookies } from 'next/headers'
+import { neon } from '@neondatabase/serverless'
 
-export async function hashPassword(password: string): Promise<string> {
-  return bcrypt.hash(password, 10)
+const sql = neon(process.env.DATABASE_URL!)
+
+export interface User {
+  id: string
+  email: string
+  name: string
+  role: string
+  organization_id: string
+  created_at: string
 }
 
-export async function verifyPassword(password: string, hashedPassword: string): Promise<boolean> {
-  return bcrypt.compare(password, hashedPassword)
-}
+export async function getUser(): Promise<User | null> {
+  try {
+    const cookieStore = await cookies()
+    const sessionToken = cookieStore.get('session-token')?.value
+    
+    if (!sessionToken) {
+      return null
+    }
 
-export async function generateSessionToken(): Promise<string> {
-  return Math.random().toString(36).substring(2) + Date.now().toString(36)
+    const users = await sql`
+      SELECT u.*, o.name as organization_name 
+      FROM users u
+      LEFT JOIN organizations o ON u.organization_id = o.id
+      WHERE u.session_token = ${sessionToken}
+      LIMIT 1
+    `
+    
+    if (users.length === 0) {
+      return null
+    }
+
+    return users[0] as User
+  } catch (error) {
+    console.error('Error getting user:', error)
+    return null
+  }
 }
 
 export async function createSession(userId: string): Promise<string> {
-  const sessionToken = await generateSessionToken()
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
-
+  const sessionToken = crypto.randomUUID()
+  
   await sql`
-    INSERT INTO user_sessions (user_id, session_token, expires_at)
-    VALUES (${userId}, ${sessionToken}, ${expiresAt.toISOString()})
+    UPDATE users 
+    SET session_token = ${sessionToken}, last_login = NOW()
+    WHERE id = ${userId}
   `
-
+  
   return sessionToken
 }
 
-export async function getUserBySession(
-  sessionToken: string,
-): Promise<(User & { permissions: string[]; connectedAgents: ConnectedAgent[] }) | null> {
-  const sessions = await sql`
-    SELECT u.*, s.expires_at
-    FROM users u
-    JOIN user_sessions s ON u.id = s.user_id
-    WHERE s.session_token = ${sessionToken}
-    AND s.expires_at > NOW()
-  `
-
-  if (sessions.length === 0) {
-    return null
-  }
-
-  const user = sessions[0] as User & { expires_at: string }
-
-  // Get user permissions
-  const permissions = await sql`
-    SELECT permission
-    FROM user_permissions
-    WHERE user_id = ${user.id}
-  `
-
-  // Get connected agents
-  const connectedAgents = await sql`
-    SELECT *
-    FROM connected_agents
-    WHERE user_id = ${user.id}
-    ORDER BY connected_at DESC
-  `
-
-  return {
-    ...user,
-    permissions: permissions.map((p: UserPermission) => p.permission),
-    connectedAgents: connectedAgents as ConnectedAgent[],
-  }
-}
-
-export async function signInUser(
-  email: string,
-  password: string,
-): Promise<{ user: User & { permissions: string[]; connectedAgents: ConnectedAgent[] }; sessionToken: string } | null> {
-  const users = await sql`
-    SELECT *
-    FROM users
-    WHERE email = ${email}
-  `
-
-  if (users.length === 0) {
-    return null
-  }
-
-  const user = users[0] as User & { password_hash: string }
-
-  const isValidPassword = await verifyPassword(password, user.password_hash)
-  if (!isValidPassword) {
-    return null
-  }
-
-  // Update last login
+export async function clearSession(sessionToken: string): Promise<void> {
   await sql`
-    UPDATE users
-    SET last_login = NOW()
-    WHERE id = ${user.id}
-  `
-
-  // Create session
-  const sessionToken = await createSession(user.id)
-
-  // Get user permissions
-  const permissions = await sql`
-    SELECT permission
-    FROM user_permissions
-    WHERE user_id = ${user.id}
-  `
-
-  // Get connected agents
-  const connectedAgents = await sql`
-    SELECT *
-    FROM connected_agents
-    WHERE user_id = ${user.id}
-    ORDER BY connected_at DESC
-  `
-
-  const { password_hash, ...userWithoutPassword } = user
-
-  return {
-    user: {
-      ...userWithoutPassword,
-      permissions: permissions.map((p: UserPermission) => p.permission),
-      connectedAgents: connectedAgents as ConnectedAgent[],
-    },
-    sessionToken,
-  }
-}
-
-export async function signUpUser(
-  email: string,
-  password: string,
-  name: string,
-  organization: string,
-  role = "viewer",
-): Promise<{ user: User & { permissions: string[]; connectedAgents: ConnectedAgent[] }; sessionToken: string }> {
-  const hashedPassword = await hashPassword(password)
-
-  const users = await sql`
-    INSERT INTO users (email, password_hash, name, organization, role)
-    VALUES (${email}, ${hashedPassword}, ${name}, ${organization}, ${role})
-    RETURNING *
-  `
-
-  const user = users[0] as User
-
-  // Add comprehensive permissions for all roles - no restrictions
-  const allPermissions = [
-    "manage_agents",
-    "view_analytics",
-    "manage_users",
-    "manage_policies",
-    "view_audit_logs",
-    "test_agents",
-    "view_reports",
-    "view_dashboard",
-    "manage_compliance",
-    "manage_risk",
-    "manage_incidents",
-    "manage_training",
-    "manage_access_control",
-    "manage_financial_goals",
-    "manage_transactions",
-  ]
-
-  for (const permission of allPermissions) {
-    await sql`
-      INSERT INTO user_permissions (user_id, permission)
-      VALUES (${user.id}, ${permission})
-    `
-  }
-
-  // Create session
-  const sessionToken = await createSession(user.id)
-
-  return {
-    user: {
-      ...user,
-      permissions: allPermissions,
-      connectedAgents: [],
-    },
-    sessionToken,
-  }
-}
-
-export async function deleteSession(sessionToken: string): Promise<void> {
-  await sql`
-    DELETE FROM user_sessions
+    UPDATE users 
+    SET session_token = NULL
     WHERE session_token = ${sessionToken}
   `
 }
 
-export async function completeOnboarding(userId: string): Promise<void> {
-  await sql`
-    UPDATE users
-    SET onboarding_completed = true
-    WHERE id = ${userId}
-  `
+export async function hashPassword(password: string): Promise<string> {
+  // Simple hash for demo - use bcrypt in production
+  const encoder = new TextEncoder()
+  const data = encoder.encode(password)
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+  const hashArray = Array.from(new Uint8Array(hashBuffer))
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
+export async function verifyPassword(password: string, hash: string): Promise<boolean> {
+  const hashedInput = await hashPassword(password)
+  return hashedInput === hash
 }

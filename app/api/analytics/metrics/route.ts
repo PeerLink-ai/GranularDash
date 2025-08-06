@@ -1,66 +1,34 @@
-import { NextResponse } from 'next/server'
-import { getUser } from '@/lib/auth'
-import { neon } from '@neondatabase/serverless'
+import { type NextRequest, NextResponse } from "next/server"
+import { sql } from "@/lib/db"
 
-const sql = neon(process.env.DATABASE_URL!)
-
-export const dynamic = 'force-dynamic'
-
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const user = await getUser()
-    
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    // Get user from session/auth - for now using placeholder
+    const organizationId = 1
 
-    // Get basic metrics with fallbacks
-    const metrics = await Promise.all([
-      // Total agents
-      sql`
-        SELECT COUNT(*) as count 
-        FROM connected_agents 
-        WHERE organization_id = ${user.organization_id}
-      `.catch(() => [{ count: '0' }]),
-      
-      // Active agents
-      sql`
-        SELECT COUNT(*) as count 
-        FROM connected_agents 
-        WHERE organization_id = ${user.organization_id}
-        AND status = 'active'
-      `.catch(() => [{ count: '0' }]),
-      
-      // Policy violations
-      sql`
-        SELECT COUNT(*) as count 
-        FROM policy_violations 
-        WHERE organization_id = ${user.organization_id}
-        AND created_at > NOW() - INTERVAL '30 days'
-      `.catch(() => [{ count: '0' }]),
-      
-      // Security threats
-      sql`
-        SELECT COUNT(*) as count 
-        FROM security_threats 
-        WHERE organization_id = ${user.organization_id}
-        AND status = 'active'
-      `.catch(() => [{ count: '0' }])
+    // Fetch metrics from database
+    const [agentCount, userCount, transactionCount, revenueSum] = await Promise.all([
+      sql`SELECT COUNT(*) as count FROM connected_agents WHERE user_id IN (SELECT id FROM users WHERE organization = (SELECT organization FROM users WHERE id = ${organizationId}))`,
+      sql`SELECT COUNT(*) as count FROM users WHERE organization = (SELECT organization FROM users WHERE id = ${organizationId})`,
+      sql`SELECT COUNT(*) as count FROM transactions WHERE organization_id = (SELECT organization FROM users WHERE id = ${organizationId})`,
+      sql`SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE organization_id = (SELECT organization FROM users WHERE id = ${organizationId})`,
     ])
 
-    return NextResponse.json({
-      totalAgents: parseInt(metrics[0][0]?.count) || 0,
-      activeAgents: parseInt(metrics[1][0]?.count) || 0,
-      policyViolations: parseInt(metrics[2][0]?.count) || 0,
-      securityThreats: parseInt(metrics[3][0]?.count) || 0,
-    })
+    const metrics = {
+      totalRevenue: `$${Number(revenueSum[0]?.total || 0).toLocaleString()}`,
+      totalUsers: (userCount[0]?.count || 0).toString(),
+      totalTransactions: (transactionCount[0]?.count || 0).toString(),
+      activeAgents: (agentCount[0]?.count || 0).toString(),
+    }
+
+    return NextResponse.json(metrics)
   } catch (error) {
-    console.error('Metrics error:', error)
+    console.error("Metrics error:", error)
     return NextResponse.json({
-      totalAgents: 0,
-      activeAgents: 0,
-      policyViolations: 0,
-      securityThreats: 0,
+      totalRevenue: "$0",
+      totalUsers: "0",
+      totalTransactions: "0",
+      activeAgents: "0",
     })
   }
 }

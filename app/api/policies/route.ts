@@ -1,12 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
-
-const sql = neon(process.env.DATABASE_URL!)
+import { sql } from "@/lib/db"
 
 export async function GET(request: NextRequest) {
   try {
-    // Get user session from cookie
-    const sessionToken = request.cookies.get("session-token")?.value
+    const sessionToken = request.cookies.get("session")?.value
 
     if (!sessionToken) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -14,47 +11,43 @@ export async function GET(request: NextRequest) {
 
     // Get user from session
     const userResult = await sql`
-      SELECT id, organization_id FROM users WHERE session_token = ${sessionToken}
+      SELECT id, email, organization 
+      FROM users 
+      WHERE session_token = ${sessionToken}
     `
 
     if (userResult.length === 0) {
-      return NextResponse.json({ error: "Invalid session" }, { status: 401 })
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const user = userResult[0]
 
-    // Get search query
-    const { searchParams } = new URL(request.url)
-    const search = searchParams.get("search") || ""
+    // Get policies for the user's organization
+    const policies = await sql`
+      SELECT 
+        id,
+        name,
+        description,
+        type,
+        status,
+        severity,
+        created_at,
+        updated_at
+      FROM policies 
+      WHERE organization = ${user.organization}
+      ORDER BY created_at DESC
+    `
 
-    // Fetch policies for the user's organization
-    let policies
-    if (search) {
-      policies = await sql`
-        SELECT * FROM policies 
-        WHERE organization_id = ${user.organization_id}
-        AND (name ILIKE ${`%${search}%`} OR type ILIKE ${`%${search}%`} OR description ILIKE ${`%${search}%`})
-        ORDER BY created_at DESC
-      `
-    } else {
-      policies = await sql`
-        SELECT * FROM policies 
-        WHERE organization_id = ${user.organization_id}
-        ORDER BY created_at DESC
-      `
-    }
-
-    return NextResponse.json(policies)
+    return NextResponse.json({ policies })
   } catch (error) {
-    console.error("Error fetching policies:", error)
-    return NextResponse.json({ error: "Failed to fetch policies" }, { status: 500 })
+    console.error("Failed to fetch policies:", error)
+    return NextResponse.json({ policies: [] })
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    // Get user session from cookie
-    const sessionToken = request.cookies.get("session-token")?.value
+    const sessionToken = request.cookies.get("session")?.value
 
     if (!sessionToken) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -62,32 +55,54 @@ export async function POST(request: NextRequest) {
 
     // Get user from session
     const userResult = await sql`
-      SELECT id, organization_id FROM users WHERE session_token = ${sessionToken}
+      SELECT id, email, organization 
+      FROM users 
+      WHERE session_token = ${sessionToken}
     `
 
     if (userResult.length === 0) {
-      return NextResponse.json({ error: "Invalid session" }, { status: 401 })
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const user = userResult[0]
     const body = await request.json()
 
-    const { name, type, description, rules, severity, status = "active" } = body
+    const { name, description, type, severity, rules } = body
 
-    if (!name || !type || !description || !rules) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
+    if (!name || !type) {
+      return NextResponse.json({ error: "Name and type are required" }, { status: 400 })
     }
 
     // Create new policy
     const result = await sql`
-      INSERT INTO policies (name, type, description, rules, severity, status, organization_id, created_by)
-      VALUES (${name}, ${type}, ${description}, ${JSON.stringify(rules)}, ${severity}, ${status}, ${user.organization_id}, ${user.id})
+      INSERT INTO policies (
+        name, 
+        description, 
+        type, 
+        severity, 
+        rules, 
+        status, 
+        organization,
+        created_at,
+        updated_at
+      )
+      VALUES (
+        ${name},
+        ${description || ""},
+        ${type},
+        ${severity || "medium"},
+        ${JSON.stringify(rules || {})},
+        'active',
+        ${user.organization},
+        NOW(),
+        NOW()
+      )
       RETURNING *
     `
 
-    return NextResponse.json(result[0], { status: 201 })
+    return NextResponse.json({ policy: result[0] })
   } catch (error) {
-    console.error("Error creating policy:", error)
+    console.error("Failed to create policy:", error)
     return NextResponse.json({ error: "Failed to create policy" }, { status: 500 })
   }
 }

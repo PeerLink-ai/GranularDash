@@ -31,17 +31,26 @@ export async function GET(request: NextRequest) {
         type,
         status,
         severity,
+        applies_to_agents,
+        agent_enforcement,
         created_at,
         updated_at
-      FROM policies 
-      WHERE organization = ${user.organization}
+      FROM governance_policies 
+      WHERE organization_id = ${user.organization}
       ORDER BY created_at DESC
     `
 
-    return NextResponse.json({ policies })
+    return NextResponse.json({ 
+      success: true, 
+      policies: policies || [] 
+    })
   } catch (error) {
     console.error("Failed to fetch policies:", error)
-    return NextResponse.json({ policies: [] })
+    return NextResponse.json({ 
+      success: false, 
+      error: "Failed to fetch policies",
+      policies: [] 
+    }, { status: 500 })
   }
 }
 
@@ -66,43 +75,65 @@ export async function POST(request: NextRequest) {
 
     const user = userResult[0]
     const body = await request.json()
+    const { 
+      name, 
+      description, 
+      type, 
+      severity, 
+      applies_to_agents = false, 
+      agent_enforcement = 'warn',
+      agent_ids = []
+    } = body
 
-    const { name, description, type, severity, rules } = body
-
-    if (!name || !type) {
-      return NextResponse.json({ error: "Name and type are required" }, { status: 400 })
-    }
-
-    // Create new policy
+    // Insert new policy
     const result = await sql`
-      INSERT INTO policies (
+      INSERT INTO governance_policies (
+        organization_id, 
         name, 
         description, 
         type, 
-        severity, 
-        rules, 
-        status, 
-        organization,
+        severity,
+        status,
+        applies_to_agents,
+        agent_enforcement,
         created_at,
         updated_at
-      )
-      VALUES (
-        ${name},
-        ${description || ""},
-        ${type},
-        ${severity || "medium"},
-        ${JSON.stringify(rules || {})},
-        'active',
+      ) VALUES (
         ${user.organization},
+        ${name},
+        ${description},
+        ${type},
+        ${severity},
+        'active',
+        ${applies_to_agents},
+        ${agent_enforcement},
         NOW(),
         NOW()
       )
-      RETURNING *
+      RETURNING id, name, description, type, severity, status, applies_to_agents, agent_enforcement, created_at, updated_at
     `
 
-    return NextResponse.json({ policy: result[0] })
+    const policy = result[0]
+
+    // If policy applies to agents, create assignments
+    if (applies_to_agents && agent_ids.length > 0) {
+      for (const agentId of agent_ids) {
+        await sql`
+          INSERT INTO policy_agent_assignments (policy_id, agent_id, assigned_at, status)
+          VALUES (${policy.id}, ${agentId}, NOW(), 'active')
+        `
+      }
+    }
+
+    return NextResponse.json({ 
+      success: true, 
+      policy 
+    })
   } catch (error) {
     console.error("Failed to create policy:", error)
-    return NextResponse.json({ error: "Failed to create policy" }, { status: 500 })
+    return NextResponse.json({ 
+      success: false, 
+      error: "Failed to create policy" 
+    }, { status: 500 })
   }
 }

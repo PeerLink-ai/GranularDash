@@ -1,59 +1,68 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
+import { cookies } from "next/headers"
 import { getUserBySession } from "@/lib/auth"
-import { sql } from "@/lib/db"
+import { addAuditLog, listAuditLogs } from "@/lib/audit-store"
 
-export async function GET(request: NextRequest) {
+export async function GET(req: NextRequest) {
   try {
-    const sessionToken = request.cookies.get("session")?.value
-
+    const cookieStore = await cookies()
+    const sessionToken = cookieStore.get("session_token")?.value
     if (!sessionToken) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
-
     const user = await getUserBySession(sessionToken)
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Get audit logs for the user's organization
-    const auditLogs = await sql`
-      SELECT * FROM audit_logs 
-      WHERE organization = ${user.organization}
-      ORDER BY timestamp DESC
-      LIMIT 100
-    `
+    const { searchParams } = new URL(req.url)
+    const limit = Number(searchParams.get("limit") || 50)
+    const offset = Number(searchParams.get("offset") || 0)
 
-    return NextResponse.json({ auditLogs })
-  } catch (error) {
-    console.error("Error fetching audit logs:", error)
+    const logs = await listAuditLogs({ userId: user.id, limit, offset })
+    return NextResponse.json({ logs })
+  } catch (err) {
+    console.error("GET /api/audit-logs error:", err)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
-    const sessionToken = request.cookies.get("session")?.value
-
+    const cookieStore = await cookies()
+    const sessionToken = cookieStore.get("session_token")?.value
     if (!sessionToken) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
-
     const user = await getUserBySession(sessionToken)
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { action, resource_type, resource_id, details } = await request.json()
+    const body = await req.json()
+    if (!body?.action || !body?.resourceType) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
+    }
 
-    const auditLog = await sql`
-      INSERT INTO audit_logs (user_id, organization, action, resource_type, resource_id, details)
-      VALUES (${user.id}, ${user.organization}, ${action}, ${resource_type}, ${resource_id || null}, ${JSON.stringify(details || {})})
-      RETURNING *
-    `
+    const ipAddress =
+      req.headers.get("x-forwarded-for") ||
+      req.headers.get("x-real-ip") ||
+      undefined
+    const userAgent = req.headers.get("user-agent") || undefined
 
-    return NextResponse.json({ auditLog: auditLog[0] })
-  } catch (error) {
-    console.error("Error creating audit log:", error)
+    const log = await addAuditLog({
+      userId: user.id,
+      organization: user.organization,
+      action: body.action,
+      resourceType: body.resourceType,
+      resourceId: body.resourceId,
+      details: body.details,
+      ipAddress,
+      userAgent,
+    })
+    return NextResponse.json({ log })
+  } catch (err) {
+    console.error("POST /api/audit-logs error:", err)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

@@ -1,89 +1,91 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Plus, Activity, AlertCircle, CheckCircle } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
 import { ConnectAgentModal } from "./connect-agent-modal"
-import { useAuth } from "@/contexts/auth-context"
+import { Plus, Activity, AlertCircle, CheckCircle, Clock } from 'lucide-react'
 
-interface ConnectedAgent {
-  user_id: string
-  agent_id: string
+interface Agent {
+  id: string
   name: string
   provider: string
   model: string
-  status: "active" | "inactive" | "error"
   endpoint: string
+  status: string
   connected_at: string
   last_active?: string
-  usage_requests: number
-  usage_tokens_used: number
-  usage_estimated_cost: number
 }
 
 export function ConnectedAgentsOverview() {
-  const { user } = useAuth()
-  const [agents, setAgents] = useState<ConnectedAgent[]>([])
-  const [isConnectModalOpen, setIsConnectModalOpen] = useState(false)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    if (user) {
-      fetchAgents()
-    }
-  }, [user])
+  const [agents, setAgents] = useState<Agent[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [showConnectModal, setShowConnectModal] = useState(false)
 
   const fetchAgents = async () => {
     try {
       const response = await fetch("/api/agents")
       if (response.ok) {
         const data = await response.json()
-        setAgents(data)
+        setAgents(Array.isArray(data.agents) ? data.agents : [])
+      } else {
+        console.error("Failed to fetch agents")
+        setAgents([])
       }
     } catch (error) {
-      console.error("Failed to fetch agents:", error)
+      console.error("Error fetching agents:", error)
+      setAgents([])
     } finally {
-      setLoading(false)
+      setIsLoading(false)
     }
+  }
+
+  useEffect(() => {
+    fetchAgents()
+  }, [])
+
+  const handleAgentConnected = () => {
+    setShowConnectModal(false)
+    fetchAgents()
   }
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case "active":
+      case 'active':
         return <CheckCircle className="h-4 w-4 text-green-500" />
-      case "inactive":
-        return <Activity className="h-4 w-4 text-yellow-500" />
-      case "error":
+      case 'inactive':
+        return <Clock className="h-4 w-4 text-yellow-500" />
+      case 'error':
         return <AlertCircle className="h-4 w-4 text-red-500" />
       default:
         return <Activity className="h-4 w-4 text-gray-500" />
     }
   }
 
-  const getStatusColor = (status: string) => {
+  const getStatusBadge = (status: string) => {
     switch (status) {
-      case "active":
-        return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300"
-      case "inactive":
-        return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300"
-      case "error":
-        return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300"
+      case 'active':
+        return <Badge variant="default" className="bg-green-100 text-green-800">Active</Badge>
+      case 'inactive':
+        return <Badge variant="secondary">Inactive</Badge>
+      case 'error':
+        return <Badge variant="destructive">Error</Badge>
       default:
-        return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300"
+        return <Badge variant="outline">Unknown</Badge>
     }
   }
 
-  if (loading) {
+  if (isLoading) {
     return (
       <Card>
         <CardHeader>
           <CardTitle>Connected Agents</CardTitle>
+          <CardDescription>Loading agents...</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center justify-center h-32">
-            <div className="animate-pulse text-muted-foreground">Loading agents...</div>
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
           </div>
         </CardContent>
       </Card>
@@ -94,8 +96,13 @@ export function ConnectedAgentsOverview() {
     <>
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-base font-semibold">Connected Agents</CardTitle>
-          <Button variant="outline" size="sm" onClick={() => setIsConnectModalOpen(true)}>
+          <div>
+            <CardTitle>Connected Agents</CardTitle>
+            <CardDescription>
+              Manage your AI agents and their connections
+            </CardDescription>
+          </div>
+          <Button onClick={() => setShowConnectModal(true)} size="sm">
             <Plus className="h-4 w-4 mr-2" />
             Connect Agent
           </Button>
@@ -103,8 +110,12 @@ export function ConnectedAgentsOverview() {
         <CardContent>
           {agents.length === 0 ? (
             <div className="text-center py-8">
-              <div className="text-muted-foreground mb-4">No agents connected yet</div>
-              <Button variant="outline" onClick={() => setIsConnectModalOpen(true)}>
+              <Activity className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-semibold mb-2">No agents connected</h3>
+              <p className="text-muted-foreground mb-4">
+                Connect your first AI agent to start monitoring and governance.
+              </p>
+              <Button onClick={() => setShowConnectModal(true)}>
                 <Plus className="h-4 w-4 mr-2" />
                 Connect Your First Agent
               </Button>
@@ -112,19 +123,24 @@ export function ConnectedAgentsOverview() {
           ) : (
             <div className="space-y-4">
               {agents.map((agent) => (
-                <div key={agent.agent_id} className="flex items-center justify-between p-3 border rounded-lg">
-                  <div className="flex items-center space-x-3">
+                <div
+                  key={agent.id}
+                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                >
+                  <div className="flex items-center space-x-4">
                     {getStatusIcon(agent.status)}
                     <div>
-                      <div className="font-medium">{agent.name}</div>
-                      <div className="text-sm text-muted-foreground">
+                      <h4 className="font-semibold">{agent.name}</h4>
+                      <p className="text-sm text-muted-foreground">
                         {agent.provider} • {agent.model}
-                      </div>
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Connected {new Date(agent.connected_at).toLocaleDateString()}
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <Badge className={getStatusColor(agent.status)}>{agent.status}</Badge>
-                    <div className="text-sm text-muted-foreground">{agent.usage_requests} requests</div>
+                    {getStatusBadge(agent.status)}
                   </div>
                 </div>
               ))}
@@ -134,9 +150,9 @@ export function ConnectedAgentsOverview() {
       </Card>
 
       <ConnectAgentModal
-        isOpen={isConnectModalOpen}
-        onClose={() => setIsConnectModalOpen(false)}
-        onAgentConnected={fetchAgents}
+        open={showConnectModal}
+        onOpenChange={setShowConnectModal}
+        onAgentConnected={handleAgentConnected}
       />
     </>
   )

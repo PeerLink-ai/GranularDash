@@ -1,24 +1,8 @@
 "use client"
+
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import {
-  Home,
-  BarChart2,
-  Building2,
-  Folder,
-  Receipt,
-  Users2,
-  Shield,
-  Settings,
-  HelpCircle,
-  Menu,
-  ChevronDown,
-  FileText,
-  Key,
-  MessageSquare,
-  Video,
-  GitFork,
-} from "lucide-react"
+import { Home, BarChart2, Building2, FolderKanban, GitFork, Video, Shield, FileText, Receipt, MessageSquare, Users2, Key, Settings, HelpCircle, Menu, ChevronDown } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import {
   Sidebar,
@@ -42,48 +26,40 @@ export function AppSidebar() {
   const { isMobile, toggleSidebar, state } = useSidebar()
   const { user } = useAuth()
 
-  // Don't render sidebar if user is not authenticated
   if (!user) return null
 
-  // All navigation items available to all authenticated users
+  // Consolidated navigation
   const navigationGroups = [
     {
       label: "Overview",
       items: [
-        { title: "AI Governance Dashboard", href: "/", icon: Home },
-        { title: "Behavioral Analytics", href: "/analytics", icon: BarChart2 },
+        { title: "Dashboard", href: "/", icon: Home },
+        { title: "Projects", href: "/projects", icon: FolderKanban },
+        { title: "Analytics", href: "/analytics", icon: BarChart2 },
       ],
     },
     {
-      label: "AI Operations",
+      label: "Operations",
       items: [
         { title: "Agent Management", href: "/agent-management", icon: Building2 },
-        { title: "Data & Model Lineage", href: "/data-model-lineage", icon: GitFork },
         { title: "Training & Simulation", href: "/training-simulation", icon: Video },
+        { title: "Data & Model Lineage", href: "/data-model-lineage", icon: GitFork },
       ],
     },
     {
-      label: "Governance & Compliance",
+      label: "Governance",
       items: [
-        { title: "Policies & Rules", href: "/policies-rules", icon: Folder },
+        { title: "Policies & Rules", href: "/policies-rules", icon: Shield },
         { title: "Audit Logs", href: "/audit-logs", icon: FileText },
         { title: "Compliance Reports", href: "/compliance-reports", icon: Receipt },
-        { title: "Risk Management", href: "/risk-management", icon: Shield },
-        { title: "Incident Response", href: "/incident-response", icon: MessageSquare },
+        { title: "Risk & Incidents", href: "/incident-response", icon: MessageSquare },
       ],
     },
     {
-      label: "Access & Users",
+      label: "Access",
       items: [
         { title: "Users & Roles", href: "/users-roles", icon: Users2 },
         { title: "Access Control", href: "/access-control", icon: Key },
-      ],
-    },
-    {
-      label: "Financial",
-      items: [
-        { title: "Financial Goals", href: "/financial-goals", icon: Receipt },
-        { title: "Transactions", href: "/transactions", icon: FileText },
       ],
     },
   ]

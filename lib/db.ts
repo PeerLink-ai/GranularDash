@@ -166,3 +166,16 @@ export interface Transaction {
   description?: string
   created_at: string
 }
+
+/** New: Projects table model */
+export interface Project {
+  id: string
+  name: string
+  description?: string | null
+  type: "native" | "github" | "external"
+  repo_url?: string | null
+  metadata?: Record<string, any>
+  pinned?: boolean
+  created_at: string
+  updated_at: string
+}

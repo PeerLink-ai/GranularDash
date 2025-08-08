@@ -19,7 +19,8 @@ import {
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Search, Edit, Trash2 } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Plus, Search, Edit, Trash2, Shield, Bot } from 'lucide-react'
 import { toast } from "@/hooks/use-toast"
 
 interface Policy {
@@ -29,28 +30,42 @@ interface Policy {
   type: string
   status: string
   severity: string
+  applies_to_agents: boolean
+  agent_enforcement: string
   created_at: string
   updated_at: string
+}
+
+interface ConnectedAgent {
+  id: string
+  name: string
+  status: string
 }
 
 export function PolicyList() {
   const { user } = useAuth()
   const [policies, setPolicies] = useState<Policy[]>([])
+  const [agents, setAgents] = useState<ConnectedAgent[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [isAgentModalOpen, setIsAgentModalOpen] = useState(false)
   const [selectedPolicy, setSelectedPolicy] = useState<Policy | null>(null)
+  const [selectedAgents, setSelectedAgents] = useState<string[]>([])
   const [formData, setFormData] = useState({
     name: "",
     description: "",
     type: "",
     severity: "medium",
+    applies_to_agents: false,
+    agent_enforcement: "warn",
   })
 
   useEffect(() => {
     if (user) {
       fetchPolicies()
+      fetchAgents()
     }
   }, [user])
 
@@ -80,6 +95,18 @@ export function PolicyList() {
     }
   }
 
+  const fetchAgents = async () => {
+    try {
+      const response = await fetch("/api/agents")
+      if (response.ok) {
+        const data = await response.json()
+        setAgents(data.agents || [])
+      }
+    } catch (error) {
+      console.error("Failed to fetch agents:", error)
+    }
+  }
+
   const handleCreatePolicy = async () => {
     try {
       const response = await fetch("/api/policies", {
@@ -87,7 +114,10 @@ export function PolicyList() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          agent_ids: formData.applies_to_agents ? selectedAgents : [],
+        }),
       })
 
       if (response.ok) {
@@ -96,7 +126,7 @@ export function PolicyList() {
           description: "Policy created successfully",
         })
         setIsCreateModalOpen(false)
-        setFormData({ name: "", description: "", type: "", severity: "medium" })
+        resetForm()
         fetchPolicies()
       } else {
         const error = await response.json()
@@ -125,7 +155,10 @@ export function PolicyList() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          agent_ids: formData.applies_to_agents ? selectedAgents : [],
+        }),
       })
 
       if (response.ok) {
@@ -135,7 +168,7 @@ export function PolicyList() {
         })
         setIsEditModalOpen(false)
         setSelectedPolicy(null)
-        setFormData({ name: "", description: "", type: "", severity: "medium" })
+        resetForm()
         fetchPolicies()
       } else {
         const error = await response.json()
@@ -194,8 +227,27 @@ export function PolicyList() {
       description: policy.description,
       type: policy.type,
       severity: policy.severity,
+      applies_to_agents: policy.applies_to_agents,
+      agent_enforcement: policy.agent_enforcement || "warn",
     })
     setIsEditModalOpen(true)
+  }
+
+  const openAgentModal = (policy: Policy) => {
+    setSelectedPolicy(policy)
+    setIsAgentModalOpen(true)
+  }
+
+  const resetForm = () => {
+    setFormData({
+      name: "",
+      description: "",
+      type: "",
+      severity: "medium",
+      applies_to_agents: false,
+      agent_enforcement: "warn",
+    })
+    setSelectedAgents([])
   }
 
   const filteredPolicies = policies.filter(
@@ -256,7 +308,7 @@ export function PolicyList() {
                 Add Policy
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-2xl">
               <DialogHeader>
                 <DialogTitle>Create New Policy</DialogTitle>
                 <DialogDescription>Define a new governance policy for your organization.</DialogDescription>
@@ -283,6 +335,7 @@ export function PolicyList() {
                       <SelectItem value="data-governance">Data Governance</SelectItem>
                       <SelectItem value="access-control">Access Control</SelectItem>
                       <SelectItem value="operational">Operational</SelectItem>
+                      <SelectItem value="ai-ethics">AI Ethics</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -302,6 +355,32 @@ export function PolicyList() {
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="applies_to_agents"
+                    checked={formData.applies_to_agents}
+                    onCheckedChange={(checked) => setFormData({ ...formData, applies_to_agents: !!checked })}
+                  />
+                  <Label htmlFor="applies_to_agents">Apply to Connected Agents</Label>
+                </div>
+                {formData.applies_to_agents && (
+                  <div className="grid gap-2">
+                    <Label htmlFor="agent_enforcement">Agent Enforcement</Label>
+                    <Select
+                      value={formData.agent_enforcement}
+                      onValueChange={(value) => setFormData({ ...formData, agent_enforcement: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select enforcement level" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="warn">Warn Only</SelectItem>
+                        <SelectItem value="block">Block Action</SelectItem>
+                        <SelectItem value="audit">Audit & Log</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div className="grid gap-2">
                   <Label htmlFor="description">Description</Label>
                   <Textarea
@@ -346,6 +425,7 @@ export function PolicyList() {
                 <TableHead>Type</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Severity</TableHead>
+                <TableHead>Agent Policy</TableHead>
                 <TableHead>Created</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -353,7 +433,7 @@ export function PolicyList() {
             <TableBody>
               {filteredPolicies.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                     {searchTerm ? "No policies found matching your search." : "No policies created yet."}
                   </TableCell>
                 </TableRow>
@@ -370,9 +450,24 @@ export function PolicyList() {
                     <TableCell>
                       <Badge variant={getSeverityColor(policy.severity)}>{policy.severity}</Badge>
                     </TableCell>
+                    <TableCell>
+                      {policy.applies_to_agents ? (
+                        <div className="flex items-center space-x-1">
+                          <Bot className="h-3 w-3" />
+                          <span className="text-xs">{policy.agent_enforcement}</span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">N/A</span>
+                      )}
+                    </TableCell>
                     <TableCell>{new Date(policy.created_at).toLocaleDateString()}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end space-x-2">
+                        {policy.applies_to_agents && (
+                          <Button variant="ghost" size="sm" onClick={() => openAgentModal(policy)}>
+                            <Shield className="h-4 w-4" />
+                          </Button>
+                        )}
                         <Button variant="ghost" size="sm" onClick={() => openEditModal(policy)}>
                           <Edit className="h-4 w-4" />
                         </Button>
@@ -390,7 +485,7 @@ export function PolicyList() {
 
         {/* Edit Modal */}
         <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-          <DialogContent>
+          <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>Edit Policy</DialogTitle>
               <DialogDescription>Update the policy details.</DialogDescription>
@@ -417,6 +512,7 @@ export function PolicyList() {
                     <SelectItem value="data-governance">Data Governance</SelectItem>
                     <SelectItem value="access-control">Access Control</SelectItem>
                     <SelectItem value="operational">Operational</SelectItem>
+                    <SelectItem value="ai-ethics">AI Ethics</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -436,6 +532,32 @@ export function PolicyList() {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="edit_applies_to_agents"
+                  checked={formData.applies_to_agents}
+                  onCheckedChange={(checked) => setFormData({ ...formData, applies_to_agents: !!checked })}
+                />
+                <Label htmlFor="edit_applies_to_agents">Apply to Connected Agents</Label>
+              </div>
+              {formData.applies_to_agents && (
+                <div className="grid gap-2">
+                  <Label htmlFor="edit_agent_enforcement">Agent Enforcement</Label>
+                  <Select
+                    value={formData.agent_enforcement}
+                    onValueChange={(value) => setFormData({ ...formData, agent_enforcement: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select enforcement level" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="warn">Warn Only</SelectItem>
+                      <SelectItem value="block">Block Action</SelectItem>
+                      <SelectItem value="audit">Audit & Log</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="grid gap-2">
                 <Label htmlFor="edit-description">Description</Label>
                 <Textarea
@@ -452,6 +574,56 @@ export function PolicyList() {
                 Cancel
               </Button>
               <Button onClick={handleEditPolicy}>Update Policy</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Agent Assignment Modal */}
+        <Dialog open={isAgentModalOpen} onOpenChange={setIsAgentModalOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Agent Policy Assignment</DialogTitle>
+              <DialogDescription>
+                Manage which agents this policy applies to: {selectedPolicy?.name}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="space-y-2">
+                <Label>Connected Agents</Label>
+                {agents.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No connected agents found.</p>
+                ) : (
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {agents.map((agent) => (
+                      <div key={agent.id} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`agent-${agent.id}`}
+                          checked={selectedAgents.includes(agent.id)}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setSelectedAgents([...selectedAgents, agent.id])
+                            } else {
+                              setSelectedAgents(selectedAgents.filter((id) => id !== agent.id))
+                            }
+                          }}
+                        />
+                        <Label htmlFor={`agent-${agent.id}`} className="flex items-center space-x-2">
+                          <Bot className="h-4 w-4" />
+                          <span>{agent.name}</span>
+                          <Badge variant={agent.status === "active" ? "default" : "secondary"}>
+                            {agent.status}
+                          </Badge>
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsAgentModalOpen(false)}>
+                Close
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

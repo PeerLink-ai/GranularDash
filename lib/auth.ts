@@ -1,6 +1,19 @@
+import { sql } from "@/lib/db"
+import jwt from "jsonwebtoken"
 import bcrypt from "bcryptjs"
-import { sql } from "./db"
+import crypto from "crypto"
+import { NextRequest } from "next/server"
 import type { User, UserPermission, ConnectedAgent } from "./db"
+
+const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key"
+
+export interface User {
+  id: string
+  email: string
+  name: string
+  organization: string
+  role: string
+}
 
 export async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, 10)
@@ -14,54 +27,62 @@ export async function generateSessionToken(): Promise<string> {
   return Math.random().toString(36).substring(2) + Date.now().toString(36)
 }
 
-export async function createSession(userId: string): Promise<string> {
-  const sessionToken = await generateSessionToken()
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
+export async function createSession(userId: string): Promise<string | null> {
+  try {
+    const sessionToken = crypto.randomUUID()
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
 
-  await sql`
-    INSERT INTO user_sessions (user_id, session_token, expires_at)
-    VALUES (${userId}, ${sessionToken}, ${expiresAt.toISOString()})
-  `
+    await sql`
+      INSERT INTO user_sessions (user_id, session_token, expires_at)
+      VALUES (${userId}, ${sessionToken}, ${expiresAt})
+    `
 
-  return sessionToken
-}
-
-export async function getUserBySession(
-  sessionToken: string,
-): Promise<(User & { permissions: string[]; connectedAgents: ConnectedAgent[] }) | null> {
-  const sessions = await sql`
-    SELECT u.*, s.expires_at
-    FROM users u
-    JOIN user_sessions s ON u.id = s.user_id
-    WHERE s.session_token = ${sessionToken}
-    AND s.expires_at > NOW()
-  `
-
-  if (sessions.length === 0) {
+    return sessionToken
+  } catch (error) {
+    console.error("Error creating session:", error)
     return null
   }
+}
 
-  const user = sessions[0] as User & { expires_at: string }
+export async function getUserBySession(sessionToken: string): Promise<(User & { permissions: string[]; connectedAgents: ConnectedAgent[] }) | null> {
+  try {
+    const result = await sql`
+      SELECT u.*, s.expires_at
+      FROM users u
+      JOIN user_sessions s ON u.id = s.user_id
+      WHERE s.session_token = ${sessionToken}
+      AND s.expires_at > NOW()
+    `
+    
+    const user = result[0] as User & { expires_at: string } | null
 
-  // Get user permissions
-  const permissions = await sql`
-    SELECT permission
-    FROM user_permissions
-    WHERE user_id = ${user.id}
-  `
+    if (!user) {
+      return null
+    }
 
-  // Get connected agents
-  const connectedAgents = await sql`
-    SELECT *
-    FROM connected_agents
-    WHERE user_id = ${user.id}
-    ORDER BY connected_at DESC
-  `
+    // Get user permissions
+    const permissions = await sql`
+      SELECT permission
+      FROM user_permissions
+      WHERE user_id = ${user.id}
+    `
 
-  return {
-    ...user,
-    permissions: permissions.map((p: UserPermission) => p.permission),
-    connectedAgents: connectedAgents as ConnectedAgent[],
+    // Get connected agents
+    const connectedAgents = await sql`
+      SELECT *
+      FROM connected_agents
+      WHERE user_id = ${user.id}
+      ORDER BY connected_at DESC
+    `
+
+    return {
+      ...user,
+      permissions: permissions.map((p: UserPermission) => p.permission),
+      connectedAgents: connectedAgents as ConnectedAgent[],
+    }
+  } catch (error) {
+    console.error("Error getting user by session:", error)
+    return null
   }
 }
 
@@ -95,6 +116,10 @@ export async function signInUser(
 
   // Create session
   const sessionToken = await createSession(user.id)
+
+  if (!sessionToken) {
+    return null
+  }
 
   // Get user permissions
   const permissions = await sql`
@@ -169,6 +194,10 @@ export async function signUpUser(
   // Create session
   const sessionToken = await createSession(user.id)
 
+  if (!sessionToken) {
+    throw new Error("Failed to create session token")
+  }
+
   return {
     user: {
       ...user,
@@ -192,4 +221,19 @@ export async function completeOnboarding(userId: string): Promise<void> {
     SET onboarding_completed = true
     WHERE id = ${userId}
   `
+}
+
+export async function verifyToken(request: NextRequest) {
+  try {
+    const sessionToken = request.cookies.get("session_token")?.value
+    
+    if (!sessionToken) {
+      return null
+    }
+
+    return await getUserBySession(sessionToken)
+  } catch (error) {
+    console.error("Error verifying token:", error)
+    return null
+  }
 }

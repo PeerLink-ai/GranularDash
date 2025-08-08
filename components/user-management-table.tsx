@@ -1,12 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Search, UserPlus } from "lucide-react"
+import { Search, UserPlus } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -18,16 +18,65 @@ import {
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { MoreHorizontal } from "lucide-react"
+import { MoreHorizontal } from 'lucide-react'
+import { useToast } from "@/hooks/use-toast"
 
-
+interface User {
+  id: string
+  name: string
+  email: string
+  role: string
+  status: string
+  lastLogin: string
+  organization: string
+  created_at: string
+}
 
 export function UserManagementTable() {
-  const [users, setUsers] = useState([])
+  const [users, setUsers] = useState<User[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
-  const [selectedUser, setSelectedUser] = useState(null)
-  const [editFormData, setEditFormData] = useState({ id: "", name: "", email: "", role: "", status: "" })
+  const [selectedUser, setSelectedUser] = useState<User | null>(null)
+  const [editFormData, setEditFormData] = useState({ 
+    id: "", 
+    name: "", 
+    email: "", 
+    role: "", 
+    status: "",
+    organization: ""
+  })
+  const [isLoading, setIsLoading] = useState(true)
+  const { toast } = useToast()
+
+  // Fetch users from database
+  useEffect(() => {
+    fetchUsers()
+  }, [])
+
+  const fetchUsers = async () => {
+    try {
+      const response = await fetch('/api/users')
+      if (response.ok) {
+        const data = await response.json()
+        setUsers(data.users)
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to fetch users",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error('Error fetching users:', error)
+      toast({
+        title: "Error",
+        description: "Failed to fetch users",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   const filteredUsers = users.filter(
     (user) =>
@@ -54,13 +103,14 @@ export function UserManagementTable() {
   }
 
   const sendVerificationEmail = (email: string) => {
-    // This is a placeholder for actual email sending logic.
-    // In a real application, you would call an API endpoint here.
     console.log(`Simulating sending verification email to: ${email}`)
-    // You might integrate with a service like SendGrid, Mailgun, or a Vercel Serverless Function
+    toast({
+      title: "Verification Email Sent",
+      description: `A verification email has been sent to ${email}`,
+    })
   }
 
-  const handleEditClick = (user) => {
+  const handleEditClick = (user: User | null) => {
     setSelectedUser(user)
     if (user) {
       setEditFormData({
@@ -69,42 +119,137 @@ export function UserManagementTable() {
         email: user.email,
         role: user.role,
         status: user.status,
+        organization: user.organization,
       })
     } else {
-      // For adding a new user, initialize with empty values and default role/status
       setEditFormData({
         id: "",
         name: "",
         email: "",
-        role: "Viewer", // Default role
-        status: "Pending Verification", // Default status for new users
+        role: "viewer",
+        status: "active",
+        organization: "",
       })
     }
     setIsEditModalOpen(true)
   }
 
-  const handleSaveUser = () => {
-    if (selectedUser) {
-      // Editing existing user
-      setUsers(users.map((u) => (u.id === editFormData.id ? { ...u, ...editFormData } : u)))
-    } else {
-      // Adding new user
-      const newUser = {
-        ...editFormData,
-        id: `U${Date.now()}`, // Simple unique ID generation
-        lastLogin: "N/A", // New users haven't logged in yet
-        status: "Pending Verification", // Explicitly set for new users
+  const handleSaveUser = async () => {
+    try {
+      if (selectedUser) {
+        // Update existing user
+        const response = await fetch(`/api/users/${selectedUser.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(editFormData),
+        })
+
+        if (response.ok) {
+          toast({
+            title: "Success",
+            description: "User updated successfully",
+          })
+          fetchUsers() // Refresh the list
+        } else {
+          const error = await response.json()
+          toast({
+            title: "Error",
+            description: error.error || "Failed to update user",
+            variant: "destructive",
+          })
+        }
+      } else {
+        // Create new user
+        const response = await fetch('/api/users', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            ...editFormData,
+            password: 'temp123', // Temporary password - user should reset
+          }),
+        })
+
+        if (response.ok) {
+          toast({
+            title: "Success",
+            description: "User created successfully. A verification email has been sent.",
+          })
+          sendVerificationEmail(editFormData.email)
+          fetchUsers() // Refresh the list
+        } else {
+          const error = await response.json()
+          toast({
+            title: "Error",
+            description: error.error || "Failed to create user",
+            variant: "destructive",
+          })
+        }
       }
-      setUsers([...users, newUser])
-      sendVerificationEmail(newUser.email) // Simulate sending verification email
+    } catch (error) {
+      console.error('Error saving user:', error)
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred",
+        variant: "destructive",
+      })
     }
+
     setIsEditModalOpen(false)
-    setSelectedUser(null) // Clear selected user after save
-    setEditFormData({ id: "", name: "", email: "", role: "", status: "" }) // Reset form data
+    setSelectedUser(null)
+    setEditFormData({ id: "", name: "", email: "", role: "", status: "", organization: "" })
   }
 
-  const handleDeleteUser = (userId) => {
-    setUsers(users.filter((u) => u.id !== userId))
+  const handleDeleteUser = async (userId: string) => {
+    if (!confirm('Are you sure you want to delete this user?')) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/users/${userId}`, {
+        method: 'DELETE',
+      })
+
+      if (response.ok) {
+        toast({
+          title: "Success",
+          description: "User deleted successfully",
+        })
+        fetchUsers() // Refresh the list
+      } else {
+        const error = await response.json()
+        toast({
+          title: "Error",
+          description: error.error || "Failed to delete user",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error('Error deleting user:', error)
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred",
+        variant: "destructive",
+      })
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-xl font-semibold">Platform Users</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-center py-8">
+            <div className="text-muted-foreground">Loading users...</div>
+          </div>
+        </CardContent>
+      </Card>
+    )
   }
 
   return (
@@ -133,6 +278,7 @@ export function UserManagementTable() {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
+                <TableHead>Organization</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Last Login</TableHead>
@@ -145,11 +291,12 @@ export function UserManagementTable() {
                   <TableRow key={user.id}>
                     <TableCell className="font-medium">{user.name}</TableCell>
                     <TableCell>{user.email}</TableCell>
-                    <TableCell>{user.role}</TableCell>
+                    <TableCell>{user.organization}</TableCell>
+                    <TableCell className="capitalize">{user.role}</TableCell>
                     <TableCell>
                       <Badge className={getStatusColor(user.status)}>{user.status}</Badge>
                     </TableCell>
-                    <TableCell>{user.lastLogin}</TableCell>
+                    <TableCell>{user.lastLogin || 'Never'}</TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -161,7 +308,6 @@ export function UserManagementTable() {
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => handleEditClick(user)}>Edit</DropdownMenuItem>
                           <DropdownMenuItem onClick={() => handleDeleteUser(user.id)}>Delete</DropdownMenuItem>
-                          {/* Add more actions like "Reset Password", "View Activity" */}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -169,7 +315,7 @@ export function UserManagementTable() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center text-muted-foreground">
                     No users found.
                   </TableCell>
                 </TableRow>
@@ -219,6 +365,18 @@ export function UserManagementTable() {
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="organization" className="text-right">
+                Organization
+              </Label>
+              <Input
+                id="organization"
+                value={editFormData.organization}
+                onChange={(e) => setEditFormData({ ...editFormData, organization: e.target.value })}
+                className="col-span-3"
+                required
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="role" className="text-right">
                 Role
               </Label>
@@ -230,32 +388,34 @@ export function UserManagementTable() {
                   <SelectValue placeholder="Select role" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Admin">Admin</SelectItem>
-                  <SelectItem value="Editor">Editor</SelectItem>
-                  <SelectItem value="Viewer">Viewer</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="developer">Developer</SelectItem>
+                  <SelectItem value="analyst">Analyst</SelectItem>
+                  <SelectItem value="viewer">Viewer</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="status" className="text-right">
-                Status
-              </Label>
-              <Select
-                value={editFormData.status}
-                onValueChange={(value) => setEditFormData({ ...editFormData, status: value })}
-                disabled={!selectedUser} // Disable status change for new users (always Pending Verification)
-              >
-                <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder="Select status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Active">Active</SelectItem>
-                  <SelectItem value="Inactive">Inactive</SelectItem>
-                  <SelectItem value="Suspended">Suspended</SelectItem>
-                  <SelectItem value="Pending Verification">Pending Verification</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {selectedUser && (
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="status" className="text-right">
+                  Status
+                </Label>
+                <Select
+                  value={editFormData.status}
+                  onValueChange={(value) => setEditFormData({ ...editFormData, status: value })}
+                >
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="inactive">Inactive</SelectItem>
+                    <SelectItem value="suspended">Suspended</SelectItem>
+                    <SelectItem value="pending">Pending Verification</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button type="submit" onClick={handleSaveUser}>

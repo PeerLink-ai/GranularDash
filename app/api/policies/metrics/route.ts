@@ -22,29 +22,42 @@ export async function GET(request: NextRequest) {
 
     const user = userResult[0]
 
-    // Get policy metrics for the user's organization
-    const [totalPoliciesResult, activePoliciesResult, violationsResult] = await Promise.all([
-      sql`SELECT COUNT(*) as count FROM policies WHERE organization = ${user.organization}`,
-      sql`SELECT COUNT(*) as count FROM policies WHERE organization = ${user.organization} AND status = 'active'`,
-      sql`SELECT COUNT(*) as count FROM policy_violations WHERE organization = ${user.organization} AND status = 'open'`,
+    // Fetch policy metrics from database
+    const [policyStats, violationStats] = await Promise.all([
+      sql`
+        SELECT 
+          COUNT(*) as total_policies,
+          COUNT(CASE WHEN status = 'active' THEN 1 END) as active_policies
+        FROM governance_policies 
+        WHERE organization_id = ${user.organization}
+      `,
+      sql`
+        SELECT 
+          COUNT(CASE WHEN status = 'open' THEN 1 END) as open_violations,
+          COUNT(*) as total_violations
+        FROM policy_violations 
+        WHERE organization_id = ${user.organization}
+      `
     ])
 
-    const totalPolicies = Number.parseInt(totalPoliciesResult[0]?.count || "0")
-    const activePolicies = Number.parseInt(activePoliciesResult[0]?.count || "0")
-    const openViolations = Number.parseInt(violationsResult[0]?.count || "0")
-
+    const totalPolicies = parseInt(policyStats[0]?.total_policies || '0')
+    const activePolicies = parseInt(policyStats[0]?.active_policies || '0')
+    const openViolations = parseInt(violationStats[0]?.open_violations || '0')
+    const totalViolations = parseInt(violationStats[0]?.total_violations || '0')
+    
     // Calculate compliance rate
-    const complianceRate =
-      totalPolicies > 0 ? Math.round(((totalPolicies - openViolations) / totalPolicies) * 100) : 100
+    const complianceRate = totalViolations > 0 ? Math.round(((totalViolations - openViolations) / totalViolations) * 100) : 100
 
-    return NextResponse.json({
+    const metrics = {
       totalPolicies,
       activePolicies,
       openViolations,
       complianceRate,
-    })
+    }
+
+    return NextResponse.json(metrics)
   } catch (error) {
-    console.error("Failed to fetch policy metrics:", error)
+    console.error("Policy metrics error:", error)
     return NextResponse.json({
       totalPolicies: 0,
       activePolicies: 0,

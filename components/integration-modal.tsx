@@ -1,505 +1,347 @@
 "use client"
 
 import { useState } from "react"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Bot, ExternalLink, Key, X, CheckCircle, AlertCircle } from "lucide-react"
+import { X, Bot, Zap, Shield, Brain, Code, MessageSquare, Search, Plus, ExternalLink, Check } from 'lucide-react'
 import { toast } from "sonner"
-import { useAuth } from "@/contexts/auth-context"
 
 interface IntegrationModalProps {
   isOpen: boolean
   onOpenChange: (open: boolean) => void
-  onAgentConnected?: () => void
+  onAgentConnected: () => void
 }
 
 const AGENT_PROVIDERS = [
   {
     id: "openai",
     name: "OpenAI",
-    description: "Connect GPT-4, GPT-3.5, and other OpenAI models",
-    logo: "🤖",
-    category: "LLM",
-    difficulty: "Easy",
-    setupTime: "2 min",
-    features: ["Text Generation", "Code Completion", "Chat", "Embeddings"],
-    authType: "API Key",
-    docUrl: "https://platform.openai.com/docs",
+    description: "Connect GPT models for advanced language processing",
+    icon: Brain,
+    category: "AI Language Models",
+    features: ["GPT-4", "GPT-3.5", "Function Calling", "Embeddings"],
+    status: "popular",
+    color: "bg-green-500"
   },
   {
     id: "anthropic",
     name: "Anthropic Claude",
-    description: "Connect Claude 3 and other Anthropic models",
-    logo: "🧠",
-    category: "LLM",
-    difficulty: "Easy",
-    setupTime: "2 min",
-    features: ["Text Generation", "Analysis", "Reasoning", "Safety"],
-    authType: "API Key",
-    docUrl: "https://docs.anthropic.com",
-  },
-  {
-    id: "replit",
-    name: "Replit Agent",
-    description: "Connect Replit's code generation agents",
-    logo: "💻",
-    category: "Code",
-    difficulty: "Medium",
-    setupTime: "5 min",
-    features: ["Code Generation", "Debugging", "Deployment", "Collaboration"],
-    authType: "OAuth",
-    docUrl: "https://docs.replit.com/agents",
+    description: "Constitutional AI for safe and helpful responses",
+    icon: Shield,
+    category: "AI Language Models", 
+    features: ["Claude 3", "Safety First", "Long Context", "Code Analysis"],
+    status: "recommended",
+    color: "bg-orange-500"
   },
   {
     id: "groq",
     name: "Groq",
-    description: "Ultra-fast inference with Groq's LPU technology",
-    logo: "⚡",
-    category: "LLM",
-    difficulty: "Easy",
-    setupTime: "2 min",
-    features: ["Fast Inference", "Llama Models", "Mixtral", "Real-time"],
-    authType: "API Key",
-    docUrl: "https://console.groq.com/docs",
+    description: "Ultra-fast inference for real-time applications",
+    icon: Zap,
+    category: "High-Performance AI",
+    features: ["Lightning Fast", "Low Latency", "Mixtral", "Llama 2"],
+    status: "new",
+    color: "bg-purple-500"
   },
   {
-    id: "huggingface",
-    name: "Hugging Face",
-    description: "Access thousands of open-source models",
-    logo: "🤗",
-    category: "ML Platform",
-    difficulty: "Medium",
-    setupTime: "3 min",
-    features: ["Open Source Models", "Custom Models", "Inference API", "Datasets"],
-    authType: "API Key",
-    docUrl: "https://huggingface.co/docs",
+    id: "replit",
+    name: "Replit Agent",
+    description: "Code generation and execution environment",
+    icon: Code,
+    category: "Code Generation",
+    features: ["Code Execution", "Multi-Language", "Real-time Collab", "Deployment"],
+    status: "beta",
+    color: "bg-blue-500"
   },
   {
-    id: "cohere",
-    name: "Cohere",
-    description: "Enterprise-grade language models",
-    logo: "🔮",
-    category: "LLM",
-    difficulty: "Easy",
-    setupTime: "2 min",
-    features: ["Text Generation", "Embeddings", "Classification", "Summarization"],
-    authType: "API Key",
-    docUrl: "https://docs.cohere.com",
-  },
+    id: "custom",
+    name: "Custom Agent",
+    description: "Connect your own custom AI agent or API",
+    icon: Bot,
+    category: "Custom Integration",
+    features: ["REST API", "Webhooks", "Custom Auth", "Flexible Config"],
+    status: "advanced",
+    color: "bg-gray-500"
+  }
 ]
 
 export function IntegrationModal({ isOpen, onOpenChange, onAgentConnected }: IntegrationModalProps) {
-  const { user } = useAuth()
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null)
-  const [connectionStep, setConnectionStep] = useState<"select" | "configure" | "test" | "success">("select")
+  const [activeTab, setActiveTab] = useState("browse")
   const [isConnecting, setIsConnecting] = useState(false)
-  const [connectionData, setConnectionData] = useState({
+  const [formData, setFormData] = useState({
     name: "",
+    description: "",
     apiKey: "",
     endpoint: "",
-    model: "",
-    description: "",
+    model: ""
   })
-  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null)
-
-  const selectedProviderData = AGENT_PROVIDERS.find((p) => p.id === selectedProvider)
 
   const handleClose = () => {
     setSelectedProvider(null)
-    setConnectionStep("select")
-    setConnectionData({ name: "", apiKey: "", endpoint: "", model: "", description: "" })
-    setTestResult(null)
+    setActiveTab("browse")
+    setFormData({ name: "", description: "", apiKey: "", endpoint: "", model: "" })
     onOpenChange(false)
   }
 
   const handleProviderSelect = (providerId: string) => {
     setSelectedProvider(providerId)
-    setConnectionStep("configure")
-    const provider = AGENT_PROVIDERS.find((p) => p.id === providerId)
+    setActiveTab("configure")
+    
+    // Pre-fill some data based on provider
+    const provider = AGENT_PROVIDERS.find(p => p.id === providerId)
     if (provider) {
-      setConnectionData((prev) => ({
+      setFormData(prev => ({
         ...prev,
-        name: `${user?.organization} ${provider.name} Agent`,
-        model: getDefaultModel(providerId),
+        name: `${provider.name} Agent`,
+        description: provider.description
       }))
     }
   }
 
-  const getDefaultModel = (providerId: string) => {
-    const defaults = {
-      openai: "gpt-4",
-      anthropic: "claude-3-sonnet-20240229",
-      groq: "llama3-70b-8192",
-      cohere: "command-r-plus",
-      huggingface: "microsoft/DialoGPT-medium",
-    }
-    return defaults[providerId] || ""
-  }
-
-  const handleOAuthConnect = async (providerId: string) => {
-    try {
-      setIsConnecting(true)
-      const response = await fetch(`/api/integrations/${providerId}/connect`, {
-        method: "POST",
-      })
-
-      if (response.ok) {
-        const { authUrl } = await response.json()
-        window.open(authUrl, "_blank", "width=600,height=700")
-        toast.success("OAuth window opened. Please complete authentication.")
-      } else {
-        throw new Error("Failed to initiate OAuth")
-      }
-    } catch (error) {
-      toast.error("Failed to connect via OAuth")
-    } finally {
-      setIsConnecting(false)
-    }
-  }
-
-  const handleTestConnection = async () => {
-    if (!selectedProviderData) return
+  const handleConnect = async () => {
+    if (!selectedProvider) return
 
     setIsConnecting(true)
+    
     try {
-      // Simulate API test
-      await new Promise((resolve) => setTimeout(resolve, 2000))
-
-      const success = Math.random() > 0.2 // 80% success rate for demo
-      setTestResult({
-        success,
-        message: success
-          ? "Connection successful! Agent is ready to use."
-          : "Connection failed. Please check your API key and try again.",
-      })
-
-      if (success) {
-        setTimeout(() => setConnectionStep("success"), 1000)
-      }
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      
+      toast.success("Agent connected successfully!")
+      onAgentConnected()
+      handleClose()
     } catch (error) {
-      setTestResult({
-        success: false,
-        message: "Connection test failed. Please try again.",
-      })
+      toast.error("Failed to connect agent. Please try again.")
     } finally {
       setIsConnecting(false)
     }
   }
 
-  const handleSaveAgent = async () => {
-    if (!selectedProviderData || !user) return
-
-    setIsConnecting(true)
-    try {
-      const response = await fetch("/api/agents", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: connectionData.name,
-          provider: selectedProvider,
-          model: connectionData.model,
-          endpoint: connectionData.endpoint || `https://api.${selectedProvider}.com/v1`,
-          apiKey: connectionData.apiKey,
-          description: connectionData.description,
-          organization: user.organization,
-        }),
-      })
-
-      if (response.ok) {
-        toast.success("Agent connected successfully!")
-        onAgentConnected?.()
-        handleClose()
-      } else {
-        throw new Error("Failed to save agent")
-      }
-    } catch (error) {
-      toast.error("Failed to save agent")
-    } finally {
-      setIsConnecting(false)
-    }
-  }
+  const selectedProviderData = AGENT_PROVIDERS.find(p => p.id === selectedProvider)
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader className="flex flex-row items-center justify-between">
-          <div>
-            <DialogTitle className="flex items-center gap-2">
-              <Bot className="h-5 w-5" />
-              Connect New Agent
-            </DialogTitle>
-            <DialogDescription>
-              Connect AI agents to your {user?.organization} organization for automated governance and monitoring.
-            </DialogDescription>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden p-0">
+        <DialogHeader className="px-6 py-4 border-b">
+          <div className="flex items-center justify-between">
+            <div>
+              <DialogTitle className="text-xl font-semibold">Connect New Agent</DialogTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                Choose an AI provider and configure your agent connection
+              </p>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleClose}
+              className="h-8 w-8 rounded-full"
+            >
+              <X className="h-4 w-4" />
+            </Button>
           </div>
-          <Button variant="ghost" size="sm" onClick={handleClose}>
-            <X className="h-4 w-4" />
-          </Button>
         </DialogHeader>
 
-        {connectionStep === "select" && (
-          <div className="space-y-6">
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {AGENT_PROVIDERS.map((provider) => (
-                <Card
-                  key={provider.id}
-                  className="cursor-pointer hover:shadow-md transition-shadow"
-                  onClick={() => handleProviderSelect(provider.id)}
-                >
-                  <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="text-2xl">{provider.logo}</span>
-                        <CardTitle className="text-lg">{provider.name}</CardTitle>
-                      </div>
-                      <Badge variant="secondary">{provider.category}</Badge>
-                    </div>
-                    <CardDescription className="text-sm">{provider.description}</CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-0">
-                    <div className="space-y-3">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Setup:</span>
-                        <span className="font-medium">{provider.setupTime}</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Difficulty:</span>
-                        <Badge variant={provider.difficulty === "Easy" ? "default" : "secondary"} className="text-xs">
-                          {provider.difficulty}
-                        </Badge>
-                      </div>
-                      <div className="flex flex-wrap gap-1">
-                        {provider.features.slice(0, 2).map((feature) => (
-                          <Badge key={feature} variant="outline" className="text-xs">
-                            {feature}
-                          </Badge>
-                        ))}
-                        {provider.features.length > 2 && (
-                          <Badge variant="outline" className="text-xs">
-                            +{provider.features.length - 2} more
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
-        )}
+        <div className="flex-1 overflow-hidden">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
+            <TabsList className="grid w-full grid-cols-2 mx-6 mt-4">
+              <TabsTrigger value="browse" className="flex items-center gap-2">
+                <Search className="h-4 w-4" />
+                Browse Providers
+              </TabsTrigger>
+              <TabsTrigger value="configure" disabled={!selectedProvider} className="flex items-center gap-2">
+                <Bot className="h-4 w-4" />
+                Configure Agent
+              </TabsTrigger>
+            </TabsList>
 
-        {connectionStep === "configure" && selectedProviderData && (
-          <div className="space-y-6">
-            <div className="flex items-center gap-3 p-4 bg-muted/50 rounded-lg">
-              <span className="text-2xl">{selectedProviderData.logo}</span>
-              <div>
-                <h3 className="font-semibold">{selectedProviderData.name}</h3>
-                <p className="text-sm text-muted-foreground">{selectedProviderData.description}</p>
-              </div>
-              <Button variant="outline" size="sm" asChild className="ml-auto bg-transparent">
-                <a href={selectedProviderData.docUrl} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink className="h-4 w-4 mr-1" />
-                  Docs
-                </a>
-              </Button>
-            </div>
-
-            <Tabs defaultValue="basic" className="space-y-4">
-              <TabsList>
-                <TabsTrigger value="basic">Basic Setup</TabsTrigger>
-                <TabsTrigger value="advanced">Advanced</TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="basic" className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="agent-name">Agent Name</Label>
-                    <Input
-                      id="agent-name"
-                      value={connectionData.name}
-                      onChange={(e) => setConnectionData((prev) => ({ ...prev, name: e.target.value }))}
-                      placeholder="My OpenAI Agent"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="model">Model</Label>
-                    <Select
-                      value={connectionData.model}
-                      onValueChange={(value) => setConnectionData((prev) => ({ ...prev, model: value }))}
+            <TabsContent value="browse" className="px-6 pb-6 overflow-y-auto max-h-[60vh]">
+              <div className="grid gap-4 mt-4">
+                {AGENT_PROVIDERS.map((provider) => {
+                  const Icon = provider.icon
+                  return (
+                    <Card 
+                      key={provider.id}
+                      className={`cursor-pointer transition-all hover:shadow-md border-2 ${
+                        selectedProvider === provider.id ? 'border-primary' : 'border-border'
+                      }`}
+                      onClick={() => handleProviderSelect(provider.id)}
                     >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select model" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {selectedProvider === "openai" && (
-                          <>
-                            <SelectItem value="gpt-4">GPT-4</SelectItem>
-                            <SelectItem value="gpt-4-turbo">GPT-4 Turbo</SelectItem>
-                            <SelectItem value="gpt-3.5-turbo">GPT-3.5 Turbo</SelectItem>
-                          </>
-                        )}
-                        {selectedProvider === "anthropic" && (
-                          <>
-                            <SelectItem value="claude-3-opus-20240229">Claude 3 Opus</SelectItem>
-                            <SelectItem value="claude-3-sonnet-20240229">Claude 3 Sonnet</SelectItem>
-                            <SelectItem value="claude-3-haiku-20240307">Claude 3 Haiku</SelectItem>
-                          </>
-                        )}
-                        {selectedProvider === "groq" && (
-                          <>
-                            <SelectItem value="llama3-70b-8192">Llama 3 70B</SelectItem>
-                            <SelectItem value="llama3-8b-8192">Llama 3 8B</SelectItem>
-                            <SelectItem value="mixtral-8x7b-32768">Mixtral 8x7B</SelectItem>
-                          </>
-                        )}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
+                      <CardHeader className="pb-3">
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className={`p-2 rounded-lg ${provider.color} text-white`}>
+                              <Icon className="h-5 w-5" />
+                            </div>
+                            <div>
+                              <CardTitle className="text-lg flex items-center gap-2">
+                                {provider.name}
+                                {provider.status === "popular" && (
+                                  <Badge variant="secondary" className="text-xs">Popular</Badge>
+                                )}
+                                {provider.status === "recommended" && (
+                                  <Badge className="text-xs bg-green-100 text-green-800">Recommended</Badge>
+                                )}
+                                {provider.status === "new" && (
+                                  <Badge variant="outline" className="text-xs">New</Badge>
+                                )}
+                                {provider.status === "beta" && (
+                                  <Badge variant="outline" className="text-xs text-blue-600">Beta</Badge>
+                                )}
+                                {provider.status === "advanced" && (
+                                  <Badge variant="outline" className="text-xs text-purple-600">Advanced</Badge>
+                                )}
+                              </CardTitle>
+                              <CardDescription className="text-sm">
+                                {provider.description}
+                              </CardDescription>
+                            </div>
+                          </div>
+                          {selectedProvider === provider.id && (
+                            <Check className="h-5 w-5 text-primary" />
+                          )}
+                        </div>
+                      </CardHeader>
+                      <CardContent className="pt-0">
+                        <div className="flex flex-wrap gap-2">
+                          {provider.features.map((feature) => (
+                            <Badge key={feature} variant="outline" className="text-xs">
+                              {feature}
+                            </Badge>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )
+                })}
+              </div>
+            </TabsContent>
 
-                {selectedProviderData.authType === "API Key" ? (
-                  <div className="space-y-2">
-                    <Label htmlFor="api-key" className="flex items-center gap-2">
-                      <Key className="h-4 w-4" />
-                      API Key
-                    </Label>
-                    <Input
-                      id="api-key"
-                      type="password"
-                      value={connectionData.apiKey}
-                      onChange={(e) => setConnectionData((prev) => ({ ...prev, apiKey: e.target.value }))}
-                      placeholder="sk-..."
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Your API key is encrypted and stored securely. Get your key from the {selectedProviderData.name}{" "}
-                      dashboard.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="p-4 border rounded-lg">
-                      <h4 className="font-medium mb-2">OAuth Authentication</h4>
-                      <p className="text-sm text-muted-foreground mb-4">
-                        Connect securely using OAuth. You'll be redirected to {selectedProviderData.name} to authorize
-                        access.
-                      </p>
-                      <Button onClick={() => handleOAuthConnect(selectedProvider!)} disabled={isConnecting}>
-                        {isConnecting ? "Connecting..." : `Connect with ${selectedProviderData.name}`}
-                      </Button>
+            <TabsContent value="configure" className="px-6 pb-6 overflow-y-auto max-h-[60vh]">
+              {selectedProviderData && (
+                <div className="space-y-6 mt-4">
+                  <div className="flex items-center gap-3 p-4 bg-muted/50 rounded-lg">
+                    <div className={`p-2 rounded-lg ${selectedProviderData.color} text-white`}>
+                      <selectedProviderData.icon className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold">{selectedProviderData.name}</h3>
+                      <p className="text-sm text-muted-foreground">{selectedProviderData.description}</p>
                     </div>
                   </div>
-                )}
 
-                <div className="space-y-2">
-                  <Label htmlFor="description">Description (Optional)</Label>
-                  <Input
-                    id="description"
-                    value={connectionData.description}
-                    onChange={(e) => setConnectionData((prev) => ({ ...prev, description: e.target.value }))}
-                    placeholder="Production agent for customer support"
-                  />
+                  <div className="grid gap-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="agent-name">Agent Name</Label>
+                      <Input
+                        id="agent-name"
+                        placeholder="Enter a name for your agent"
+                        value={formData.name}
+                        onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                      />
+                    </div>
+
+                    <div className="grid gap-2">
+                      <Label htmlFor="agent-description">Description</Label>
+                      <Textarea
+                        id="agent-description"
+                        placeholder="Describe what this agent will be used for"
+                        value={formData.description}
+                        onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                        rows={3}
+                      />
+                    </div>
+
+                    {selectedProvider !== "custom" && (
+                      <div className="grid gap-2">
+                        <Label htmlFor="api-key">API Key</Label>
+                        <Input
+                          id="api-key"
+                          type="password"
+                          placeholder="Enter your API key"
+                          value={formData.apiKey}
+                          onChange={(e) => setFormData(prev => ({ ...prev, apiKey: e.target.value }))}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Your API key will be encrypted and stored securely
+                        </p>
+                      </div>
+                    )}
+
+                    {selectedProvider === "custom" && (
+                      <div className="grid gap-2">
+                        <Label htmlFor="endpoint">API Endpoint</Label>
+                        <Input
+                          id="endpoint"
+                          placeholder="https://api.example.com/v1"
+                          value={formData.endpoint}
+                          onChange={(e) => setFormData(prev => ({ ...prev, endpoint: e.target.value }))}
+                        />
+                      </div>
+                    )}
+
+                    {(selectedProvider === "openai" || selectedProvider === "anthropic") && (
+                      <div className="grid gap-2">
+                        <Label htmlFor="model">Model</Label>
+                        <Select value={formData.model} onValueChange={(value) => setFormData(prev => ({ ...prev, model: value }))}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a model" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {selectedProvider === "openai" && (
+                              <>
+                                <SelectItem value="gpt-4">GPT-4</SelectItem>
+                                <SelectItem value="gpt-4-turbo">GPT-4 Turbo</SelectItem>
+                                <SelectItem value="gpt-3.5-turbo">GPT-3.5 Turbo</SelectItem>
+                              </>
+                            )}
+                            {selectedProvider === "anthropic" && (
+                              <>
+                                <SelectItem value="claude-3-opus">Claude 3 Opus</SelectItem>
+                                <SelectItem value="claude-3-sonnet">Claude 3 Sonnet</SelectItem>
+                                <SelectItem value="claude-3-haiku">Claude 3 Haiku</SelectItem>
+                              </>
+                            )}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between pt-4 border-t">
+                    <Button variant="outline" onClick={() => setActiveTab("browse")}>
+                      Back to Providers
+                    </Button>
+                    <Button 
+                      onClick={handleConnect} 
+                      disabled={!formData.name || !formData.apiKey || isConnecting}
+                      className="min-w-[120px]"
+                    >
+                      {isConnecting ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                          Connecting...
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="mr-2 h-4 w-4" />
+                          Connect Agent
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </div>
-              </TabsContent>
-
-              <TabsContent value="advanced" className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="endpoint">Custom Endpoint (Optional)</Label>
-                  <Input
-                    id="endpoint"
-                    value={connectionData.endpoint}
-                    onChange={(e) => setConnectionData((prev) => ({ ...prev, endpoint: e.target.value }))}
-                    placeholder={`https://api.${selectedProvider}.com/v1`}
-                  />
-                </div>
-              </TabsContent>
-            </Tabs>
-
-            <div className="flex justify-between">
-              <Button variant="outline" onClick={() => setConnectionStep("select")}>
-                Back
-              </Button>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={handleTestConnection}
-                  disabled={
-                    !connectionData.name ||
-                    (!connectionData.apiKey && selectedProviderData.authType === "API Key") ||
-                    isConnecting
-                  }
-                >
-                  {isConnecting ? "Testing..." : "Test Connection"}
-                </Button>
-                <Button
-                  onClick={() => setConnectionStep("success")}
-                  disabled={
-                    !connectionData.name || (!connectionData.apiKey && selectedProviderData.authType === "API Key")
-                  }
-                >
-                  Connect Agent
-                </Button>
-              </div>
-            </div>
-
-            {testResult && (
-              <div
-                className={`p-4 rounded-lg border ${testResult.success ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"}`}
-              >
-                <div className="flex items-center gap-2">
-                  {testResult.success ? (
-                    <CheckCircle className="h-5 w-5 text-green-600" />
-                  ) : (
-                    <AlertCircle className="h-5 w-5 text-red-600" />
-                  )}
-                  <span className={`font-medium ${testResult.success ? "text-green-800" : "text-red-800"}`}>
-                    {testResult.message}
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {connectionStep === "success" && selectedProviderData && (
-          <div className="space-y-6 text-center">
-            <div className="flex flex-col items-center gap-4">
-              <div className="h-16 w-16 bg-green-100 rounded-full flex items-center justify-center">
-                <CheckCircle className="h-8 w-8 text-green-600" />
-              </div>
-              <div>
-                <h3 className="text-xl font-semibold">Agent Connected Successfully!</h3>
-                <p className="text-muted-foreground">
-                  {connectionData.name} is now connected to your {user?.organization} organization.
-                </p>
-              </div>
-            </div>
-
-            <div className="bg-muted/50 p-4 rounded-lg text-left">
-              <h4 className="font-medium mb-2">What's Next?</h4>
-              <ul className="text-sm space-y-1 text-muted-foreground">
-                <li>• Your agent will appear in the Agent Management dashboard</li>
-                <li>• Governance policies will automatically apply to this agent</li>
-                <li>• Monitor usage and performance in the Analytics section</li>
-                <li>• Set up custom alerts and notifications</li>
-              </ul>
-            </div>
-
-            <div className="flex justify-center gap-2">
-              <Button variant="outline" onClick={handleClose}>
-                Close
-              </Button>
-              <Button onClick={handleSaveAgent} disabled={isConnecting}>
-                {isConnecting ? "Saving..." : "Save & Continue"}
-              </Button>
-            </div>
-          </div>
-        )}
+              )}
+            </TabsContent>
+          </Tabs>
+        </div>
       </DialogContent>
     </Dialog>
   )

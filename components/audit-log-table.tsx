@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Search } from "lucide-react"
+import { Search, RefreshCw } from 'lucide-react'
 import { AuditLogDetailsModal } from "./audit-log-details-modal"
 import { useAuth } from "@/contexts/auth-context"
 
@@ -84,16 +84,22 @@ export function AuditLogTable() {
   return (
     <>
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between space-y-0 pb-2">
           <CardTitle>Audit Logs</CardTitle>
-          <div className="relative w-full max-w-sm">
-            <Input
-              placeholder="Search logs..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-8"
-            />
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <div className="relative w-full max-w-sm">
+              <Input
+                placeholder="Search logs..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-8"
+                aria-label="Search logs"
+              />
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            </div>
+            <Button variant="outline" size="icon" onClick={() => fetchAuditLogs()} aria-label="Refresh logs">
+              <RefreshCw className="h-4 w-4" />
+            </Button>
           </div>
         </CardHeader>
         <CardContent>

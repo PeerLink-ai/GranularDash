@@ -1,73 +1,197 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
+import { cookies } from "next/headers"
+import { getUserBySession } from "@/lib/auth"
 import { sql } from "@/lib/db"
-import { getUser } from "@/lib/auth"
-import { logActivity } from "@/lib/activity-logger"
+import { encryptSecret } from "@/lib/crypto"
+import { addAuditLog } from "@/lib/audit-store"
 
-export async function GET(request: NextRequest) {
+function isValidUrl(url: string) {
   try {
-    const user = await getUser(request)
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const agents = await sql`
-      SELECT * FROM connected_agents 
-      WHERE user_id = ${user.id}
-      ORDER BY connected_at DESC
-    `
-
-    return NextResponse.json({ agents })
-  } catch (error) {
-    console.error("Failed to fetch agents:", error)
-    return NextResponse.json({ agents: [] })
+    const u = new URL(url)
+    return u.protocol === "https:" || u.protocol === "http:"
+  } catch {
+    return false
   }
 }
 
-export async function POST(request: NextRequest) {
+async function performHealthCheck(endpoint: string, apiKey?: string) {
+  // Consider reachable if we get any non-network error and status < 500
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 5000)
+  const started = Date.now()
   try {
-    const user = await getUser(request)
+    const res = await fetch(endpoint, {
+      method: "GET",
+      headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : undefined,
+      signal: controller.signal,
+    })
+    const ms = Date.now() - started
+    // 2xx-4xx considered reachable (4xx likely auth/route), 5xx is provider down
+    const reachable = res.status < 500
+    return { reachable, status: res.status, ms }
+  } catch (e) {
+    return { reachable: false, status: 0, ms: Date.now() - started, error: String(e) }
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+export async function GET(_req: NextRequest) {
+  try {
+    const cookieStore = await cookies()
+    const sessionToken = cookieStore.get("session_token")?.value
+    if (!sessionToken) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    const user = await getUserBySession(sessionToken)
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const body = await request.json()
-    const { name, provider, model, endpoint, apiKey, configuration = {} } = body
+    // Normalize provider/model to the client’s expected shape: type/version
+    const rows = await sql<any[]>`
+      SELECT 
+        id,
+        name,
+        provider AS type,
+        model AS version,
+        status,
+        endpoint,
+        connected_at,
+        last_active
+      FROM connected_agents
+      WHERE user_id = ${user.id}
+      ORDER BY connected_at DESC
+    `
+    return NextResponse.json({ agents: rows || [] })
+  } catch (error) {
+    console.error("GET /api/agents error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  }
+}
 
-    if (!name || !provider || !model || !endpoint) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
+export async function POST(req: NextRequest) {
+  try {
+    const cookieStore = await cookies()
+    const sessionToken = cookieStore.get("session_token")?.value
+    if (!sessionToken) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    const user = await getUserBySession(sessionToken)
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const agentId = `${provider.toLowerCase()}-${model.toLowerCase()}-${Date.now()}`
+    const { name, type, endpoint, apiKey, description } = await req.json()
 
-    // In a real implementation, encrypt the API key
-    const encryptedApiKey = apiKey ? btoa(apiKey) : null
+    // Server-side validations
+    if (!name || typeof name !== "string" || name.trim().length < 2) {
+      return NextResponse.json({ error: "Please provide a valid agent name (min 2 chars)." }, { status: 400 })
+    }
+    if (!type || typeof type !== "string") {
+      return NextResponse.json({ error: "Please select a provider." }, { status: 400 })
+    }
+    if (!endpoint || typeof endpoint !== "string" || !isValidUrl(endpoint)) {
+      return NextResponse.json({ error: "Please provide a valid HTTP(S) endpoint URL." }, { status: 400 })
+    }
+    if (apiKey && typeof apiKey !== "string") {
+      return NextResponse.json({ error: "Invalid API key." }, { status: 400 })
+    }
+    if (description && typeof description !== "string") {
+      return NextResponse.json({ error: "Invalid description/model." }, { status: 400 })
+    }
 
-    const [newAgent] = await sql`
+    // Duplicate check (same endpoint for this user)
+    const dup = await sql<{ exists: boolean }[]>`
+      SELECT EXISTS (
+        SELECT 1 FROM connected_agents WHERE user_id = ${user.id} AND endpoint = ${endpoint}
+      ) AS exists
+    `
+    if (dup[0]?.exists) {
+      return NextResponse.json({ error: "An agent with this endpoint already exists." }, { status: 409 })
+    }
+
+    // Live health check
+    const health = await performHealthCheck(endpoint, apiKey)
+    const status: "active" | "inactive" | "error" = health.reachable
+      ? "active"
+      : "error"
+
+    // Encrypt API key if provided
+    const encrypted = encryptSecret(apiKey)
+
+    const inserted = await sql<any[]>`
       INSERT INTO connected_agents (
-        user_id, agent_id, name, provider, model, status, endpoint, 
-        connected_at, usage_requests, usage_tokens_used, usage_estimated_cost,
-        api_key_encrypted, configuration, health_status
+        user_id,
+        name,
+        provider,
+        model,
+        endpoint,
+        api_key_encrypted,
+        status,
+        connected_at,
+        last_active
       ) VALUES (
-        ${user.id}, ${agentId}, ${name}, ${provider}, ${model}, 'active', ${endpoint},
-        NOW(), 0, 0, 0, ${encryptedApiKey}, ${JSON.stringify(configuration)}, 'unknown'
+        ${user.id},
+        ${name.trim()},
+        ${type},
+        ${description || "default"},
+        ${endpoint},
+        ${encrypted},
+        ${status},
+        NOW(),
+        NULL
       )
       RETURNING *
     `
+    const newAgent = inserted[0]
 
-    // Log the activity
-    await logActivity({
+    // Normalize for client (type/version)
+    const agentForClient = {
+      id: newAgent.id,
+      name: newAgent.name,
+      type: newAgent.provider,
+      version: newAgent.model,
+      status: newAgent.status,
+      endpoint: newAgent.endpoint,
+      connected_at: newAgent.connected_at,
+      last_active: newAgent.last_active ?? null,
+    }
+
+    // Audit log
+    const ipAddress =
+      req.headers.get("x-forwarded-for") ||
+      req.headers.get("x-real-ip") ||
+      undefined
+    const userAgent = req.headers.get("user-agent") || undefined
+
+    await addAuditLog({
       userId: user.id,
       organization: user.organization,
-      action: `Connected ${name} agent`,
+      action: "agent_connected",
       resourceType: "agent",
-      resourceId: agentId,
-      description: `Successfully connected ${provider} ${model} agent`,
-      status: "success",
+      resourceId: String(newAgent.id),
+      details: {
+        name,
+        provider: type,
+        model: description || "default",
+        endpoint,
+        health,
+      },
+      ipAddress,
+      userAgent,
     })
 
-    return NextResponse.json({ agent: newAgent })
+    return NextResponse.json(
+      {
+        message: "Agent connected successfully",
+        agent: agentForClient,
+        health,
+      },
+      { status: 201 }
+    )
   } catch (error) {
-    console.error("Failed to create agent:", error)
+    console.error("POST /api/agents error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

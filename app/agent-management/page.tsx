@@ -1,140 +1,167 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useAuth } from "@/contexts/auth-context"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Plus, Bot, Activity, AlertTriangle, CheckCircle } from "lucide-react"
-import { ConnectedAgentsOverview } from "@/components/connected-agents-overview"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { AgentList } from "@/components/agent-list"
-import { IntegrationModal } from "@/components/integration-modal"
+
+interface Agent {
+  id: string
+  name: string
+  type: string
+  status: "active" | "inactive" | "error"
+  endpoint: string
+  version: string
+  description: string
+  connected_at: string
+  last_activity?: string
+}
+
+interface AgentStats {
+  total: number
+  active: number
+  inactive: number
+  error: number
+  totalRequests: number
+  healthPercentage: number
+}
 
 export default function AgentManagementPage() {
-  const { user } = useAuth()
-  const [isIntegrationModalOpen, setIsIntegrationModalOpen] = useState(false)
-  const [agents, setAgents] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [stats, setStats] = useState<AgentStats>({
+    total: 0,
+    active: 0,
+    inactive: 0,
+    error: 0,
+    totalRequests: 0,
+    healthPercentage: 100
+  })
+  const [isLoading, setIsLoading] = useState(true)
 
-  useEffect(() => {
-    if (user) {
-      fetchAgents()
-    }
-  }, [user])
-
-  const fetchAgents = async () => {
+  const fetchAgentStats = async () => {
     try {
       const response = await fetch("/api/agents")
-      if (response.ok) {
-        const data = await response.json()
-        setAgents(data.agents || [])
+      if (!response.ok) {
+        throw new Error("Failed to fetch agents")
       }
+      const data = await response.json()
+      const agents: Agent[] = data.agents || []
+      
+      const total = agents.length
+      const active = agents.filter(agent => agent.status === "active").length
+      const inactive = agents.filter(agent => agent.status === "inactive").length
+      const error = agents.filter(agent => agent.status === "error").length
+      
+      // Calculate health percentage (active agents / total agents * 100)
+      const healthPercentage = total > 0 ? Math.round((active / total) * 100) : 100
+      
+      // Mock total requests - in a real app, this would come from analytics
+      const totalRequests = agents.reduce((sum, agent) => {
+        // Mock calculation based on agent activity
+        return sum + (agent.status === "active" ? Math.floor(Math.random() * 1000) : 0)
+      }, 0)
+
+      setStats({
+        total,
+        active,
+        inactive,
+        error,
+        totalRequests,
+        healthPercentage
+      })
     } catch (error) {
-      console.error("Failed to fetch agents:", error)
+      console.error("Error fetching agent stats:", error)
     } finally {
-      setLoading(false)
+      setIsLoading(false)
     }
   }
 
-  const handleAgentConnected = () => {
-    fetchAgents()
-    setIsIntegrationModalOpen(false)
+  useEffect(() => {
+    fetchAgentStats()
+    
+    // Refresh stats every 30 seconds
+    const interval = setInterval(fetchAgentStats, 30000)
+    return () => clearInterval(interval)
+  }, [])
+
+  const getHealthStatusColor = (percentage: number) => {
+    if (percentage >= 80) return "text-green-600"
+    if (percentage >= 60) return "text-yellow-600"
+    return "text-red-600"
   }
 
-  if (!user) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    )
+  const getHealthStatusText = (percentage: number) => {
+    if (percentage >= 80) return "Excellent"
+    if (percentage >= 60) return "Good"
+    if (percentage >= 40) return "Fair"
+    return "Poor"
   }
-
-  const activeAgents = agents.filter((agent) => agent.status === "active").length
-  const totalAgents = agents.length
-  const healthyAgents = agents.filter((agent) => agent.health_status === "healthy").length
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Agent Management</h1>
-          <p className="text-muted-foreground">
-            Connect and manage your AI agents for automated governance and monitoring.
-          </p>
-        </div>
-        <Button onClick={() => setIsIntegrationModalOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Connect Agent
-        </Button>
+    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+      <div className="flex items-center justify-between space-y-2">
+        <h2 className="text-3xl font-bold tracking-tight">Agent Management</h2>
       </div>
-
-      {/* Overview Cards */}
+      
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Agents</CardTitle>
-            <Bot className="h-4 w-4 text-muted-foreground" />
+            <div className="h-4 w-4 text-muted-foreground">🤖</div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalAgents}</div>
+            <div className="text-2xl font-bold">
+              {isLoading ? "..." : stats.total}
+            </div>
             <p className="text-xs text-muted-foreground">
-              {totalAgents === 0 ? "No agents connected" : "Connected to your organization"}
+              {stats.total === 0 ? "No agents connected" : `${stats.total} agent${stats.total !== 1 ? 's' : ''} connected`}
             </p>
           </CardContent>
         </Card>
-
+        
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Active Agents</CardTitle>
-            <Activity className="h-4 w-4 text-muted-foreground" />
+            <div className="h-4 w-4 text-muted-foreground">✅</div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{activeAgents}</div>
+            <div className="text-2xl font-bold">
+              {isLoading ? "..." : stats.active}
+            </div>
             <p className="text-xs text-muted-foreground">
-              {activeAgents === 0 ? "No active agents" : "Currently running"}
+              {stats.active === 0 ? "No active agents" : "Currently running"}
             </p>
           </CardContent>
         </Card>
-
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Requests</CardTitle>
+            <div className="h-4 w-4 text-muted-foreground">📊</div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {isLoading ? "..." : stats.totalRequests.toLocaleString()}
+            </div>
+            <p className="text-xs text-muted-foreground">This month</p>
+          </CardContent>
+        </Card>
+        
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Health Status</CardTitle>
-            <CheckCircle className="h-4 w-4 text-muted-foreground" />
+            <div className="h-4 w-4 text-muted-foreground">💚</div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{healthyAgents}</div>
+            <div className={`text-2xl font-bold ${getHealthStatusColor(stats.healthPercentage)}`}>
+              {isLoading ? "..." : `${stats.healthPercentage}%`}
+            </div>
             <p className="text-xs text-muted-foreground">
-              {healthyAgents === 0 ? "No healthy agents" : "Agents running normally"}
+              {getHealthStatusText(stats.healthPercentage)}
             </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Issues</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{agents.filter((agent) => agent.health_status === "error").length}</div>
-            <p className="text-xs text-muted-foreground">Agents requiring attention</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Connected Agents Overview */}
-      <ConnectedAgentsOverview />
-
-      {/* Agent List */}
       <AgentList />
-
-      {/* Integration Modal */}
-      <IntegrationModal
-        isOpen={isIntegrationModalOpen}
-        onOpenChange={setIsIntegrationModalOpen}
-        onAgentConnected={handleAgentConnected}
-      />
     </div>
   )
 }

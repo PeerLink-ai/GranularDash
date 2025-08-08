@@ -9,9 +9,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
-import { ExternalLink, Github, Hammer, FolderKanban, CheckCircle2, Globe, Terminal, AlertTriangle } from 'lucide-react'
+import { ExternalLink, Github, Hammer, FolderKanban, CheckCircle2, Terminal } from 'lucide-react'
 import { useToast } from "@/hooks/use-toast"
-import { CopyButton } from "@/components/ui/copy-button"
 
 type Props = {
   open: boolean
@@ -19,13 +18,12 @@ type Props = {
   onCreated?: (project: any) => void
 }
 
-type Step = "choose" | "connect" | "new" | "review"
+type Step = "choose" | "connect" | "new"
 
 export function ProjectWizard({ open, onOpenChange, onCreated }: Props) {
   const [step, setStep] = React.useState<Step>("choose")
-  const [choice, setChoice] = React.useState<"connect" | "new" | null>(null)
 
-  // Shared fields
+  // Shared
   const [name, setName] = React.useState("")
   const [description, setDescription] = React.useState("")
 
@@ -37,17 +35,16 @@ export function ProjectWizard({ open, onOpenChange, onCreated }: Props) {
   const [branch, setBranch] = React.useState("main")
   const [repoValid, setRepoValid] = React.useState<null | { full_name: string; description?: string }>(null)
   const [repoChecking, setRepoChecking] = React.useState(false)
+  const lastValidatedRef = React.useRef<string | null>(null)
 
-  // Connect: External (terminal)
+  // External
   const [externalLink, setExternalLink] = React.useState("")
 
   const { toast } = useToast()
 
   React.useEffect(() => {
     if (!open) {
-      // reset wizard when closed
       setStep("choose")
-      setChoice(null)
       setName("")
       setDescription("")
       setTemplate("governance")
@@ -55,11 +52,34 @@ export function ProjectWizard({ open, onOpenChange, onCreated }: Props) {
       setBranch("main")
       setRepoValid(null)
       setExternalLink("")
+      lastValidatedRef.current = null
     }
   }, [open])
 
+  // Auto-validate GitHub URL (debounced)
+  React.useEffect(() => {
+    if (!repoUrl) {
+      setRepoValid(null)
+      lastValidatedRef.current = null
+      return
+    }
+    const parsed = parseGitHubUrl(repoUrl)
+    if (!parsed) {
+      setRepoValid(null)
+      lastValidatedRef.current = null
+      return
+    }
+    if (lastValidatedRef.current === repoUrl || repoChecking) return
+    const t = setTimeout(() => {
+      validateGitHub().then(() => {
+        lastValidatedRef.current = repoUrl
+      }).catch(() => {})
+    }, 600)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repoUrl])
+
   function onPick(type: "connect" | "new") {
-    setChoice(type)
     setStep(type === "connect" ? "connect" : "new")
   }
 
@@ -68,20 +88,16 @@ export function ProjectWizard({ open, onOpenChange, onCreated }: Props) {
       setRepoChecking(true)
       setRepoValid(null)
       const parsed = parseGitHubUrl(repoUrl)
-      if (!parsed) {
-        throw new Error("Please enter a valid GitHub repository URL.")
-      }
+      if (!parsed) throw new Error("Please enter a valid GitHub repository URL.")
       const res = await fetch(`https://api.github.com/repos/${parsed.owner}/${parsed.repo}`)
-      if (!res.ok) {
-        throw new Error(`Repository not found or not accessible (${res.status}).`)
-      }
+      if (!res.ok) throw new Error(`Repository not accessible (${res.status}).`)
       const data = await res.json()
       setRepoValid({ full_name: data.full_name, description: data.description ?? undefined })
       if (!name) setName(data.name)
       if (!description && data.description) setDescription(data.description)
-      toast({ title: "Repository validated", description: "Public metadata loaded from GitHub." })
     } catch (e: any) {
-      toast({ title: "Validation failed", description: e.message, variant: "destructive" })
+      setRepoValid(null)
+      throw e
     } finally {
       setRepoChecking(false)
     }
@@ -93,23 +109,23 @@ export function ProjectWizard({ open, onOpenChange, onCreated }: Props) {
         toast({ title: "Name required", description: "Please provide a project name.", variant: "destructive" })
         return
       }
-      const id = crypto.randomUUID()
+      const body = {
+        id: crypto.randomUUID(),
+        name: name.trim(),
+        description: description.trim() || undefined,
+        type: "native" as const,
+        metadata: { template },
+        pinned: true,
+      }
       const res = await fetch("/api/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id,
-          name: name.trim(),
-          description: description.trim() || undefined,
-          type: "native",
-          metadata: { template },
-          pinned: true,
-        }),
+        body: JSON.stringify(body),
       })
-      if (!res.ok) throw new Error("Failed to create project")
-      const data = await res.json()
-      onCreated?.(data.project)
+      const payload = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(payload?.error || "Failed to create project")
       toast({ title: "Project created", description: "Your native project is ready." })
+      onCreated?.(payload.project)
     } catch (e: any) {
       toast({ title: "Could not create project", description: e.message, variant: "destructive" })
     }
@@ -122,22 +138,23 @@ export function ProjectWizard({ open, onOpenChange, onCreated }: Props) {
         toast({ title: "Invalid URL", description: "Enter a valid GitHub repo URL.", variant: "destructive" })
         return
       }
+      const body = {
+        name: name || parsed.repo,
+        description: description || undefined,
+        type: "github" as const,
+        repo_url: repoUrl,
+        metadata: { owner: parsed.owner, repo: parsed.repo, branch },
+        pinned: true,
+      }
       const res = await fetch("/api/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: name || parsed.repo,
-          description: description || undefined,
-          type: "github",
-          repo_url: repoUrl,
-          metadata: { owner: parsed.owner, repo: parsed.repo, branch },
-          pinned: true,
-        }),
+        body: JSON.stringify(body),
       })
-      if (!res.ok) throw new Error("Failed to connect repository")
-      const data = await res.json()
-      onCreated?.(data.project)
+      const payload = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(payload?.error || "Failed to connect repository")
       toast({ title: "Repository connected", description: "Linked to your dashboard." })
+      onCreated?.(payload.project)
     } catch (e: any) {
       toast({ title: "Could not connect", description: e.message, variant: "destructive" })
     }
@@ -149,22 +166,23 @@ export function ProjectWizard({ open, onOpenChange, onCreated }: Props) {
         toast({ title: "Missing fields", description: "Provide a name and an external link.", variant: "destructive" })
         return
       }
+      const body = {
+        name: name.trim(),
+        description: description.trim() || undefined,
+        type: "external" as const,
+        repo_url: externalLink.trim(),
+        metadata: { how: "terminal" },
+        pinned: false,
+      }
       const res = await fetch("/api/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: name.trim(),
-          description: description.trim() || undefined,
-          type: "external",
-          repo_url: externalLink.trim(),
-          metadata: { how: "terminal" },
-          pinned: false,
-        }),
+        body: JSON.stringify(body),
       })
-      if (!res.ok) throw new Error("Failed to create external reference")
-      const data = await res.json()
-      onCreated?.(data.project)
-      toast({ title: "External project added", description: "Quick access is now available from here." })
+      const payload = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(payload?.error || "Failed to create external reference")
+      toast({ title: "External project added" })
+      onCreated?.(payload.project)
     } catch (e: any) {
       toast({ title: "Could not add", description: e.message, variant: "destructive" })
     }
@@ -230,7 +248,7 @@ export function ProjectWizard({ open, onOpenChange, onCreated }: Props) {
                     aria-describedby="repo-help"
                   />
                   <p id="repo-help" className="text-xs text-muted-foreground">
-                    Public repos validate without a token. Private repos require a token; for now, link by URL.
+                    Public repos auto-validate after you paste a valid URL.
                   </p>
                   <div className="grid sm:grid-cols-2 gap-3">
                     <div>
@@ -249,11 +267,11 @@ export function ProjectWizard({ open, onOpenChange, onCreated }: Props) {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <Button variant="outline" onClick={validateGitHub} disabled={!repoUrl || repoChecking}>
+                  <Button variant="outline" onClick={validateGitHub} disabled={!repoUrl || repoChecking} className="sm:hidden">
                     {repoChecking ? "Validating..." : "Validate"}
                   </Button>
-                  <Button onClick={connectGitHub} disabled={!repoUrl}>
-                    Connect
+                  <Button onClick={connectGitHub} disabled={!repoUrl || !repoValid || repoChecking}>
+                    {repoChecking ? "Checking..." : "Connect"}
                   </Button>
                 </div>
 
@@ -292,15 +310,10 @@ export function ProjectWizard({ open, onOpenChange, onCreated }: Props) {
                     <code className="block rounded-md bg-muted p-3 text-sm">
                       npx create-next-app@latest my-app --ts --tailwind --app --eslint --import-alias "@/*"
                     </code>
-                    <CopyButton text={`npx create-next-app@latest my-app --ts --tailwind --app --eslint --import-alias "@/*"`} />
-                    <p className="text-xs text-muted-foreground">
-                      Use create-next-app to initialize the project with App Router, TypeScript and Tailwind. [Docs: create-next-app][^1][^3]
-                    </p>
                     <Separator />
                     <div className="space-y-2">
                       <p className="text-sm font-medium">Link to Vercel (optional)</p>
                       <code className="block rounded-md bg-muted p-3 text-sm">npx vercel link</code>
-                      <CopyButton text="npx vercel link" />
                     </div>
                   </CardContent>
                 </Card>

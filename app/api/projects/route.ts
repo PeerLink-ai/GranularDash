@@ -1,67 +1,67 @@
-import { NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { sql } from "@/lib/db"
+import { ensureProjectsSchema } from "@/lib/projects-schema"
 
-// GET /api/projects - list projects
 export async function GET() {
   try {
-    const rows = await sql<{
-      id: string
-      name: string
-      description: string | null
-      type: "native" | "github" | "external"
-      repo_url: string | null
-      metadata: any
-      pinned: boolean | null
-      created_at: string
-      updated_at: string
-    }[]>`select id, name, description, type, repo_url, metadata, coalesce(pinned,false) as pinned, created_at, updated_at from projects order by pinned desc, created_at desc`
-
+    await ensureProjectsSchema()
+    const rows = await sql`
+      SELECT id, name, description, type, repo_url, metadata, pinned, created_at, updated_at
+      FROM projects
+      ORDER BY pinned DESC, updated_at DESC
+      LIMIT 200;
+    `
     return NextResponse.json({ projects: rows }, { status: 200 })
   } catch (e: any) {
-    return NextResponse.json({ error: e.message || "Failed to list projects" }, { status: 500 })
+    return NextResponse.json({ error: String(e?.message || e) }, { status: 500 })
   }
 }
 
-// POST /api/projects - create project
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
   try {
-    const body = await req.json()
-    const {
-      id,
-      name,
-      description,
-      type,
-      repo_url,
-      metadata,
-      pinned,
-    }: {
+    await ensureProjectsSchema()
+    const body = await req.json().catch(() => ({}))
+
+    let { id, name, description, type, repo_url, metadata, pinned } = body as {
       id?: string
-      name: string
+      name?: string
       description?: string
-      type: "native" | "github" | "external"
+      type?: "native" | "github" | "external"
       repo_url?: string
       metadata?: any
       pinned?: boolean
-    } = body
+    }
 
     if (!name || !type) {
-      return NextResponse.json({ error: "name and type are required" }, { status: 400 })
+      return NextResponse.json(
+        { error: "Missing required fields: name, type" },
+        { status: 400 }
+      )
     }
 
-    if (type === "github" && !repo_url) {
-      return NextResponse.json({ error: "repo_url is required for github projects" }, { status: 400 })
-    }
+    // Normalize
+    id = id || crypto.randomUUID()
+    description = description || null
+    repo_url = repo_url || null
+    pinned = Boolean(pinned)
+    const metadataStr = JSON.stringify(metadata ?? {})
 
-    const newId = id ?? crypto.randomUUID()
-
-    await sql`
-      insert into projects (id, name, description, type, repo_url, metadata, pinned)
-      values (${newId}, ${name}, ${description ?? null}, ${type}, ${repo_url ?? null}, ${metadata ?? {}}, ${pinned ?? false})
+    const inserted = await sql`
+      INSERT INTO projects (id, name, description, type, repo_url, metadata, pinned, created_at, updated_at)
+      VALUES (${id}, ${name}, ${description}, ${type}, ${repo_url}, ${metadataStr}::jsonb, ${pinned}, now(), now())
+      ON CONFLICT (id) DO UPDATE
+        SET name = EXCLUDED.name,
+            description = EXCLUDED.description,
+            type = EXCLUDED.type,
+            repo_url = EXCLUDED.repo_url,
+            metadata = EXCLUDED.metadata,
+            pinned = EXCLUDED.pinned,
+            updated_at = now()
+      RETURNING id, name, description, type, repo_url, metadata, pinned, created_at, updated_at;
     `
 
-    const [project] = await sql<any[]>`select * from projects where id = ${newId}`
-    return NextResponse.json({ project }, { status: 201 })
+    return NextResponse.json({ project: inserted[0] }, { status: 201 })
   } catch (e: any) {
-    return NextResponse.json({ error: e.message || "Failed to create project" }, { status: 500 })
+    return NextResponse.json({ error: String(e?.message || e) }, { status: 500 })
   }
 }

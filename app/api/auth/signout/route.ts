@@ -1,22 +1,29 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { deleteSession } from "@/lib/auth"
 import { cookies } from "next/headers"
+import { deleteSession, SESSION_COOKIE_NAME } from "@/lib/auth"
 
 export async function POST(request: NextRequest) {
   try {
     const cookieStore = await cookies()
-    const sessionToken = cookieStore.get("session_token")?.value
-
-    if (sessionToken) {
-      await deleteSession(sessionToken)
+    const token = cookieStore.get(SESSION_COOKIE_NAME)?.value
+    if (token) {
+      try {
+        await deleteSession(token)
+      } catch (e) {
+        // ignore if session row missing
+      }
     }
-
-    // Clear session cookie
-    cookieStore.delete("session_token")
-
-    return NextResponse.json({ success: true })
-  } catch (error) {
-    console.error("Sign out error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    // Clear cookie
+    cookieStore.set(SESSION_COOKIE_NAME, "", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 0,
+      path: "/",
+    })
+    return NextResponse.json({ ok: true })
+  } catch (err) {
+    console.error("Sign out error:", err)
+    return NextResponse.json({ ok: true })
   }
 }

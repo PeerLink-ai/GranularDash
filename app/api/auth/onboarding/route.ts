@@ -1,27 +1,20 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getUserBySession, completeOnboarding } from "@/lib/auth"
 import { cookies } from "next/headers"
+import { completeOnboarding, getUserBySession, SESSION_COOKIE_NAME } from "@/lib/auth"
 
-export async function POST(request: NextRequest) {
+export async function POST(_req: NextRequest) {
   try {
     const cookieStore = await cookies()
-    const sessionToken = cookieStore.get("session_token")?.value
+    const token = cookieStore.get(SESSION_COOKIE_NAME)?.value
+    if (!token) return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
 
-    if (!sessionToken) {
-      return NextResponse.json({ error: "No session token" }, { status: 401 })
-    }
-
-    const user = await getUserBySession(sessionToken)
-
-    if (!user) {
-      return NextResponse.json({ error: "Invalid session" }, { status: 401 })
-    }
+    const user = await getUserBySession(token)
+    if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
 
     await completeOnboarding(user.id)
-
-    return NextResponse.json({ success: true })
-  } catch (error) {
-    console.error("Complete onboarding error:", error)
+    return NextResponse.json({ ok: true })
+  } catch (err) {
+    console.error("Onboarding error:", err)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

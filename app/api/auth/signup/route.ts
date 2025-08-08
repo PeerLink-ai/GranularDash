@@ -1,36 +1,33 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { signUpUser } from "@/lib/auth"
 import { cookies } from "next/headers"
+import { ensureAuthSchema } from "@/lib/auth-schema"
+import { signUpUser, SESSION_COOKIE_NAME } from "@/lib/auth"
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, password, name, organization, role } = await request.json()
+    await ensureAuthSchema()
 
+    const { email, password, name, organization, role } = await request.json()
     if (!email || !password || !name || !organization) {
-      return NextResponse.json({ error: "All fields are required" }, { status: 400 })
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
-    const result = await signUpUser(email, password, name, organization, role)
-    const { user, sessionToken } = result
+    const { user, sessionToken } = await signUpUser(email, password, name, organization, role)
 
-    // Set session cookie
     const cookieStore = await cookies()
-    cookieStore.set("session_token", sessionToken, {
+    cookieStore.set(SESSION_COOKIE_NAME, sessionToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge: 7 * 24 * 60 * 60, // 7 days
+      maxAge: 7 * 24 * 60 * 60,
       path: "/",
     })
 
     return NextResponse.json({ user })
-  } catch (error) {
-    console.error("Sign up error:", error)
-
-    if (error.message?.includes("duplicate key")) {
-      return NextResponse.json({ error: "User with this email already exists" }, { status: 409 })
-    }
-
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  } catch (err: any) {
+    const msg = err?.message || "Internal server error"
+    const status = msg.includes("exists") ? 409 : 500
+    console.error("Sign up error:", err)
+    return NextResponse.json({ error: msg }, { status })
   }
 }

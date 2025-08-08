@@ -1,10 +1,47 @@
 import { neon } from "@neondatabase/serverless"
 
-if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL environment variable is not set")
+const url =
+  process.env.DATABASE_URL ||
+  process.env.POSTGRES_URL ||
+  process.env.POSTGRES_PRISMA_URL ||
+  process.env.POSTGRES_URL_NON_POOLING
+
+if (!url) {
+  throw new Error("DATABASE_URL (or POSTGRES_URL) is not set")
 }
 
-export const sql = neon(process.env.DATABASE_URL)
+// Neon client – use tagged template: sql`... ${value} ...`
+// For dynamic SQL strings, use sql.query("...", [params])
+export const sql = neon(url)
+
+// Singleton Neon client for server routes.
+let _client: ReturnType<typeof neon> | null = null
+
+function getConnectionString(): string {
+  const c =
+    process.env.DATABASE_URL ||
+    process.env.POSTGRES_PRISMA_URL ||
+    process.env.POSTGRES_URL_NON_POOLING ||
+    process.env.POSTGRES_URL ||
+    ""
+  if (!c) throw new Error("DATABASE_URL (or POSTGRES_*) is not set")
+  return c
+}
+
+export function db() {
+  if (_client) return _client
+  _client = neon(getConnectionString())
+  return _client
+}
+
+// Simple query helper with $1, $2 params.
+export async function query<T = any>(text: string, params: any[] = []) {
+  const rows = (await sql.query(text, params)) as T[]
+  return { rows }
+}
+
+// Re-export a convenient tag.
+export const sqlTag = sql
 
 export interface User {
   id: string

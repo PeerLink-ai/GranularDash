@@ -1,17 +1,16 @@
 "use client"
 
 import { useAuth } from "@/contexts/auth-context"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { ConnectedAgentsOverview } from "@/components/connected-agents-overview"
 import { QuickActions } from "@/components/quick-actions"
 import { RecentActivity } from "@/components/recent-activity"
 import { SystemHealth } from "@/components/system-health"
-import { Bot, Shield, AlertTriangle, CheckCircle } from "lucide-react"
+import { Bot, Shield, AlertTriangle, CheckCircle, Activity, TrendingUp } from 'lucide-react'
+import { KPICard } from "@/components/ui/kpi-card"
 
 export function DashboardOverview() {
   const { user } = useAuth()
-
   if (!user) return null
 
   const getRoleColor = (role: string) => {
@@ -46,6 +45,12 @@ export function DashboardOverview() {
 
   const hasConnectedAgents = user.connectedAgents.length > 0
 
+  // Fake trend data for visuals
+  const agentsTrend = [2, 3, 4, 5, 4, 6, 6, 7]
+  const permsTrend = [1, 2, 2, 3, 3, 4, 3, 5]
+  const healthTrend = [80, 85, 83, 88, 92, 95, 93, 96]
+  const alertsTrend = [3, 2, 2, 1, 1, 0, 0, 0]
+
   return (
     <div className="space-y-6">
       {/* Welcome Header */}
@@ -60,70 +65,62 @@ export function DashboardOverview() {
         </div>
       </div>
 
-      {/* Quick Stats */}
+      {/* Upgraded Quick Stats */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Connected Agents</CardTitle>
-            <Bot className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{user.connectedAgents.length}</div>
-            <p className="text-xs text-muted-foreground">
-              {hasConnectedAgents ? "Active and monitored" : "No agents connected"}
-            </p>
-          </CardContent>
-        </Card>
+        <KPICard
+          title="Connected Agents"
+          value={user.connectedAgents.length}
+          subtitle={hasConnectedAgents ? "Active and monitored" : "No agents connected"}
+          icon={Bot}
+          tone="violet"
+          trendData={agentsTrend}
+          trendLabel="+2 this week"
+        />
+        <KPICard
+          title="Permissions"
+          value={user.permissions.length}
+          subtitle="Access levels granted"
+          icon={Shield}
+          tone="sky"
+          trendData={permsTrend}
+          trendLabel="+1 new role"
+        />
+        <KPICard
+          title="System Status"
+          value="Healthy"
+          subtitle="All systems operational"
+          icon={CheckCircle}
+          tone="emerald"
+          trendData={healthTrend}
+          trendLabel="Uptime 99.9%"
+        />
+        <KPICard
+          title="Active Alerts"
+          value={0}
+          subtitle="No active alerts"
+          icon={AlertTriangle}
+          tone="amber"
+          trendData={alertsTrend}
+          trendLabel="Down from 3"
+        />
+      </div>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Permissions</CardTitle>
-            <Shield className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{user.permissions.length}</div>
-            <p className="text-xs text-muted-foreground">Access levels granted</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">System Status</CardTitle>
-            <CheckCircle className="h-4 w-4 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">Healthy</div>
-            <p className="text-xs text-muted-foreground">All systems operational</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Alerts</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">0</div>
-            <p className="text-xs text-muted-foreground">No active alerts</p>
-          </CardContent>
-        </Card>
+      {/* Bonus: small banner */}
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Activity className="h-4 w-4" />
+        <span>Tip: Connect more agents to unlock advanced analytics</span>
+        <TrendingUp className="h-4 w-4" />
       </div>
 
       {/* Main Content Grid */}
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Connected Agents Overview */}
         <ConnectedAgentsOverview />
-
-        {/* Quick Actions */}
         <QuickActions />
       </div>
 
       {/* Bottom Grid */}
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Recent Activity */}
         <RecentActivity />
-
-        {/* System Health */}
         <SystemHealth />
       </div>
     </div>

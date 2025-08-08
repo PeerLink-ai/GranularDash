@@ -1,43 +1,79 @@
-import { NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { sql } from "@/lib/db"
+import { ensureProjectsSchema } from "@/lib/projects-schema"
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(
+  req: Request,
+  { params }: { params: { id: string } }
+) {
   try {
+    await ensureProjectsSchema()
     const id = params.id
-    const body = await req.json()
-    const fields: string[] = []
-    const values: any[] = []
+    const body = await req.json().catch(() => ({}))
 
-    // Only allow known fields
-    const updatable = ["name", "description", "pinned", "repo_url", "metadata", "type"] as const
-    let idx = 1
-    let setClauses: any[] = []
+    const allowed: Record<string, any> = {}
+    if ("name" in body) allowed.name = body.name
+    if ("description" in body) allowed.description = body.description
+    if ("type" in body) allowed.type = body.type
+    if ("repo_url" in body) allowed.repo_url = body.repo_url
+    if ("metadata" in body) allowed.metadata = body.metadata
+    if ("pinned" in body) allowed.pinned = Boolean(body.pinned)
 
-    for (const key of updatable) {
-      if (key in body) {
-        // @ts-ignore
-        setClauses.push(sql`${sql.raw(key)} = ${body[key]}`)
-      }
-    }
-
-    if (setClauses.length === 0) {
+    if (Object.keys(allowed).length === 0) {
       return NextResponse.json({ error: "No updatable fields provided" }, { status: 400 })
     }
 
-    await sql`update projects set ${sql.join(setClauses, sql`, `)} where id = ${id}`
-    const [project] = await sql<any[]>`select * from projects where id = ${id}`
-    return NextResponse.json({ project }, { status: 200 })
+    // Build dynamic SET clause safely
+    const sets: string[] = []
+    const paramsArr: any[] = []
+    let idx = 1
+
+    for (const [key, value] of Object.entries(allowed)) {
+      if (key === "metadata") {
+        sets.push(`metadata = $${idx}::jsonb`)
+        paramsArr.push(JSON.stringify(value ?? {}))
+      } else {
+        sets.push(`${key} = $${idx}`)
+        paramsArr.push(value)
+      }
+      idx++
+    }
+    // updated_at
+    sets.push(`updated_at = now()`)
+
+    const text = `
+      UPDATE projects
+      SET ${sets.join(", ")}
+      WHERE id = $${idx}
+      RETURNING id, name, description, type, repo_url, metadata, pinned, created_at, updated_at;
+    `
+    paramsArr.push(id)
+
+    const result = await sql.query(text, paramsArr)
+    if (result.length === 0) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 })
+    }
+    return NextResponse.json({ project: result[0] }, { status: 200 })
   } catch (e: any) {
-    return NextResponse.json({ error: e.message || "Failed to update project" }, { status: 500 })
+    return NextResponse.json({ error: String(e?.message || e) }, { status: 500 })
   }
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(
+  _req: Request,
+  { params }: { params: { id: string } }
+) {
   try {
+    await ensureProjectsSchema()
     const id = params.id
-    await sql`delete from projects where id = ${id}`
+    const deleted = await sql`
+      DELETE FROM projects WHERE id = ${id} RETURNING id;
+    `
+    if (deleted.length === 0) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 })
+    }
     return NextResponse.json({ ok: true }, { status: 200 })
   } catch (e: any) {
-    return NextResponse.json({ error: e.message || "Failed to delete project" }, { status: 500 })
+    return NextResponse.json({ error: String(e?.message || e) }, { status: 500 })
   }
 }

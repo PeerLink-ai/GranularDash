@@ -1,171 +1,124 @@
 import { sql } from "@/lib/db"
-import jwt from "jsonwebtoken"
 import bcrypt from "bcryptjs"
 import crypto from "crypto"
-import { NextRequest } from "next/server"
-import type { User, UserPermission, ConnectedAgent } from "./db"
 
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key"
+const SESSION_COOKIE_NAME = "session_token"
+const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 
-export interface User {
+export type DbUser = {
   id: string
   email: string
   name: string
   organization: string
   role: string
+  password_hash?: string
+  onboarding_completed: boolean
+  created_at: string
+  last_login?: string | null
 }
 
-export async function hashPassword(password: string): Promise<string> {
+export type ConnectedAgent = {
+  id: number
+  user_id: string
+  agent_id: string
+  name: string | null
+  status: string | null
+  connected_at: string
+}
+
+export async function hashPassword(password: string) {
   return bcrypt.hash(password, 10)
 }
 
-export async function verifyPassword(password: string, hashedPassword: string): Promise<boolean> {
+export async function verifyPassword(password: string, hashedPassword: string) {
   return bcrypt.compare(password, hashedPassword)
 }
 
-export async function generateSessionToken(): Promise<string> {
-  return Math.random().toString(36).substring(2) + Date.now().toString(36)
-}
-
-export async function createSession(userId: string): Promise<string | null> {
-  try {
-    const sessionToken = crypto.randomUUID()
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
-
-    await sql`
-      INSERT INTO user_sessions (user_id, session_token, expires_at)
-      VALUES (${userId}, ${sessionToken}, ${expiresAt})
-    `
-
-    return sessionToken
-  } catch (error) {
-    console.error("Error creating session:", error)
-    return null
-  }
-}
-
-export async function getUserBySession(sessionToken: string): Promise<(User & { permissions: string[]; connectedAgents: ConnectedAgent[] }) | null> {
-  try {
-    const result = await sql`
-      SELECT u.*, s.expires_at
-      FROM users u
-      JOIN user_sessions s ON u.id = s.user_id
-      WHERE s.session_token = ${sessionToken}
-      AND s.expires_at > NOW()
-    `
-    
-    const user = result[0] as User & { expires_at: string } | null
-
-    if (!user) {
-      return null
-    }
-
-    // Get user permissions
-    const permissions = await sql`
-      SELECT permission
-      FROM user_permissions
-      WHERE user_id = ${user.id}
-    `
-
-    // Get connected agents
-    const connectedAgents = await sql`
-      SELECT *
-      FROM connected_agents
-      WHERE user_id = ${user.id}
-      ORDER BY connected_at DESC
-    `
-
-    return {
-      ...user,
-      permissions: permissions.map((p: UserPermission) => p.permission),
-      connectedAgents: connectedAgents as ConnectedAgent[],
-    }
-  } catch (error) {
-    console.error("Error getting user by session:", error)
-    return null
-  }
-}
-
-export async function signInUser(
-  email: string,
-  password: string,
-): Promise<{ user: User & { permissions: string[]; connectedAgents: ConnectedAgent[] }; sessionToken: string } | null> {
-  const users = await sql`
-    SELECT *
-    FROM users
-    WHERE email = ${email}
-  `
-
-  if (users.length === 0) {
-    return null
-  }
-
-  const user = users[0] as User & { password_hash: string }
-
-  const isValidPassword = await verifyPassword(password, user.password_hash)
-  if (!isValidPassword) {
-    return null
-  }
-
-  // Update last login
+export async function createSession(userId: string) {
+  const sessionToken = crypto.randomUUID()
+  const expiresAt = new Date(Date.now() + SESSION_TTL_MS)
   await sql`
-    UPDATE users
-    SET last_login = NOW()
-    WHERE id = ${user.id}
+    INSERT INTO user_sessions (user_id, session_token, expires_at)
+    VALUES (${userId}, ${sessionToken}, ${expiresAt})
   `
+  return sessionToken
+}
 
-  // Create session
-  const sessionToken = await createSession(user.id)
+export async function deleteSession(sessionToken: string) {
+  await sql`DELETE FROM user_sessions WHERE session_token = ${sessionToken}`
+}
 
-  if (!sessionToken) {
-    return null
+async function getPermissions(userId: string): Promise<string[]> {
+  try {
+    const rows = await sql`SELECT permission FROM user_permissions WHERE user_id = ${userId}`
+    // rows can be array of objects { permission: '...' }
+    return (rows as Array<{ permission: string }>).map((r) => r.permission)
+  } catch {
+    return []
   }
+}
 
-  // Get user permissions
-  const permissions = await sql`
-    SELECT permission
-    FROM user_permissions
-    WHERE user_id = ${user.id}
-  `
+async function getConnectedAgents(userId: string): Promise<ConnectedAgent[]> {
+  try {
+    const rows = (await sql`
+      SELECT id, user_id, agent_id, name, status, connected_at
+      FROM connected_agents
+      WHERE user_id = ${userId}
+      ORDER BY connected_at DESC
+    `) as ConnectedAgent[]
+    return rows
+  } catch {
+    return []
+  }
+}
 
-  // Get connected agents
-  const connectedAgents = await sql`
-    SELECT *
-    FROM connected_agents
-    WHERE user_id = ${user.id}
-    ORDER BY connected_at DESC
+export async function getUserBySession(sessionToken: string) {
+  const rows = await sql`
+    SELECT u.id, u.email, u.name, u.organization, u.role, u.onboarding_completed, u.created_at, u.last_login
+    FROM users u
+    JOIN user_sessions s ON u.id = s.user_id
+    WHERE s.session_token = ${sessionToken} AND s.expires_at > NOW()
+    LIMIT 1
   `
+  const user = (rows as DbUser[])[0]
+  if (!user) return null
+  const [permissions, connectedAgents] = await Promise.all([getPermissions(user.id), getConnectedAgents(user.id)])
+  return { ...user, permissions, connectedAgents }
+}
+
+export async function signInUser(email: string, password: string) {
+  const rows = await sql`SELECT * FROM users WHERE email = ${email} LIMIT 1`
+  if (!rows || (rows as any[]).length === 0) return null
+
+  const user = rows[0] as DbUser & { password_hash: string }
+  const ok = await verifyPassword(password, user.password_hash)
+  if (!ok) return null
+
+  await sql`UPDATE users SET last_login = NOW() WHERE id = ${user.id}`
+
+  const sessionToken = await createSession(user.id)
+  const [permissions, connectedAgents] = await Promise.all([getPermissions(user.id), getConnectedAgents(user.id)])
 
   const { password_hash, ...userWithoutPassword } = user
-
-  return {
-    user: {
-      ...userWithoutPassword,
-      permissions: permissions.map((p: UserPermission) => p.permission),
-      connectedAgents: connectedAgents as ConnectedAgent[],
-    },
-    sessionToken,
-  }
+  return { user: { ...userWithoutPassword, permissions, connectedAgents }, sessionToken }
 }
 
-export async function signUpUser(
-  email: string,
-  password: string,
-  name: string,
-  organization: string,
-  role = "viewer",
-): Promise<{ user: User & { permissions: string[]; connectedAgents: ConnectedAgent[] }; sessionToken: string }> {
-  const hashedPassword = await hashPassword(password)
+export async function signUpUser(email: string, password: string, name: string, organization: string, role = "viewer") {
+  const id = crypto.randomUUID()
+  const password_hash = await hashPassword(password)
 
-  const users = await sql`
-    INSERT INTO users (email, password_hash, name, organization, role)
-    VALUES (${email}, ${hashedPassword}, ${name}, ${organization}, ${role})
-    RETURNING *
+  // Ensure no duplicate email
+  const existing = await sql`SELECT 1 FROM users WHERE email = ${email} LIMIT 1`
+  if ((existing as any[]).length > 0) {
+    throw new Error("Email already exists")
+  }
+
+  await sql`
+    INSERT INTO users (id, email, password_hash, name, organization, role)
+    VALUES (${id}, ${email}, ${password_hash}, ${name}, ${organization}, ${role})
   `
 
-  const user = users[0] as User
-
-  // Add comprehensive permissions for all roles - no restrictions
+  // Grant broad permissions by default so the demo works end-to-end.
   const allPermissions = [
     "manage_agents",
     "view_analytics",
@@ -183,57 +136,22 @@ export async function signUpUser(
     "manage_financial_goals",
     "manage_transactions",
   ]
-
   for (const permission of allPermissions) {
-    await sql`
-      INSERT INTO user_permissions (user_id, permission)
-      VALUES (${user.id}, ${permission})
-    `
+    await sql`INSERT INTO user_permissions (user_id, permission) VALUES (${id}, ${permission})`
   }
 
-  // Create session
-  const sessionToken = await createSession(user.id)
+  const sessionToken = await createSession(id)
+  const [userRows, connectedAgents] = await Promise.all([
+    sql`SELECT id, email, name, organization, role, onboarding_completed, created_at, last_login FROM users WHERE id = ${id}`,
+    getConnectedAgents(id),
+  ])
 
-  if (!sessionToken) {
-    throw new Error("Failed to create session token")
-  }
-
-  return {
-    user: {
-      ...user,
-      permissions: allPermissions,
-      connectedAgents: [],
-    },
-    sessionToken,
-  }
+  const user = (userRows as DbUser[])[0]
+  return { user: { ...user, permissions: allPermissions, connectedAgents }, sessionToken }
 }
 
-export async function deleteSession(sessionToken: string): Promise<void> {
-  await sql`
-    DELETE FROM user_sessions
-    WHERE session_token = ${sessionToken}
-  `
+export async function completeOnboarding(userId: string) {
+  await sql`UPDATE users SET onboarding_completed = TRUE WHERE id = ${userId}`
 }
 
-export async function completeOnboarding(userId: string): Promise<void> {
-  await sql`
-    UPDATE users
-    SET onboarding_completed = true
-    WHERE id = ${userId}
-  `
-}
-
-export async function verifyToken(request: NextRequest) {
-  try {
-    const sessionToken = request.cookies.get("session_token")?.value
-    
-    if (!sessionToken) {
-      return null
-    }
-
-    return await getUserBySession(sessionToken)
-  } catch (error) {
-    console.error("Error verifying token:", error)
-    return null
-  }
-}
+export { SESSION_COOKIE_NAME }

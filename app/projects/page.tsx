@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
 import { ProjectWizard } from "@/components/project-wizard"
 import { ProjectCard } from "@/components/project-card"
+import { ProjectQuickView } from "@/components/project-quick-view"
 
 export type Project = {
   id: string
@@ -31,6 +32,7 @@ export default function ProjectsPage() {
   const [query, setQuery] = React.useState("")
   const [open, setOpen] = React.useState(false)
   const [defaultId, setDefaultId] = React.useState<string | null>(null)
+  const [quickView, setQuickView] = React.useState<Project | null>(null)
   const { toast } = useToast()
   const router = useRouter()
 
@@ -192,13 +194,26 @@ export default function ProjectsPage() {
           setOpen(false)
           await load()
           setDefault(proj.id)
-          // route to a relevant area after creation
-          if (proj.type === "native") {
-            // Go to agent management for native templates by default
-            router.push("/agent-management")
-          } else {
-            router.refresh()
+          setQuickView(proj) // Open the slide-over with project details
+        }}
+      />
+
+      <ProjectQuickView
+        open={!!quickView}
+        project={quickView}
+        onOpenChange={(o) => {
+          if (!o) setQuickView(null)
+        }}
+        onUpdated={async () => {
+          await load()
+          // keep quickView in sync with latest data
+          if (quickView) {
+            const updated = projects.find(p => p.id === quickView.id)
+            if (updated) setQuickView(updated)
           }
+        }}
+        onDefault={(id) => {
+          setDefault(id)
         }}
       />
     </div>

@@ -2,8 +2,23 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, BarChart2, Building2, FolderKanban, GitFork, Video, Shield, FileText, Receipt, MessageSquare, Users2, Key, Settings, HelpCircle, Menu, ChevronDown } from 'lucide-react'
-import { Button } from "@/components/ui/button"
+import {
+  Home,
+  BarChart2,
+  Building2,
+  FolderKanban,
+  GitFork,
+  Video,
+  Shield,
+  FileText,
+  Receipt,
+  MessageSquare,
+  Users2,
+  Key,
+  Settings,
+  HelpCircle,
+  ChevronDown,
+} from "lucide-react"
 import {
   Sidebar,
   SidebarContent,
@@ -16,6 +31,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
+  SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
@@ -23,10 +39,12 @@ import { useAuth } from "@/contexts/auth-context"
 
 export function AppSidebar() {
   const pathname = usePathname()
-  const { isMobile, toggleSidebar, state } = useSidebar()
+  const { state } = useSidebar()
   const { user } = useAuth()
 
   if (!user) return null
+
+  const isActive = (href: string) => pathname === href || (href !== "/" && pathname.startsWith(href))
 
   // Consolidated navigation
   const navigationGroups = [
@@ -73,18 +91,20 @@ export function AppSidebar() {
     <Sidebar collapsible="icon" variant="sidebar">
       <SidebarHeader>
         <div className="flex items-center justify-between w-full">
-          {state === "expanded" && (
-            <Link href="/" className="flex items-center font-semibold text-lg">
+          {state === "expanded" ? (
+            <Link href="/" className="flex items-center font-semibold text-lg" aria-label="Granular Home">
+              <span>Granular</span>
+            </Link>
+          ) : (
+            <Link href="/" className="sr-only" aria-label="Granular Home">
               Granular
             </Link>
           )}
-          {!isMobile && (
-            <Button variant="ghost" size="sm" className="h-8 w-8" onClick={toggleSidebar} aria-label="Toggle sidebar">
-              <Menu className="h-4 w-4" />
-            </Button>
-          )}
+          {/* Use the shared SidebarTrigger for consistent mobile/desktop toggling */}
+          <SidebarTrigger aria-label="Toggle sidebar" />
         </div>
       </SidebarHeader>
+
       <SidebarContent>
         {navigationGroups.map((group) => (
           <Collapsible key={group.label} defaultOpen className="group/collapsible">
@@ -102,11 +122,11 @@ export function AppSidebar() {
                       <SidebarMenuItem key={item.title}>
                         <SidebarMenuButton
                           asChild
-                          isActive={pathname === item.href}
+                          isActive={isActive(item.href)}
                           tooltip={item.title}
                           className="px-4 py-2 rounded-md hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground"
                         >
-                          <Link href={item.href}>
+                          <Link href={item.href} aria-current={isActive(item.href) ? "page" : undefined}>
                             <item.icon className="h-4 w-4" />
                             <span>{item.title}</span>
                           </Link>
@@ -120,17 +140,18 @@ export function AppSidebar() {
           </Collapsible>
         ))}
       </SidebarContent>
+
       <SidebarFooter>
         <SidebarMenu>
           {bottomNavigation.map((item) => (
             <SidebarMenuItem key={item.title}>
               <SidebarMenuButton
                 asChild
-                isActive={pathname === item.href}
+                isActive={isActive(item.href)}
                 tooltip={item.title}
                 className="px-4 py-2 rounded-md hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground"
               >
-                <Link href={item.href}>
+                <Link href={item.href} aria-current={isActive(item.href) ? "page" : undefined}>
                   <item.icon className="h-4 w-4" />
                   <span>{item.title}</span>
                 </Link>
@@ -139,6 +160,7 @@ export function AppSidebar() {
           ))}
         </SidebarMenu>
       </SidebarFooter>
+
       <SidebarRail />
     </Sidebar>
   )

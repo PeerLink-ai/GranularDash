@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Home, BarChart2, Building2, Shield, Settings } from "lucide-react"
@@ -29,14 +28,16 @@ export function MobileNav() {
       aria-label="Primary"
       className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 md:hidden"
     >
-      <ul className="grid grid-cols-5">
+      <ul className="grid grid-cols-5 pb-safe">
         {items.map((item) => {
-          const active = pathname === item.href
+          const active = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href))
+
           const Icon = item.icon
           return (
             <li key={item.href}>
               <Link
                 href={item.href}
+                aria-label={item.label}
                 className={cn(
                   "flex flex-col items-center justify-center py-2 text-xs",
                   active ? "text-primary" : "text-muted-foreground hover:text-foreground",
@@ -44,7 +45,7 @@ export function MobileNav() {
                 aria-current={active ? "page" : undefined}
               >
                 <Icon className={cn("h-5 w-5", active && "text-primary")} />
-                <span className="mt-1">{item.label}</span>
+                <span className="mt-1 hidden sm:block">{item.label}</span>
               </Link>
             </li>
           )

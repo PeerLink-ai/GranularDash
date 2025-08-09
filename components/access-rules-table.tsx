@@ -355,70 +355,74 @@ export function AccessRulesTable() {
               )}
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Rule Name</TableHead>
-                  <TableHead>Resource Type</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredRules.map((rule) => (
-                  <TableRow key={rule.id}>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">{rule.name}</div>
-                        <div className="text-sm text-muted-foreground">{rule.description}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        {getResourceIcon(rule.resource_type)}
-                        <span className="capitalize">{rule.resource_type}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={getStatusColor(rule.status)}>{rule.status}</Badge>
-                    </TableCell>
-                    <TableCell>{new Date(rule.created_at).toLocaleDateString()}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        {!isAnalyst && (
-                          <>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                setEditingRule(rule)
-                                setFormData({
-                                  name: rule.name,
-                                  description: rule.description,
-                                  resource_type: rule.resource_type,
-                                  permissions: rule.permissions,
-                                  conditions: rule.conditions || {
-                                    roles: [],
-                                    timeWindow: { start: "08:00", end: "18:00", tz: "UTC" },
-                                  },
-                                  status: rule.status,
-                                })
-                              }}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="sm" onClick={() => deleteRule(rule.id)}>
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    </TableCell>
+            <div className="w-full overflow-x-auto rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Rule Name</TableHead>
+                    <TableHead>Resource Type</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="hidden sm:table-cell">Created</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {filteredRules.map((rule) => (
+                    <TableRow key={rule.id}>
+                      <TableCell>
+                        <div>
+                          <div className="font-medium">{rule.name}</div>
+                          <div className="text-sm text-muted-foreground">{rule.description}</div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          {getResourceIcon(rule.resource_type)}
+                          <span className="capitalize">{rule.resource_type}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={getStatusColor(rule.status)}>{rule.status}</Badge>
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell">
+                        {new Date(rule.created_at).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          {!isAnalyst && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setEditingRule(rule)
+                                  setFormData({
+                                    name: rule.name,
+                                    description: rule.description,
+                                    resource_type: rule.resource_type,
+                                    permissions: rule.permissions,
+                                    conditions: rule.conditions || {
+                                      roles: [],
+                                      timeWindow: { start: "08:00", end: "18:00", tz: "UTC" },
+                                    },
+                                    status: rule.status,
+                                  })
+                                }}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button variant="ghost" size="sm" onClick={() => deleteRule(rule.id)}>
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </div>
 

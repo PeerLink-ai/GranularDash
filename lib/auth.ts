@@ -1,6 +1,7 @@
 import { sql } from "@/lib/db"
 import bcrypt from "bcryptjs"
 import crypto from "crypto"
+import type { NextRequest } from "next/server"
 
 const SESSION_COOKIE_NAME = "session_token"
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
@@ -155,3 +156,16 @@ export async function completeOnboarding(userId: string) {
 }
 
 export { SESSION_COOKIE_NAME }
+
+export async function getUser(request: NextRequest) {
+  try {
+    const headerToken = request.headers.get("x-session-token")
+    const cookieToken = request.cookies.get(SESSION_COOKIE_NAME)?.value || request.cookies.get("session")?.value || null
+    const token = headerToken || cookieToken
+    if (!token) return null
+    const user = await getUserBySession(token)
+    return user
+  } catch {
+    return null
+  }
+}

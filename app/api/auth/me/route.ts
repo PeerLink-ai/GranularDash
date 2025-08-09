@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic"
+
 import { type NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { ensureAuthSchema } from "@/lib/auth-schema"
@@ -7,7 +9,7 @@ export async function GET(_req: NextRequest) {
   try {
     await ensureAuthSchema()
     const cookieStore = await cookies()
-    const token = cookieStore.get(SESSION_COOKIE_NAME)?.value
+    const token = cookieStore.get(SESSION_COOKIE_NAME)?.value || cookieStore.get("session")?.value
     if (!token) {
       return NextResponse.json({ user: null }, { status: 200 })
     }

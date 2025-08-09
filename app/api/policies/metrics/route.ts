@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic"
+
 import { type NextRequest, NextResponse } from "next/server"
 import { sql as neonSql, query } from "@/lib/db"
 
@@ -23,7 +25,7 @@ async function columnExists(table: string, column: string) {
 
 async function getOrgFromRequest(req: NextRequest): Promise<string | null> {
   // Try session cookie
-  const sessionToken = req.cookies.get("session")?.value || null
+  const sessionToken = req.cookies.get("session")?.value || req.cookies.get("session_token")?.value || null
   try {
     if (sessionToken) {
       // Prefer user_sessions if present

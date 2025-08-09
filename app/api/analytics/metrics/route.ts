@@ -1,27 +1,52 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { sql } from "@/lib/db"
 
-export async function GET(request: NextRequest) {
+async function tableExists(name: string) {
   try {
-    // Get user from session/auth - for now using placeholder
-    const organizationId = 1
+    const rows = await sql`SELECT to_regclass(${`public.${name}`}) AS exists`
+    return rows?.[0]?.exists !== null
+  } catch {
+    return false
+  }
+}
 
-    // Fetch metrics from database
-    const [agentCount, userCount, transactionCount, revenueSum] = await Promise.all([
-      sql`SELECT COUNT(*) as count FROM connected_agents WHERE user_id IN (SELECT id FROM users WHERE organization = (SELECT organization FROM users WHERE id = ${organizationId}))`,
-      sql`SELECT COUNT(*) as count FROM users WHERE organization = (SELECT organization FROM users WHERE id = ${organizationId})`,
-      sql`SELECT COUNT(*) as count FROM transactions WHERE organization_id = (SELECT organization FROM users WHERE id = ${organizationId})`,
-      sql`SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE organization_id = (SELECT organization FROM users WHERE id = ${organizationId})`,
-    ])
+export async function GET(_request: NextRequest) {
+  try {
+    const hasAgents = await tableExists("connected_agents")
+    const hasUsers = await tableExists("users")
+    const hasTx = await tableExists("transactions")
 
-    const metrics = {
-      totalRevenue: `$${Number(revenueSum[0]?.total || 0).toLocaleString()}`,
-      totalUsers: (userCount[0]?.count || 0).toString(),
-      totalTransactions: (transactionCount[0]?.count || 0).toString(),
-      activeAgents: (agentCount[0]?.count || 0).toString(),
+    let activeAgents = 0
+    let totalUsers = 0
+    let totalTransactions = 0
+    let totalRevenueNum = 0
+
+    if (hasAgents) {
+      const rows =
+        await sql`SELECT COUNT(*)::int AS count FROM connected_agents WHERE status IS NULL OR status = 'active'`
+      activeAgents = Number(rows?.[0]?.count ?? 0)
     }
 
-    return NextResponse.json(metrics)
+    if (hasUsers) {
+      const rows = await sql`SELECT COUNT(*)::int AS count FROM users`
+      totalUsers = Number(rows?.[0]?.count ?? 0)
+    }
+
+    if (hasTx) {
+      const [txRows, revRows] = await Promise.all([
+        sql`SELECT COUNT(*)::int AS count FROM transactions`,
+        sql`SELECT COALESCE(SUM(amount), 0)::numeric AS total FROM transactions`,
+      ])
+      totalTransactions = Number(txRows?.[0]?.count ?? 0)
+      totalRevenueNum = Number(revRows?.[0]?.total ?? 0)
+    }
+
+    return NextResponse.json({
+      totalRevenue: `$${totalRevenueNum.toLocaleString()}`,
+      totalUsers: totalUsers.toString(),
+      totalTransactions: totalTransactions.toString(),
+      activeAgents: activeAgents.toString(),
+    })
   } catch (error) {
     console.error("Metrics error:", error)
     return NextResponse.json({

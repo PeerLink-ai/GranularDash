@@ -1,32 +1,50 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { sql } from "@/lib/db"
 
-export async function GET(request: NextRequest) {
+async function tableExists(name: string) {
   try {
-    // Get user from session/auth - for now using placeholder
-    const organizationId = 1
+    const rows = await sql`SELECT to_regclass(${`public.${name}`}) AS exists`
+    return rows?.[0]?.exists !== null
+  } catch {
+    return false
+  }
+}
 
-    // Query product performance data if it exists
-    const productData = await sql`
+export async function GET(_request: NextRequest) {
+  try {
+    const hasTx = await tableExists("transactions")
+    if (!hasTx) return NextResponse.json([])
+
+    // If product_name doesn't exist, this will fail; guard by checking information_schema
+    const col = await sql`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'transactions'
+        AND column_name = 'product_name'
+      LIMIT 1
+    `
+    const hasProductName = col.length > 0
+
+    if (!hasProductName) return NextResponse.json([])
+
+    const rows = await sql`
       SELECT 
         product_name as name,
-        SUM(amount) as revenue,
-        COUNT(*) as transactions
-      FROM transactions 
-      WHERE organization_id = (SELECT organization FROM users WHERE id = ${organizationId}) 
-        AND product_name IS NOT NULL
+        COALESCE(SUM(amount), 0)::numeric as revenue,
+        COUNT(*)::int as transactions
+      FROM transactions
+      WHERE product_name IS NOT NULL
       GROUP BY product_name
       ORDER BY revenue DESC
       LIMIT 5
     `
-
-    const formattedData = productData.map((row: any) => ({
-      name: row.name,
-      revenue: `$${Number(row.revenue).toLocaleString()}`,
-      growth: "+0%", // Would calculate from historical data
+    const data = (rows as any[]).map((r) => ({
+      name: r.name,
+      revenue: `$${Number(r.revenue).toLocaleString()}`,
+      growth: "+0%",
     }))
-
-    return NextResponse.json(formattedData)
+    return NextResponse.json(data)
   } catch (error) {
     console.error("Top products error:", error)
     return NextResponse.json([])

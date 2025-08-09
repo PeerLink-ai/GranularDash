@@ -1,34 +1,36 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { sql } from "@/lib/db"
 
-export async function GET(request: NextRequest) {
+async function tableExists(name: string) {
   try {
-    // Get user from session/auth - for now using placeholder
-    const organizationId = 1
+    const rows = await sql`SELECT to_regclass(${`public.${name}`}) AS exists`
+    return rows?.[0]?.exists !== null
+  } catch {
+    return false
+  }
+}
 
-    // Fetch revenue data by month
+export async function GET(_request: NextRequest) {
+  try {
+    const hasTx = await tableExists("transactions")
+    if (!hasTx) return NextResponse.json([])
+
     const revenueData = await sql`
       SELECT 
         TO_CHAR(created_at, 'Mon') as name,
-        COALESCE(SUM(amount), 0) as total
-      FROM transactions 
-      WHERE organization_id = (SELECT organization FROM users WHERE id = ${organizationId})
-        AND created_at >= NOW() - INTERVAL '12 months'
-      GROUP BY TO_CHAR(created_at, 'Mon'), EXTRACT(month FROM created_at)
+        COALESCE(SUM(amount), 0)::numeric as total
+      FROM transactions
+      WHERE created_at >= NOW() - INTERVAL '12 months'
+      GROUP BY 1, EXTRACT(month FROM created_at)
       ORDER BY EXTRACT(month FROM created_at)
     `
 
-    // If no data, return empty array
-    if (revenueData.length === 0) {
-      return NextResponse.json([])
-    }
-
-    const formattedData = revenueData.map((row: any) => ({
+    const formatted = (revenueData as any[]).map((row) => ({
       name: row.name,
       total: Number(row.total),
     }))
 
-    return NextResponse.json(formattedData)
+    return NextResponse.json(formatted)
   } catch (error) {
     console.error("Revenue data error:", error)
     return NextResponse.json([])

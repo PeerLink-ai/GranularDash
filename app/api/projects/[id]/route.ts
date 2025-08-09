@@ -1,72 +1,79 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { sql as neonSql, query } from "@/lib/db"
+import { NextResponse } from "next/server"
+import { sql } from "@/lib/db"
+import { ensureProjectsSchema } from "@/lib/projects-schema"
 
-async function tableExists(name: string) {
-  const rows = await neonSql`SELECT to_regclass(${`public.${name}`}) AS exists`
-  return rows?.[0]?.exists !== null
-}
-
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(
+  req: Request,
+  { params }: { params: { id: string } }
+) {
   try {
-    if (!(await tableExists("projects"))) {
-      return NextResponse.json({ project: null }, { status: 404 })
+    await ensureProjectsSchema()
+    const id = params.id
+    const body = await req.json().catch(() => ({}))
+
+    const allowed: Record<string, any> = {}
+    if ("name" in body) allowed.name = body.name
+    if ("description" in body) allowed.description = body.description
+    if ("type" in body) allowed.type = body.type
+    if ("repo_url" in body) allowed.repo_url = body.repo_url
+    if ("metadata" in body) allowed.metadata = body.metadata
+    if ("pinned" in body) allowed.pinned = Boolean(body.pinned)
+
+    if (Object.keys(allowed).length === 0) {
+      return NextResponse.json({ error: "No updatable fields provided" }, { status: 400 })
     }
-    const rows = await neonSql`
-      SELECT
-        id::text AS id,
-        name,
-        description,
-        type,
-        repo_url,
-        metadata,
-        pinned,
-        created_at,
-        updated_at
-      FROM projects
-      WHERE id = ${params.id}::uuid
-      LIMIT 1
+
+    // Build dynamic SET clause safely
+    const sets: string[] = []
+    const paramsArr: any[] = []
+    let idx = 1
+
+    for (const [key, value] of Object.entries(allowed)) {
+      if (key === "metadata") {
+        sets.push(`metadata = $${idx}::jsonb`)
+        paramsArr.push(JSON.stringify(value ?? {}))
+      } else {
+        sets.push(`${key} = $${idx}`)
+        paramsArr.push(value)
+      }
+      idx++
+    }
+    // updated_at
+    sets.push(`updated_at = now()`)
+
+    const text = `
+      UPDATE projects
+      SET ${sets.join(", ")}
+      WHERE id = $${idx}
+      RETURNING id, name, description, type, repo_url, metadata, pinned, created_at, updated_at;
     `
-    if (!rows?.length) return NextResponse.json({ project: null }, { status: 404 })
-    return NextResponse.json({ project: rows[0] })
-  } catch (e) {
-    console.error("Get project error:", e)
-    return NextResponse.json({ project: null }, { status: 500 })
+    paramsArr.push(id)
+
+    const result = await sql.query(text, paramsArr)
+    if (result.length === 0) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 })
+    }
+    return NextResponse.json({ project: result[0] }, { status: 200 })
+  } catch (e: any) {
+    return NextResponse.json({ error: String(e?.message || e) }, { status: 500 })
   }
 }
 
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(
+  _req: Request,
+  { params }: { params: { id: string } }
+) {
   try {
-    if (!(await tableExists("projects"))) return NextResponse.json({ success: false }, { status: 404 })
-    const body = await req.json()
-    const { name, description, type, repo_url, metadata, pinned } = body
-    await query(
-      `
-      UPDATE projects SET
-        name = COALESCE($2, name),
-        description = COALESCE($3, description),
-        type = COALESCE($4, type),
-        repo_url = COALESCE($5, repo_url),
-        metadata = COALESCE($6, metadata),
-        pinned = COALESCE($7, pinned),
-        updated_at = NOW()
-      WHERE id = $1::uuid
-    `,
-      [params.id, name, description, type, repo_url, metadata, pinned],
-    )
-    return NextResponse.json({ success: true })
-  } catch (e) {
-    console.error("Update project error:", e)
-    return NextResponse.json({ success: false, error: "Failed to update project" }, { status: 500 })
-  }
-}
-
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
-  try {
-    if (!(await tableExists("projects"))) return NextResponse.json({ success: true })
-    await query(`DELETE FROM projects WHERE id = $1::uuid`, [params.id])
-    return NextResponse.json({ success: true })
-  } catch (e) {
-    console.error("Delete project error:", e)
-    return NextResponse.json({ success: false, error: "Failed to delete project" }, { status: 500 })
+    await ensureProjectsSchema()
+    const id = params.id
+    const deleted = await sql`
+      DELETE FROM projects WHERE id = ${id} RETURNING id;
+    `
+    if (deleted.length === 0) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 })
+    }
+    return NextResponse.json({ ok: true }, { status: 200 })
+  } catch (e: any) {
+    return NextResponse.json({ error: String(e?.message || e) }, { status: 500 })
   }
 }

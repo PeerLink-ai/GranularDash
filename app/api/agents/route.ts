@@ -1,7 +1,7 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { getUserBySession } from "@/lib/auth"
-import { sql as neonSql } from "@/lib/db"
+import { sql } from "@/lib/db"
 import { encryptSecret } from "@/lib/crypto"
 import { addAuditLog } from "@/lib/audit-store"
 
@@ -36,11 +36,6 @@ async function performHealthCheck(endpoint: string, apiKey?: string) {
   }
 }
 
-async function tableExists(name: string) {
-  const rows = await neonSql`SELECT to_regclass(${`public.${name}`}) AS exists`
-  return rows?.[0]?.exists !== null
-}
-
 export async function GET(_req: NextRequest) {
   try {
     const cookieStore = await cookies()
@@ -53,30 +48,25 @@ export async function GET(_req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    if (!(await tableExists("connected_agents"))) {
-      return NextResponse.json({ agents: [] })
-    }
-
-    const rows = await neonSql`
-      SELECT
-        id::text AS id,
-        COALESCE(name, agent_id) AS name,
-        provider,
-        model,
+    // Normalize provider/model to the client’s expected shape: type/version
+    const rows = await sql<any[]>`
+      SELECT 
+        id,
+        name,
+        provider AS type,
+        model AS version,
         status,
-        project_id::text AS project_id,
-        usage_requests,
-        usage_tokens_used,
-        usage_estimated_cost
+        endpoint,
+        connected_at,
+        last_active
       FROM connected_agents
       WHERE user_id = ${user.id}
-      ORDER BY connected_at DESC NULLS LAST
-      LIMIT 500
+      ORDER BY connected_at DESC
     `
-    return NextResponse.json({ agents: rows })
-  } catch (e) {
-    console.error("Agents list error:", e)
-    return NextResponse.json({ agents: [] })
+    return NextResponse.json({ agents: rows || [] })
+  } catch (error) {
+    console.error("GET /api/agents error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 
@@ -112,7 +102,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Duplicate check (same endpoint for this user)
-    const dup = await neonSql<{ exists: boolean }[]>`
+    const dup = await sql<{ exists: boolean }[]>`
       SELECT EXISTS (
         SELECT 1 FROM connected_agents WHERE user_id = ${user.id} AND endpoint = ${endpoint}
       ) AS exists
@@ -123,12 +113,14 @@ export async function POST(req: NextRequest) {
 
     // Live health check
     const health = await performHealthCheck(endpoint, apiKey)
-    const status: "active" | "inactive" | "error" = health.reachable ? "active" : "error"
+    const status: "active" | "inactive" | "error" = health.reachable
+      ? "active"
+      : "error"
 
     // Encrypt API key if provided
     const encrypted = encryptSecret(apiKey)
 
-    const inserted = await neonSql<any[]>`
+    const inserted = await sql<any[]>`
       INSERT INTO connected_agents (
         user_id,
         name,
@@ -167,7 +159,10 @@ export async function POST(req: NextRequest) {
     }
 
     // Audit log
-    const ipAddress = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || undefined
+    const ipAddress =
+      req.headers.get("x-forwarded-for") ||
+      req.headers.get("x-real-ip") ||
+      undefined
     const userAgent = req.headers.get("user-agent") || undefined
 
     await addAuditLog({
@@ -193,7 +188,7 @@ export async function POST(req: NextRequest) {
         agent: agentForClient,
         health,
       },
-      { status: 201 },
+      { status: 201 }
     )
   } catch (error) {
     console.error("POST /api/agents error:", error)

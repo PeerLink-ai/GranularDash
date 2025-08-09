@@ -52,6 +52,8 @@
     "lucide-react": "^0.454.0",
     "next": "14.2.16",
     "next-themes": "latest",
+    "node:fs": "latest",
+    "node:path": "latest",
     "pdf-lib": "latest",
     "react": "^18",
     "react-day-picker": "latest",

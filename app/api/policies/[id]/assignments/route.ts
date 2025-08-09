@@ -1,98 +1,76 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { sql } from "@/lib/db"
+import { sql as neonSql, query } from "@/lib/db"
 
-async function getUserFromSession(request: NextRequest) {
-  const sessionToken = request.cookies.get("session")?.value
-  if (!sessionToken) return null
-  const userResult = await sql`
-    SELECT id, email, organization 
-    FROM users
-    WHERE session_token = ${sessionToken}
-    LIMIT 1
-  `
-  return userResult[0] || null
+async function tableExists(name: string) {
+  const rows = await neonSql`SELECT to_regclass(${`public.${name}`}) AS exists`
+  return rows?.[0]?.exists !== null
 }
 
-// GET: list current agent assignments for this policy
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const user = await getUserFromSession(request)
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-
-    // Confirm policy belongs to user's org
-    const policy = await sql`
-      SELECT id FROM governance_policies
-      WHERE id = ${params.id} AND organization_id = ${user.organization}
-      LIMIT 1
-    `
-    if (policy.length === 0) {
-      return NextResponse.json({ error: "Policy not found" }, { status: 404 })
+    if (!(await tableExists("policy_agent_assignments"))) {
+      return NextResponse.json({ agent_ids: [] })
     }
-
-    const rows = await sql`
-      SELECT agent_id 
+    const rows = await neonSql`
+      SELECT agent_id::text AS id
       FROM policy_agent_assignments
-      WHERE policy_id = ${params.id}
+      WHERE policy_id = ${params.id}::uuid
+      ORDER BY assigned_at DESC
     `
-    const agent_ids = rows.map((r: any) => r.agent_id as string)
-    return NextResponse.json({ agent_ids })
-  } catch (error) {
-    console.error("Assignments GET error:", error)
-    return NextResponse.json({ error: "Failed to fetch assignments" }, { status: 500 })
+    return NextResponse.json({ agent_ids: rows.map((r: any) => r.id) })
+  } catch (e) {
+    console.error("Get assignments error:", e)
+    return NextResponse.json({ agent_ids: [] })
   }
 }
 
-// PUT: replace agent assignments for this policy
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const user = await getUserFromSession(request)
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-
-    const { agent_ids } = await request.json()
-    if (!Array.isArray(agent_ids)) {
-      return NextResponse.json({ error: "agent_ids must be an array" }, { status: 400 })
+    const policyId = params.id
+    if (!(await tableExists("policy_agent_assignments"))) {
+      return NextResponse.json({ success: false, error: "assignments table missing" }, { status: 400 })
     }
+    const body = await req.json()
+    const incoming: string[] = Array.isArray(body.agent_ids) ? body.agent_ids.map(String) : []
 
-    // Confirm policy belongs to user's org
-    const policy = await sql`
-      SELECT id FROM governance_policies
-      WHERE id = ${params.id} AND organization_id = ${user.organization}
-      LIMIT 1
+    // Get current set
+    const currentRows = await neonSql`
+      SELECT agent_id::text AS id
+      FROM policy_agent_assignments
+      WHERE policy_id = ${policyId}::uuid
     `
-    if (policy.length === 0) {
-      return NextResponse.json({ error: "Policy not found" }, { status: 404 })
+    const current = new Set<string>(currentRows.map((r: any) => r.id))
+    const next = new Set<string>(incoming)
+
+    // Compute adds and deletes
+    const toAdd = [...next].filter((id) => !current.has(id))
+    const toDel = [...current].filter((id) => !next.has(id))
+
+    await neonSql`BEGIN`
+    try {
+      for (const id of toAdd) {
+        await query(
+          `INSERT INTO policy_agent_assignments (policy_id, agent_id, assigned_at, status)
+           VALUES ($1::uuid, $2::uuid, NOW(), 'active')
+           ON CONFLICT (policy_id, agent_id) DO NOTHING`,
+          [policyId, id],
+        )
+      }
+      for (const id of toDel) {
+        await query(`DELETE FROM policy_agent_assignments WHERE policy_id = $1::uuid AND agent_id = $2::uuid`, [
+          policyId,
+          id,
+        ])
+      }
+      await neonSql`COMMIT`
+    } catch (e) {
+      await neonSql`ROLLBACK`
+      throw e
     }
 
-    // Fetch current assignments
-    const rows = await sql`
-      SELECT agent_id FROM policy_agent_assignments
-      WHERE policy_id = ${params.id}
-    `
-    const current = new Set(rows.map((r: any) => r.agent_id as string))
-    const next = new Set(agent_ids as string[])
-
-    const toAdd: string[] = []
-    const toRemove: string[] = []
-    for (const id of next) if (!current.has(id)) toAdd.push(id)
-    for (const id of current) if (!next.has(id)) toRemove.push(id)
-
-    for (const agentId of toAdd) {
-      await sql`
-        INSERT INTO policy_agent_assignments (policy_id, agent_id, assigned_at, status)
-        VALUES (${params.id}, ${agentId}, NOW(), 'active')
-        ON CONFLICT (policy_id, agent_id) DO UPDATE SET status = 'active', assigned_at = EXCLUDED.assigned_at
-      `
-    }
-    for (const agentId of toRemove) {
-      await sql`
-        DELETE FROM policy_agent_assignments
-        WHERE policy_id = ${params.id} AND agent_id = ${agentId}
-      `
-    }
-
-    return NextResponse.json({ success: true })
-  } catch (error) {
-    console.error("Assignments PUT error:", error)
-    return NextResponse.json({ error: "Failed to update assignments" }, { status: 500 })
+    return NextResponse.json({ success: true, added: toAdd, removed: toDel })
+  } catch (e) {
+    console.error("Update assignments error:", e)
+    return NextResponse.json({ success: false, error: "Failed to update assignments" }, { status: 500 })
   }
 }

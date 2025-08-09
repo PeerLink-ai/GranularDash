@@ -39,14 +39,14 @@ import { useAuth } from "@/contexts/auth-context"
 
 export function AppSidebar() {
   const pathname = usePathname()
-  const { state } = useSidebar()
+  const { isMobile, state } = useSidebar()
   const { user } = useAuth()
 
-  if (!user) return null
+  // Hide entire sidebar on mobile and when no user
+  if (!user || isMobile) return null
 
   const isActive = (href: string) => pathname === href || (href !== "/" && pathname.startsWith(href))
 
-  // Consolidated navigation
   const navigationGroups = [
     {
       label: "Overview",
@@ -100,7 +100,7 @@ export function AppSidebar() {
               Granular
             </Link>
           )}
-          {/* Use the shared SidebarTrigger for consistent mobile/desktop toggling */}
+          {/* Desktop collapse/expand */}
           <SidebarTrigger aria-label="Toggle sidebar" />
         </div>
       </SidebarHeader>

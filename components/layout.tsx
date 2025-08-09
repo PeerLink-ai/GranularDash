@@ -8,7 +8,7 @@ import MobileNav from "./mobile-nav"
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
-    <SidebarProvider defaultOpen={false}>
+    <SidebarProvider defaultOpen>
       <div className="flex min-h-svh bg-background">
         <a
           href="#main-content"
@@ -17,17 +17,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           Skip to content
         </a>
 
-        {/* Responsive Sidebar (sheet on mobile, collapsible on desktop) */}
+        {/* Desktop-only sidebar. AppSidebar returns null on mobile. */}
         <AppSidebar />
 
-        {/* Main content area that automatically insets with the sidebar */}
+        {/* Main content area */}
         <SidebarInset className="pb-24 md:pb-0">
-          {/* Sticky header with mobile sidebar trigger */}
+          {/* Sticky header */}
           <header className="sticky top-0 z-40 w-full border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
             <div className="flex h-14 items-center gap-2 px-3 sm:px-4">
-              <div className="flex items-center gap-2">
-                <SidebarTrigger className="md:hidden" aria-label="Toggle navigation" />
-              </div>
+              {/* Desktop-only collapse trigger */}
+              <SidebarTrigger className="hidden md:inline-flex" aria-label="Toggle sidebar" />
               <div className="flex-1 min-w-0">
                 <TopNav />
               </div>
@@ -39,7 +38,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             {children}
           </main>
 
-          {/* Bottom mobile nav */}
+          {/* Bottom app navbar (mobile only) */}
           <MobileNav />
         </SidebarInset>
       </div>

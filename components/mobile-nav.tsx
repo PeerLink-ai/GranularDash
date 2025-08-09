@@ -28,10 +28,9 @@ export function MobileNav() {
       aria-label="Primary"
       className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 md:hidden"
     >
-      <ul className="grid grid-cols-5 pb-safe">
+      <ul className="grid grid-cols-5 pb-[env(safe-area-inset-bottom)]">
         {items.map((item) => {
           const active = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href))
-
           const Icon = item.icon
           return (
             <li key={item.href}>

@@ -1,10 +1,8 @@
 "use client"
 
-import { Dialog, DialogContent } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { UserSquare2 } from 'lucide-react'
-import { ModalHeader } from "@/components/ui/modal-header"
 
 interface Agent {
   id: string
@@ -19,15 +17,7 @@ interface Agent {
   endpointUrl?: string
 }
 
-export function ViewAgentModal({
-  isOpen,
-  onOpenChange,
-  agent,
-}: {
-  isOpen: boolean
-  onOpenChange: (open: boolean) => void
-  agent: Agent | null
-}) {
+export function ViewAgentModal({ isOpen, onOpenChange, agent }: { isOpen: boolean; onOpenChange: (open: boolean) => void; agent: Agent | null }) {
   if (!agent) return null
 
   const displayName = agent.name || agent.agentName || ""
@@ -35,34 +25,56 @@ export function ViewAgentModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[560px] p-0 overflow-hidden">
-        <ModalHeader
-          title="Agent Details"
-          description={`Information for ${displayName}`}
-          icon={UserSquare2}
-          gradientFrom="from-indigo-700"
-          gradientTo="to-purple-600"
-        />
-        <div className="px-4 sm:px-6 py-4 grid gap-4">
-          <Field label="ID" value={agent.id} />
-          <Field label="Name" value={displayName} />
-          <Field label="Type" value={displayType} />
-          {agent.status && <Field label="Status" value={agent.status} />}
-          {agent.version && <Field label="Version" value={agent.version} />}
-          {agent.lastUpdate && <Field label="Last Update" value={agent.lastUpdate} />}
-          {agent.apiKey && <Field label="API Key" value={agent.apiKey} />}
-          {agent.endpointUrl && <Field label="Endpoint URL" value={agent.endpointUrl} />}
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>Agent Details</DialogTitle>
+          <DialogDescription>Information for {displayName}</DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 py-4">
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label className="text-right">ID</Label>
+            <Input className="col-span-3" value={agent.id} readOnly />
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label className="text-right">Name</Label>
+            <Input className="col-span-3" value={displayName} readOnly />
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label className="text-right">Type</Label>
+            <Input className="col-span-3" value={displayType} readOnly />
+          </div>
+          {agent.status && (
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">Status</Label>
+              <Input className="col-span-3" value={agent.status} readOnly />
+            </div>
+          )}
+          {agent.version && (
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">Version</Label>
+              <Input className="col-span-3" value={agent.version} readOnly />
+            </div>
+          )}
+          {agent.lastUpdate && (
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">Last Update</Label>
+              <Input className="col-span-3" value={agent.lastUpdate} readOnly />
+            </div>
+          )}
+          {agent.apiKey && (
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">API Key</Label>
+              <Input className="col-span-3" value={agent.apiKey} readOnly />
+            </div>
+          )}
+          {agent.endpointUrl && (
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">Endpoint URL</Label>
+              <Input className="col-span-3" value={agent.endpointUrl} readOnly />
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>
-  )
-}
-
-function Field({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="grid grid-cols-4 items-center gap-3">
-      <Label className="text-right col-span-1">{label}</Label>
-      <Input className="col-span-3" value={value} readOnly />
-    </div>
   )
 }

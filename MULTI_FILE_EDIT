@@ -1,0 +1,778 @@
+"use client"
+
+import { useMemo, useState } from "react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Stepper } from "@/components/ui/stepper"
+import { CheckCircle2, Cpu, Shield } from 'lucide-react'
+
+type DeployAgentModalProps = {
+  isOpen: boolean
+  onClose: () => void
+  onDeployAgent: (name: string, details: { type: string; policy: string; resources?: string }) => void
+}
+
+const steps = ["Agent", "Config", "Review"]
+
+export function DeployAgentModal({ isOpen, onClose, onDeployAgent }: DeployAgentModalProps) {
+  const [currentStep, setCurrentStep] = useState(0)
+  const [agentName, setAgentName] = useState("")
+  const [agentType, setAgentType] = useState("")
+  const [policySet, setPolicySet] = useState("")
+  const [resources, setResources] = useState("")
+
+  const canContinue = useMemo(() => {
+    if (currentStep === 0) return agentName.trim().length >= 2 && !!agentType
+    if (currentStep === 1) return !!policySet
+    return true
+  }, [currentStep, agentName, agentType, policySet])
+
+  const handleContinue = () => {
+    if (!canContinue) return
+    if (currentStep < steps.length - 1) {
+      setCurrentStep((s) => s + 1)
+    } else {
+      onDeployAgent(agentName, { type: agentType, policy: policySet, resources })
+      onClose()
+    }
+  }
+
+  const handleBack = () => setCurrentStep((s) => Math.max(0, s - 1))
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[560px] p-0 overflow-hidden">
+        <div className="bg-gradient-to-br from-zinc-900 to-zinc-800 px-6 py-5 text-zinc-50">
+          <DialogHeader className="space-y-1">
+            <DialogTitle className="text-xl">{steps[currentStep]}</DialogTitle>
+            <p className="text-sm/6 opacity-80">Deploy a new governed AI agent.</p>
+          </DialogHeader>
+          <div className="mt-4">
+            <Stepper steps={steps} currentStep={currentStep} />
+          </div>
+        </div>
+
+        <div className="px-6 py-5">
+          {currentStep === 0 && (
+            <div className="grid gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="agentName">Agent Name</Label>
+                <Input
+                  id="agentName"
+                  placeholder="e.g., AI-Finance-TradeBot"
+                  value={agentName}
+                  onChange={(e) => setAgentName(e.target.value)}
+                  aria-invalid={agentName.trim().length > 0 && agentName.trim().length < 2}
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="agentType">Agent Type</Label>
+                <Select value={agentType} onValueChange={setAgentType}>
+                  <SelectTrigger id="agentType">
+                    <SelectValue placeholder="Select agent type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="financial">Financial Trading</SelectItem>
+                    <SelectItem value="supplychain">Supply Chain Optimization</SelectItem>
+                    <SelectItem value="hr">HR Automation</SelectItem>
+                    <SelectItem value="legal">Legal Discovery</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+
+          {currentStep === 1 && (
+            <div className="grid gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="policySet">Policy Set</Label>
+                <Select value={policySet} onValueChange={setPolicySet}>
+                  <SelectTrigger id="policySet">
+                    <SelectValue placeholder="Select policy set" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="standard-compliance">Standard Compliance</SelectItem>
+                    <SelectItem value="high-security">High Security & Audit</SelectItem>
+                    <SelectItem value="experimental">Experimental (Reduced Governance)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="resourceAllocation">Resource Allocation</Label>
+                <Input
+                  id="resourceAllocation"
+                  placeholder="e.g., 2 Cores, 4GB RAM"
+                  value={resources}
+                  onChange={(e) => setResources(e.target.value)}
+                />
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Cpu className="h-3.5 w-3.5" />
+                  <span>Right-size resources to balance cost and throughput.</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {currentStep === 2 && (
+            <div className="space-y-4">
+              <div className="rounded-lg border p-4">
+                <div className="mb-2 flex items-center gap-2 text-sm font-medium">
+                  <Shield className="h-4 w-4" />
+                  Review configuration
+                </div>
+                <dl className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+                  <div>
+                    <dt className="text-muted-foreground">Name</dt>
+                    <dd className="font-medium">{agentName || "—"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">Type</dt>
+                    <dd className="font-medium">{agentType || "—"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">Policy</dt>
+                    <dd className="font-medium">{policySet || "—"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">Resources</dt>
+                    <dd className="font-medium">{resources || "Default"}</dd>
+                  </div>
+                </dl>
+              </div>
+
+              <div className="text-center space-y-2">
+                <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-600" />
+                <p className="text-sm text-muted-foreground">
+                  Everything looks good. Deploy when ready.
+                </p>
+              </div>
+            </div>
+          )}
+
+          <div className="mt-6 flex items-center justify-between">
+            <Button variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <div className="flex gap-2">
+              {currentStep > 0 && (
+                <Button variant="ghost" onClick={handleBack}>
+                  Back
+                </Button>
+              )}
+              <Button onClick={handleContinue} disabled={!canContinue}>
+                {currentStep === steps.length - 1 ? "Deploy Agent" : "Continue"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+"use client"
+
+import { useMemo, useState } from "react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Stepper } from "@/components/ui/stepper"
+import { CheckCircle2, PauseCircle } from 'lucide-react'
+
+type PauseAgentModalProps = {
+  isOpen: boolean
+  onClose: () => void
+  onPauseAgent: (id: string) => void
+  activeAgents: number
+}
+
+const steps = ["Select", "Confirm"]
+
+export function PauseAgentModal({ isOpen, onClose, onPauseAgent, activeAgents }: PauseAgentModalProps) {
+  const [currentStep, setCurrentStep] = useState(0)
+  const [selectedAgentId, setSelectedAgentId] = useState("")
+
+  const agentOptions = useMemo(
+    () =>
+      Array.from({ length: activeAgents }, (_, i) => ({
+        id: `AI-Agent-${String(i + 1).padStart(3, "0")}`,
+        name: `Agent ${String(i + 1).padStart(3, "0")}`,
+      })),
+    [activeAgents]
+  )
+
+  const canContinue = useMemo(() => {
+    if (currentStep === 0) return selectedAgentId.length > 0
+    return true
+  }, [currentStep, selectedAgentId])
+
+  const handleContinue = () => {
+    if (!canContinue) return
+    if (currentStep < steps.length - 1) {
+      setCurrentStep((s) => s + 1)
+    } else {
+      onPauseAgent(selectedAgentId)
+      onClose()
+    }
+  }
+
+  const handleBack = () => setCurrentStep((s) => Math.max(0, s - 1))
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[520px] p-0 overflow-hidden">
+        <div className="bg-gradient-to-br from-zinc-900 to-zinc-800 px-6 py-5 text-zinc-50">
+          <DialogHeader className="space-y-1">
+            <DialogTitle className="text-xl">{steps[currentStep]}</DialogTitle>
+            <p className="text-sm/6 opacity-80">Temporarily pause an active agent.</p>
+          </DialogHeader>
+          <div className="mt-4">
+            <Stepper steps={steps} currentStep={currentStep} />
+          </div>
+        </div>
+
+        <div className="px-6 py-5">
+          {currentStep === 0 && (
+            <div className="grid gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="agentId">Select Agent</Label>
+                <Select onValueChange={setSelectedAgentId} value={selectedAgentId}>
+                  <SelectTrigger id="agentId">
+                    <SelectValue placeholder="Select an active agent" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {agentOptions.map((agent) => (
+                      <SelectItem key={agent.id} value={agent.id}>
+                        {agent.name} ({agent.id})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+
+          {currentStep === 1 && (
+            <div className="space-y-4 text-center">
+              <PauseCircle className="mx-auto h-10 w-10 text-amber-600" />
+              <p className="text-sm text-muted-foreground">
+                Agent <span className="font-medium">{selectedAgentId}</span> will receive a pause command. Monitoring continues.
+              </p>
+              <div className="rounded-lg border p-4 text-left">
+                <div className="mb-1 text-sm font-medium">Action Summary</div>
+                <ul className="list-disc pl-5 text-sm text-muted-foreground">
+                  <li>Non-destructive action, can be resumed</li>
+                  <li>Audit log entry will be created</li>
+                </ul>
+              </div>
+              <CheckCircle2 className="mx-auto h-6 w-6 text-emerald-600" />
+            </div>
+          )}
+
+          <div className="mt-6 flex items-center justify-between">
+            <Button variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <div className="flex gap-2">
+              {currentStep > 0 && (
+                <Button variant="ghost" onClick={handleBack}>
+                  Back
+                </Button>
+              )}
+              <Button onClick={handleContinue} disabled={!canContinue}>
+                {currentStep === steps.length - 1 ? "Confirm Pause" : "Continue"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+"use client"
+
+import { useEffect, useState } from "react"
+import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+
+type Agent = {
+  id: string
+  agentName: string
+  agentType: string
+  apiKey?: string
+  endpointUrl: string
+}
+
+type EditAgentModalProps = {
+  isOpen: boolean
+  onOpenChange: (open: boolean) => void
+  agent: Agent | null
+  onSaveAgent: (agent: Agent) => void
+}
+
+export function EditAgentModal({ isOpen, onOpenChange, agent, onSaveAgent }: EditAgentModalProps) {
+  const [agentName, setAgentName] = useState("")
+  const [agentType, setAgentType] = useState("")
+  const [apiKey, setApiKey] = useState("")
+  const [endpointUrl, setEndpointUrl] = useState("")
+
+  useEffect(() => {
+    if (agent) {
+      setAgentName(agent.agentName || "")
+      setAgentType(agent.agentType || "")
+      setApiKey(agent.apiKey || "")
+      setEndpointUrl(agent.endpointUrl || "")
+    }
+  }, [agent])
+
+  const canSave =
+    agentName.trim().length >= 2 &&
+    agentType.length > 0 &&
+    endpointUrl.trim().length > 0
+
+  const handleSubmit = () => {
+    if (!agent) return
+    if (!canSave) return
+    onSaveAgent({
+      ...agent,
+      agentName,
+      agentType,
+      apiKey,
+      endpointUrl,
+    })
+    onOpenChange(false)
+  }
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[560px] p-0 overflow-hidden">
+        <div className="bg-gradient-to-br from-zinc-900 to-zinc-800 px-6 py-5 text-zinc-50">
+          <DialogHeader className="space-y-1">
+            <DialogTitle className="text-xl">Edit Agent</DialogTitle>
+            <DialogDescription className="text-zinc-100/80">
+              Update agent details. Sensitive fields are masked.
+            </DialogDescription>
+          </DialogHeader>
+        </div>
+
+        <div className="px-6 py-5">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="grid gap-2">
+              <Label htmlFor="agentName">Agent Name</Label>
+              <Input
+                id="agentName"
+                value={agentName}
+                onChange={(e) => setAgentName(e.target.value)}
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="agentType">Agent Type</Label>
+              <Select value={agentType} onValueChange={setAgentType}>
+                <SelectTrigger id="agentType">
+                  <SelectValue placeholder="Select agent type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="gpt">GPT (OpenAI)</SelectItem>
+                  <SelectItem value="claude">Claude (Anthropic)</SelectItem>
+                  <SelectItem value="gemini">Gemini (Google)</SelectItem>
+                  <SelectItem value="custom">Custom/Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid gap-2 sm:col-span-2">
+              <Label htmlFor="endpointUrl">Endpoint URL</Label>
+              <Input
+                id="endpointUrl"
+                value={endpointUrl}
+                onChange={(e) => setEndpointUrl(e.target.value)}
+              />
+            </div>
+
+            <div className="grid gap-2 sm:col-span-2">
+              <Label htmlFor="apiKey">API Key</Label>
+              <Input
+                id="apiKey"
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="mt-6">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSubmit} disabled={!canSave}>
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+"use client"
+
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+
+interface Agent {
+  id: string
+  name?: string
+  agentName?: string
+  type?: string
+  agentType?: string
+  status?: string
+  version?: string
+  lastUpdate?: string
+  apiKey?: string
+  endpointUrl?: string
+}
+
+export function ViewAgentModal({
+  isOpen,
+  onOpenChange,
+  agent,
+}: { isOpen: boolean; onOpenChange: (open: boolean) => void; agent: Agent | null }) {
+  if (!agent) return null
+
+  const displayName = agent.name || agent.agentName || ""
+  const displayType = agent.type || agent.agentType || ""
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[560px] p-0 overflow-hidden">
+        <div className="bg-gradient-to-br from-zinc-900 to-zinc-800 px-6 py-5 text-zinc-50">
+          <DialogHeader className="space-y-1">
+            <DialogTitle className="text-xl">Agent Details</DialogTitle>
+            <DialogDescription className="text-zinc-100/80">
+              Information for {displayName}
+            </DialogDescription>
+          </DialogHeader>
+        </div>
+
+        <div className="px-6 py-5">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="grid gap-2">
+              <Label>ID</Label>
+              <Input value={agent.id} readOnly />
+            </div>
+            <div className="grid gap-2">
+              <Label>Name</Label>
+              <Input value={displayName} readOnly />
+            </div>
+            <div className="grid gap-2">
+              <Label>Type</Label>
+              <Input value={displayType} readOnly />
+            </div>
+            {agent.status && (
+              <div className="grid gap-2">
+                <Label>Status</Label>
+                <Input value={agent.status} readOnly />
+              </div>
+            )}
+            {agent.version && (
+              <div className="grid gap-2">
+                <Label>Version</Label>
+                <Input value={agent.version} readOnly />
+              </div>
+            )}
+            {agent.lastUpdate && (
+              <div className="grid gap-2">
+                <Label>Last Update</Label>
+                <Input value={agent.lastUpdate} readOnly />
+              </div>
+            )}
+            {agent.apiKey && (
+              <div className="grid gap-2 sm:col-span-2">
+                <Label>API Key</Label>
+                <Input value={agent.apiKey} readOnly />
+              </div>
+            )}
+            {agent.endpointUrl && (
+              <div className="grid gap-2 sm:col-span-2">
+                <Label>Endpoint URL</Label>
+                <Input value={agent.endpointUrl} readOnly />
+              </div>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+"use client"
+
+import { useMemo, useState } from "react"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
+import { useToast } from "@/hooks/use-toast"
+import { Loader2, ShieldCheck, AlertTriangle, LinkIcon, Bot } from 'lucide-react'
+
+interface ConnectAgentModalProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onAgentConnected: () => void
+}
+
+export function ConnectAgentModal({ open, onOpenChange, onAgentConnected }: ConnectAgentModalProps) {
+  const [isLoading, setIsLoading] = useState(false)
+  const [formData, setFormData] = useState({
+    name: "",
+    type: "",
+    endpoint: "",
+    apiKey: "",
+    description: "",
+  })
+  const [errors, setErrors] = useState<Record<string, string>>({})
+  const { toast } = useToast()
+
+  const isValidUrl = (url: string) => {
+    try {
+      const u = new URL(url)
+      return u.protocol === "https:" || u.protocol === "http:"
+    } catch {
+      return false
+    }
+  }
+
+  const validate = () => {
+    const e: Record<string, string> = {}
+    if (!formData.name || formData.name.trim().length < 2) e.name = "Name must be at least 2 characters."
+    if (!formData.type) e.type = "Please select a provider."
+    if (!formData.endpoint || !isValidUrl(formData.endpoint)) e.endpoint = "Provide a valid HTTP(S) URL."
+    setErrors(e)
+    return Object.keys(e).length === 0
+  }
+
+  const canSubmit = useMemo(() => {
+    return (
+      !isLoading &&
+      formData.name.trim().length >= 2 &&
+      !!formData.type &&
+      isValidUrl(formData.endpoint)
+    )
+  }, [formData, isLoading])
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!validate()) return
+    setIsLoading(true)
+    try {
+      const response = await fetch("/api/agents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      })
+
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data?.error || "Failed to connect agent")
+      }
+
+      toast({
+        title: "Agent Connected",
+        description: data?.health?.reachable
+          ? `Connected successfully in ${data.health.ms}ms`
+          : "Connected, but endpoint reported an issue (see Audit Logs).",
+      })
+
+      setFormData({ name: "", type: "", endpoint: "", apiKey: "", description: "" })
+      setErrors({})
+      onAgentConnected()
+      onOpenChange(false)
+    } catch (err) {
+      toast({
+        title: "Connection Failed",
+        description: err instanceof Error ? err.message : "Failed to connect agent",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[560px] p-0 overflow-hidden">
+        <div className="bg-gradient-to-br from-zinc-900 to-zinc-800 px-6 py-5 text-zinc-50">
+          <DialogHeader className="space-y-1">
+            <DialogTitle className="text-xl">Connect New Agent</DialogTitle>
+            <DialogDescription className="text-zinc-100/80">
+              We’ll validate the endpoint, check reachability, secure your API key, and log the event for audit.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-3 flex items-center gap-3 text-zinc-200/90 text-sm">
+            <div className="rounded-lg bg-white/10 p-2 backdrop-blur">
+              <Bot className="h-4 w-4" />
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5"><ShieldCheck className="h-4 w-4" /> Encrypted key storage</div>
+              <div className="hidden items-center gap-1.5 sm:flex"><LinkIcon className="h-4 w-4" /> Live endpoint check</div>
+            </div>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="grid gap-2">
+              <Label htmlFor="name">Agent Name</Label>
+              <Input
+                id="name"
+                placeholder="My AI Assistant"
+                value={formData.name}
+                onChange={(e) => setFormData((s) => ({ ...s, name: e.target.value }))}
+                aria-invalid={!!errors.name}
+              />
+              {errors.name && <p className="text-sm text-destructive">{errors.name}</p>}
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="type">Provider</Label>
+              <Select
+                value={formData.type}
+                onValueChange={(value) => setFormData((s) => ({ ...s, type: value }))}
+              >
+                <SelectTrigger id="type" aria-invalid={!!errors.type}>
+                  <SelectValue placeholder="Select provider" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="openai">OpenAI</SelectItem>
+                  <SelectItem value="anthropic">Anthropic</SelectItem>
+                  <SelectItem value="custom">Custom API</SelectItem>
+                  <SelectItem value="huggingface">Hugging Face</SelectItem>
+                  <SelectItem value="azure">Azure OpenAI</SelectItem>
+                </SelectContent>
+              </Select>
+              {errors.type && <p className="text-sm text-destructive">{errors.type}</p>}
+            </div>
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="endpoint">API Endpoint</Label>
+            <Input
+              id="endpoint"
+              placeholder="https://api.openai.com/v1"
+              value={formData.endpoint}
+              onChange={(e) => setFormData((s) => ({ ...s, endpoint: e.target.value }))}
+              aria-invalid={!!errors.endpoint}
+            />
+            {errors.endpoint && <p className="text-sm text-destructive">{errors.endpoint}</p>}
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <ShieldCheck className="h-3.5 w-3.5" />
+              <span>{"We don't store raw API keys; they're encrypted at rest."}</span>
+            </div>
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="apiKey">API Key (Optional)</Label>
+            <Input
+              id="apiKey"
+              type="password"
+              placeholder="sk-..."
+              value={formData.apiKey}
+              onChange={(e) => setFormData((s) => ({ ...s, apiKey: e.target.value }))}
+            />
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              <span>If the endpoint requires auth, include a key to pass the reachability check.</span>
+            </div>
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="description">Model/Description (Optional)</Label>
+            <Textarea
+              id="description"
+              placeholder="gpt-4 or a brief purpose of this agent..."
+              value={formData.description}
+              onChange={(e) => setFormData((s) => ({ ...s, description: e.target.value }))}
+            />
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={!canSubmit}>
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Connect Agent
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+import MetricsSummary from "@/components/metrics-summary"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import { Shell } from "@/components/shell"
+
+const DashboardOverview = () => {
+  return (
+    <Shell>
+      <div className="space-y-6">
+        <MetricsSummary />
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <Card>
+            <CardHeader>
+              <CardTitle>Total Agents</CardTitle>
+              <CardDescription>Number of agents connected</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">12</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Active Agents</CardTitle>
+              <CardDescription>Number of agents currently active</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">8</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Inactive Agents</CardTitle>
+              <CardDescription>Number of agents currently inactive</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">4</div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </Shell>
+  )
+}
+
+export default DashboardOverview

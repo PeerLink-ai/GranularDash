@@ -11,7 +11,7 @@ if (!url) {
 }
 
 // Neon client – use tagged template: sql`... ${value} ...`
-// For dynamic SQL strings, use sql.query("...", [params])
+// For dynamic SQL strings, use sql(text, [params])
 export const sql = neon(url)
 
 // Singleton Neon client for server routes.
@@ -36,7 +36,7 @@ export function db() {
 
 // Simple query helper with $1, $2 params.
 export async function query<T = any>(text: string, params: any[] = []) {
-  const rows = (await sql.query(text, params)) as T[]
+  const rows = (await (sql as any)(text, params)) as T[]
   return { rows }
 }
 

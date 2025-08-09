@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -18,7 +18,7 @@ import {
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { Plus, Search, Edit, Trash2, Shield, Users, Database, Settings } from "lucide-react"
+import { Plus, Search, Edit, Trash2, Shield, Users, Database, Settings, Clock } from "lucide-react"
 import { toast } from "sonner"
 
 interface AccessRule {
@@ -33,8 +33,13 @@ interface AccessRule {
   updated_at: string
 }
 
-export function AccessRulesTable() {
+function useIsAnalyst() {
   const { user } = useAuth()
+  return user?.role === "analyst"
+}
+
+export function AccessRulesTable() {
+  const isAnalyst = useIsAnalyst()
   const [rules, setRules] = useState<AccessRule[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
@@ -45,28 +50,29 @@ export function AccessRulesTable() {
     description: "",
     resource_type: "",
     permissions: [] as string[],
-    conditions: {},
+    conditions: { roles: [] as string[], timeWindow: { start: "08:00", end: "18:00", tz: "UTC" } },
     status: "active" as const,
   })
 
   useEffect(() => {
-    if (user) {
-      fetchRules()
-    }
-  }, [user])
+    fetchRules()
+  }, [])
 
-  const fetchRules = async () => {
+  const filteredRules = useMemo(() => {
+    const q = searchTerm.toLowerCase()
+    return rules.filter((r) => (r.name + " " + r.resource_type + " " + r.description).toLowerCase().includes(q))
+  }, [rules, searchTerm])
+
+  async function fetchRules() {
     try {
       const response = await fetch("/api/access-rules")
       if (response.ok) {
         const data = await response.json()
         setRules(Array.isArray(data.rules) ? data.rules : [])
       } else {
-        console.error("Failed to fetch rules:", response.statusText)
         setRules([])
       }
-    } catch (error) {
-      console.error("Failed to fetch rules:", error)
+    } catch {
       setRules([])
       toast.error("Failed to load access rules")
     } finally {
@@ -74,99 +80,65 @@ export function AccessRulesTable() {
     }
   }
 
-  const handleCreateRule = async () => {
+  async function createRule() {
     try {
       const response = await fetch("/api/access-rules", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
       })
-
-      if (response.ok) {
-        toast.success("Access rule created successfully")
-        fetchRules()
-        setIsCreateModalOpen(false)
-        resetForm()
-      } else {
-        throw new Error("Failed to create rule")
-      }
-    } catch (error) {
-      toast.error("Failed to create access rule")
+      if (!response.ok) throw new Error("Failed to create rule")
+      toast.success("Access rule created")
+      fetchRules()
+      setIsCreateModalOpen(false)
+      resetForm()
+    } catch (e: any) {
+      toast.error(e.message || "Failed to create access rule")
     }
   }
 
-  const handleUpdateRule = async () => {
+  async function updateRule() {
     if (!editingRule) return
-
     try {
       const response = await fetch(`/api/access-rules/${editingRule.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
       })
-
-      if (response.ok) {
-        toast.success("Access rule updated successfully")
-        fetchRules()
-        setEditingRule(null)
-        resetForm()
-      } else {
-        throw new Error("Failed to update rule")
-      }
-    } catch (error) {
-      toast.error("Failed to update access rule")
+      if (!response.ok) throw new Error("Failed to update rule")
+      toast.success("Access rule updated")
+      fetchRules()
+      setEditingRule(null)
+      resetForm()
+    } catch (e: any) {
+      toast.error(e.message || "Failed to update access rule")
     }
   }
 
-  const handleDeleteRule = async (ruleId: string) => {
-    if (!confirm("Are you sure you want to delete this access rule?")) return
-
+  async function deleteRule(ruleId: string) {
+    if (!confirm("Delete this access rule?")) return
     try {
-      const response = await fetch(`/api/access-rules/${ruleId}`, {
-        method: "DELETE",
-      })
-
-      if (response.ok) {
-        toast.success("Access rule deleted successfully")
-        fetchRules()
-      } else {
-        throw new Error("Failed to delete rule")
-      }
-    } catch (error) {
-      toast.error("Failed to delete access rule")
+      const response = await fetch(`/api/access-rules/${ruleId}`, { method: "DELETE" })
+      if (!response.ok) throw new Error("Failed to delete rule")
+      toast.success("Access rule deleted")
+      fetchRules()
+    } catch (e: any) {
+      toast.error(e.message || "Failed to delete access rule")
     }
   }
 
-  const resetForm = () => {
+  function resetForm() {
     setFormData({
       name: "",
       description: "",
       resource_type: "",
       permissions: [],
-      conditions: {},
+      conditions: { roles: [], timeWindow: { start: "08:00", end: "18:00", tz: "UTC" } },
       status: "active",
     })
   }
 
-  const openEditModal = (rule: AccessRule) => {
-    setEditingRule(rule)
-    setFormData({
-      name: rule.name,
-      description: rule.description,
-      resource_type: rule.resource_type,
-      permissions: rule.permissions,
-      conditions: rule.conditions,
-      status: rule.status,
-    })
-  }
-
-  const filteredRules = rules.filter(
-    (rule) =>
-      rule.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      rule.resource_type.toLowerCase().includes(searchTerm.toLowerCase()),
-  )
-
-  const getResourceIcon = (resourceType: string) => {
+  function getResourceIcon(resourceType: string) {
     switch (resourceType) {
       case "agents":
         return <Shield className="h-4 w-4" />
@@ -179,7 +151,7 @@ export function AccessRulesTable() {
     }
   }
 
-  const getStatusColor = (status: string) => {
+  function getStatusColor(status: string) {
     switch (status) {
       case "active":
         return "default"
@@ -210,86 +182,152 @@ export function AccessRulesTable() {
             <CardTitle>Access Rules</CardTitle>
             <CardDescription>Manage access control rules for your organization</CardDescription>
           </div>
-          <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Create Rule
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>Create Access Rule</DialogTitle>
-                <DialogDescription>Define a new access control rule for your organization</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-2">
+          {!isAnalyst && (
+            <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create Rule
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>Create Access Rule</DialogTitle>
+                  <DialogDescription>Roles, time windows, and resource-level permissions</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="rule-name">Rule Name</Label>
+                      <Input
+                        id="rule-name"
+                        value={formData.name}
+                        onChange={(e) => setFormData((f) => ({ ...f, name: e.target.value }))}
+                        placeholder="Agent Access Control"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Resource Type</Label>
+                      <Select
+                        value={formData.resource_type}
+                        onValueChange={(v) => setFormData((f) => ({ ...f, resource_type: v }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select resource type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="agents">AI Agents</SelectItem>
+                          <SelectItem value="users">Users</SelectItem>
+                          <SelectItem value="data">Data Sources</SelectItem>
+                          <SelectItem value="policies">Policies</SelectItem>
+                          <SelectItem value="reports">Reports</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
                   <div className="space-y-2">
-                    <Label htmlFor="rule-name">Rule Name</Label>
-                    <Input
-                      id="rule-name"
-                      value={formData.name}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-                      placeholder="Agent Access Control"
+                    <Label>Description</Label>
+                    <Textarea
+                      value={formData.description}
+                      onChange={(e) => setFormData((f) => ({ ...f, description: e.target.value }))}
+                      placeholder="Describe what this rule controls..."
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="resource-type">Resource Type</Label>
-                    <Select
-                      value={formData.resource_type}
-                      onValueChange={(value) => setFormData((prev) => ({ ...prev, resource_type: value }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select resource type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="agents">AI Agents</SelectItem>
-                        <SelectItem value="users">Users</SelectItem>
-                        <SelectItem value="data">Data Sources</SelectItem>
-                        <SelectItem value="policies">Policies</SelectItem>
-                        <SelectItem value="reports">Reports</SelectItem>
-                      </SelectContent>
-                    </Select>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Allowed Roles</Label>
+                      <div className="flex flex-wrap gap-2">
+                        {["admin", "analyst", "operator", "viewer"].map((role) => {
+                          const selected = formData.conditions.roles.includes(role)
+                          return (
+                            <Button
+                              key={role}
+                              size="sm"
+                              variant={selected ? "default" : "outline"}
+                              onClick={() =>
+                                setFormData((f) => ({
+                                  ...f,
+                                  conditions: {
+                                    ...f.conditions,
+                                    roles: selected
+                                      ? f.conditions.roles.filter((r: string) => r !== role)
+                                      : [...f.conditions.roles, role],
+                                  },
+                                }))
+                              }
+                            >
+                              {role}
+                            </Button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Time Window (Local TZ)</Label>
+                      <div className="grid grid-cols-3 gap-2">
+                        <Input
+                          value={formData.conditions.timeWindow.start}
+                          onChange={(e) =>
+                            setFormData((f) => ({
+                              ...f,
+                              conditions: {
+                                ...f.conditions,
+                                timeWindow: { ...f.conditions.timeWindow, start: e.target.value },
+                              },
+                            }))
+                          }
+                          placeholder="08:00"
+                        />
+                        <Input
+                          value={formData.conditions.timeWindow.end}
+                          onChange={(e) =>
+                            setFormData((f) => ({
+                              ...f,
+                              conditions: {
+                                ...f.conditions,
+                                timeWindow: { ...f.conditions.timeWindow, end: e.target.value },
+                              },
+                            }))
+                          }
+                          placeholder="18:00"
+                        />
+                        <Input
+                          value={formData.conditions.timeWindow.tz}
+                          onChange={(e) =>
+                            setFormData((f) => ({
+                              ...f,
+                              conditions: {
+                                ...f.conditions,
+                                timeWindow: { ...f.conditions.timeWindow, tz: e.target.value },
+                              },
+                            }))
+                          }
+                          placeholder="UTC"
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Clock className="h-3.5 w-3.5" /> Restrict access to business hours or maintenance windows.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" onClick={() => setIsCreateModalOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button onClick={createRule} disabled={isAnalyst}>
+                      Create Rule
+                    </Button>
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="description">Description</Label>
-                  <Textarea
-                    id="description"
-                    value={formData.description}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
-                    placeholder="Describe what this rule controls..."
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="status">Status</Label>
-                  <Select
-                    value={formData.status}
-                    onValueChange={(value: "active" | "inactive" | "draft") =>
-                      setFormData((prev) => ({ ...prev, status: value }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="active">Active</SelectItem>
-                      <SelectItem value="inactive">Inactive</SelectItem>
-                      <SelectItem value="draft">Draft</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => setIsCreateModalOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button onClick={handleCreateRule}>Create Rule</Button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
       </CardHeader>
+
       <CardContent>
         <div className="space-y-4">
           <div className="flex items-center gap-2">
@@ -309,7 +347,7 @@ export function AccessRulesTable() {
               <p className="text-muted-foreground mb-4">
                 {searchTerm ? "No rules match your search." : "Create your first access rule to get started."}
               </p>
-              {!searchTerm && (
+              {!searchTerm && !isAnalyst && (
                 <Button onClick={() => setIsCreateModalOpen(true)}>
                   <Plus className="mr-2 h-4 w-4" />
                   Create Rule
@@ -348,12 +386,33 @@ export function AccessRulesTable() {
                     <TableCell>{new Date(rule.created_at).toLocaleDateString()}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <Button variant="ghost" size="sm" onClick={() => openEditModal(rule)}>
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => handleDeleteRule(rule.id)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        {!isAnalyst && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setEditingRule(rule)
+                                setFormData({
+                                  name: rule.name,
+                                  description: rule.description,
+                                  resource_type: rule.resource_type,
+                                  permissions: rule.permissions,
+                                  conditions: rule.conditions || {
+                                    roles: [],
+                                    timeWindow: { start: "08:00", end: "18:00", tz: "UTC" },
+                                  },
+                                  status: rule.status,
+                                })
+                              }}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => deleteRule(rule.id)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -368,23 +427,19 @@ export function AccessRulesTable() {
           <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>Edit Access Rule</DialogTitle>
-              <DialogDescription>Update the access control rule settings</DialogDescription>
+              <DialogDescription>Update rule settings, roles, and time windows</DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="edit-rule-name">Rule Name</Label>
-                  <Input
-                    id="edit-rule-name"
-                    value={formData.name}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-                  />
+                  <Label>Rule Name</Label>
+                  <Input value={formData.name} onChange={(e) => setFormData((f) => ({ ...f, name: e.target.value }))} />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="edit-resource-type">Resource Type</Label>
+                  <Label>Resource Type</Label>
                   <Select
                     value={formData.resource_type}
-                    onValueChange={(value) => setFormData((prev) => ({ ...prev, resource_type: value }))}
+                    onValueChange={(v) => setFormData((f) => ({ ...f, resource_type: v }))}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -399,37 +454,95 @@ export function AccessRulesTable() {
                   </Select>
                 </div>
               </div>
+
               <div className="space-y-2">
-                <Label htmlFor="edit-description">Description</Label>
+                <Label>Description</Label>
                 <Textarea
-                  id="edit-description"
                   value={formData.description}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
+                  onChange={(e) => setFormData((f) => ({ ...f, description: e.target.value }))}
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-status">Status</Label>
-                <Select
-                  value={formData.status}
-                  onValueChange={(value: "active" | "inactive" | "draft") =>
-                    setFormData((prev) => ({ ...prev, status: value }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="inactive">Inactive</SelectItem>
-                    <SelectItem value="draft">Draft</SelectItem>
-                  </SelectContent>
-                </Select>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Allowed Roles</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {["admin", "analyst", "operator", "viewer"].map((role) => {
+                      const selected = formData.conditions.roles?.includes(role)
+                      return (
+                        <Button
+                          key={role}
+                          size="sm"
+                          variant={selected ? "default" : "outline"}
+                          onClick={() =>
+                            setFormData((f) => ({
+                              ...f,
+                              conditions: {
+                                ...f.conditions,
+                                roles: selected
+                                  ? f.conditions.roles.filter((r: string) => r !== role)
+                                  : [...(f.conditions.roles || []), role],
+                              },
+                            }))
+                          }
+                        >
+                          {role}
+                        </Button>
+                      )
+                    })}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Time Window</Label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <Input
+                      value={formData.conditions.timeWindow?.start || "08:00"}
+                      onChange={(e) =>
+                        setFormData((f) => ({
+                          ...f,
+                          conditions: {
+                            ...f.conditions,
+                            timeWindow: { ...(f.conditions.timeWindow || {}), start: e.target.value },
+                          },
+                        }))
+                      }
+                      placeholder="08:00"
+                    />
+                    <Input
+                      value={formData.conditions.timeWindow?.end || "18:00"}
+                      onChange={(e) =>
+                        setFormData((f) => ({
+                          ...f,
+                          conditions: {
+                            ...f.conditions,
+                            timeWindow: { ...(f.conditions.timeWindow || {}), end: e.target.value },
+                          },
+                        }))
+                      }
+                      placeholder="18:00"
+                    />
+                    <Input
+                      value={formData.conditions.timeWindow?.tz || "UTC"}
+                      onChange={(e) =>
+                        setFormData((f) => ({
+                          ...f,
+                          conditions: {
+                            ...f.conditions,
+                            timeWindow: { ...(f.conditions.timeWindow || {}), tz: e.target.value },
+                          },
+                        }))
+                      }
+                      placeholder="UTC"
+                    />
+                  </div>
+                </div>
               </div>
+
               <div className="flex justify-end gap-2">
                 <Button variant="outline" onClick={() => setEditingRule(null)}>
                   Cancel
                 </Button>
-                <Button onClick={handleUpdateRule}>Update Rule</Button>
+                <Button onClick={updateRule}>Update Rule</Button>
               </div>
             </div>
           </DialogContent>

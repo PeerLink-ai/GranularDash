@@ -7,16 +7,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { Download, FileText, Printer } from "lucide-react"
 import { toast } from "sonner"
+import { useAuth } from "@/contexts/auth-context"
 
-interface Report {
+type Report = {
   id: string
   type: string
   title: string
   status: "generating" | "completed" | "failed"
-  createdAt: string
+  createdAt: number
 }
 
 export function ReportsTab() {
+  const { user } = useAuth()
+  const isAnalyst = user?.role === "analyst"
   const [reports, setReports] = useState<Report[]>([])
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
@@ -45,7 +48,6 @@ export function ReportsTab() {
       toast.error("Please select a report type")
       return
     }
-
     setGenerating(true)
     try {
       const response = await fetch("/api/reports/generate", {
@@ -53,7 +55,6 @@ export function ReportsTab() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: selectedReportType }),
       })
-
       if (response.ok) {
         toast.success("Report generation started")
         fetchReports()
@@ -133,8 +134,8 @@ export function ReportsTab() {
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle>Generate Security Report</CardTitle>
-          <CardDescription>Create comprehensive security and compliance reports</CardDescription>
+          <CardTitle>Generate Compliance Report</CardTitle>
+          <CardDescription>Templates for SOC 2 and GDPR included</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex space-x-2">
@@ -143,18 +144,25 @@ export function ReportsTab() {
                 <SelectValue placeholder="Select report type" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="security-audit">Security Audit Report</SelectItem>
-                <SelectItem value="compliance-check">Compliance Check Report</SelectItem>
-                <SelectItem value="threat-analysis">Threat Analysis Report</SelectItem>
-                <SelectItem value="agent-security">Agent Security Report</SelectItem>
-                <SelectItem value="policy-violations">Policy Violations Report</SelectItem>
+                <SelectItem value="soc2">SOC 2</SelectItem>
+                <SelectItem value="gdpr">GDPR</SelectItem>
+                <SelectItem value="security-audit">Security Audit</SelectItem>
+                <SelectItem value="compliance-check">Compliance Check</SelectItem>
+                <SelectItem value="threat-analysis">Threat Analysis</SelectItem>
+                <SelectItem value="agent-security">Agent Security</SelectItem>
+                <SelectItem value="policy-violations">Policy Violations</SelectItem>
               </SelectContent>
             </Select>
-            <Button onClick={generateReport} disabled={generating || !selectedReportType}>
+            <Button onClick={generateReport} disabled={isAnalyst || generating || !selectedReportType}>
               <FileText className="mr-2 h-4 w-4" />
               {generating ? "Generating..." : "Generate Report"}
             </Button>
           </div>
+          {isAnalyst && (
+            <div className="text-xs text-muted-foreground">
+              Analyst role is read-only. Ask an Admin to generate reports.
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -183,7 +191,7 @@ export function ReportsTab() {
             <div className="text-center text-muted-foreground py-8">
               <FileText className="h-12 w-12 mx-auto mb-4" />
               <p>No reports generated yet</p>
-              <p className="text-sm">Generate your first security report above</p>
+              <p className="text-sm">Generate your first compliance report above</p>
             </div>
           ) : (
             <div className="space-y-4">

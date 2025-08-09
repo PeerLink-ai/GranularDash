@@ -1,429 +1,227 @@
 "use client"
 
 import * as React from "react"
-import { useRouter } from "next/navigation"
-import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet"
-import { Badge } from "@/components/ui/badge"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import {
-  Github,
-  ExternalLink,
-  FolderKanban,
-  Star,
-  Pin,
-  PinOff,
-  CalendarClock,
-  Link2,
-  Cog,
-  Activity,
-  ShieldCheck,
-  FileDown,
-  Network,
-  LinkIcon,
-  CheckCircle2,
-  AlertCircle,
-  Clipboard,
-} from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { Copy, ClipboardCheck, Activity, ShieldCheck, GitBranch, FileText, Check, Bot, LinkIcon } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-
-// NOTE: keep this in sync with app/projects/page
-export type Project = {
-  id: string
-  name: string
-  description?: string
-  type: "github" | "external" | "native" | string
-  repo_url?: string | null
-  pinned?: boolean
-  created_at: string
-}
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
 
 type Props = {
   open: boolean
-  project: Project | null
-  onOpenChange: (open: boolean) => void
+  onOpenChange: (v: boolean) => void
+  project: any | null
   onUpdated?: () => void
   onDefault?: (id: string) => void
 }
 
-export function ProjectQuickView({ open, project, onOpenChange, onUpdated, onDefault }: Props) {
+export function ProjectQuickView({ open, onOpenChange, project, onUpdated, onDefault }: Props) {
   const { toast } = useToast()
-  const router = useRouter()
-  const [working, setWorking] = React.useState(false)
-  const [testing, setTesting] = React.useState<"idle" | "running" | "ok" | "error">("idle")
-  const [lastTestAt, setLastTestAt] = React.useState<string | null>(null)
-  const [isPending, startTransition] = React.useTransition()
+  const [copied, setCopied] = React.useState<string | null>(null)
+  const [policies, setPolicies] = React.useState<{ id: string; name: string }[]>([])
+  const [selectedPolicies, setSelectedPolicies] = React.useState<string[]>([])
+  const [applying, setApplying] = React.useState(false)
 
-  if (!project) {
-    return (
-      <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent side="right" className="p-0" />
-      </Sheet>
-    )
-  }
-
-  const isGithub = project.type === "github"
-  const isExternal = project.type === "external"
-  const isNative = project.type === "native"
-
-  async function togglePin() {
-    if (!project) return
-    setWorking(true)
-    try {
-      const res = await fetch(`/api/projects/${project.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pinned: !project.pinned }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data?.error || "Failed to update")
-      onUpdated?.()
-      toast({ title: project.pinned ? "Unpinned" : "Pinned", description: project.name })
-    } catch (e: any) {
-      toast({ title: "Update failed", description: e.message, variant: "destructive" })
-    } finally {
-      setWorking(false)
-    }
-  }
-
-  function openPrimary() {
-    if (isNative) {
-      router.push("/agent-management")
-      onOpenChange(false)
-    } else if ((isGithub || isExternal) && project.repo_url) {
-      window.open(project.repo_url, "_blank", "noopener,noreferrer")
-    }
-  }
-
-  function openSettings() {
-    router.push("/settings")
-    onOpenChange(false)
-  }
-
-  function TypeIcon() {
-    if (isGithub) return <Github className="h-4 w-4" />
-    if (isNative) return <FolderKanban className="h-4 w-4" />
-    return <ExternalLink className="h-4 w-4" />
-  }
-
-  async function runConnectivityTest() {
-    setTesting("running")
-    try {
-      const res = await fetch("/api/sdk/test", { method: "POST" })
-      if (!res.ok) throw new Error(await res.text())
-      setTesting("ok")
-      setLastTestAt(new Date().toLocaleString())
-      toast({ title: "SDK connectivity OK", description: "All checks passed." })
-    } catch (e: any) {
-      setTesting("error")
-      setLastTestAt(new Date().toLocaleString())
-      toast({ title: "SDK connectivity failed", description: e.message || "See logs.", variant: "destructive" })
-    }
-  }
-
-  async function exportReport() {
-    startTransition(async () => {
-      try {
-        const res = await fetch("/api/reports/generate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ reportType: "project-summary", projectId: project.id }),
+  React.useEffect(() => {
+    if (open) {
+      fetch("/api/policies")
+        .then((r) => r.json())
+        .then((data) => {
+          const items = (data.items ?? data.policies ?? []).map((p: any) => ({ id: String(p.id), name: p.name }))
+          setPolicies(items)
         })
-        if (!res.ok) throw new Error(await res.text())
-        const blob = await res.blob()
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement("a")
-        a.href = url
-        a.download = `${project.name.replace(/\s+/g, "-").toLowerCase()}-report.pdf`
-        document.body.appendChild(a)
-        a.click()
-        a.remove()
-        URL.revokeObjectURL(url)
-        toast({ title: "Report exported", description: "Project summary downloaded." })
-      } catch (e: any) {
-        toast({ title: "Export failed", description: e.message || "Try again later.", variant: "destructive" })
-      }
-    })
+        .catch(() => setPolicies([]))
+    }
+  }, [open])
+
+  if (!project) return null
+
+  async function copy(value: string, label: string) {
+    await navigator.clipboard.writeText(value)
+    setCopied(label)
+    setTimeout(() => setCopied(null), 1200)
   }
 
-  async function assignPolicies() {
-    router.push("/policies-rules")
-    onOpenChange(false)
-  }
-
-  async function syncAgents() {
-    startTransition(async () => {
-      try {
-        const res = await fetch("/api/agents", { method: "GET" })
-        if (!res.ok) throw new Error(await res.text())
-        toast({ title: "Agents synced", description: "Latest agent list loaded." })
-      } catch (e: any) {
-        toast({ title: "Sync failed", description: e.message || "Could not sync agents.", variant: "destructive" })
-      }
-    })
-  }
-
-  function copy(text: string, label: string) {
-    navigator.clipboard.writeText(text).then(
-      () => toast({ title: "Copied", description: label }),
-      () => toast({ title: "Copy failed", description: "Unable to copy to clipboard.", variant: "destructive" }),
-    )
-  }
-
-  function ActionTile({
-    icon,
-    title,
-    desc,
-    onClick,
-    disabled,
-  }: {
-    icon: React.ReactNode
-    title: string
-    desc: string
-    onClick: () => void
-    disabled?: boolean
-  }) {
-    return (
-      <button
-        className="rounded-md border bg-background p-3 text-left hover:bg-accent hover:text-accent-foreground transition-colors disabled:opacity-50 w-full"
-        onClick={onClick}
-        disabled={disabled}
-      >
-        <div className="flex items-start gap-3">
-          <div className="rounded-md border size-9 grid place-items-center">{icon}</div>
-          <div className="min-w-0">
-            <div className="font-medium">{title}</div>
-            <div className="text-sm text-muted-foreground">{desc}</div>
-          </div>
-        </div>
-      </button>
-    )
+  async function applyPolicies() {
+    setApplying(true)
+    try {
+      const res = await fetch(`/api/projects/${project.id}/apply-policies`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ policy_ids: selectedPolicies }),
+      })
+      if (!res.ok) throw new Error("Failed to apply policies")
+      toast({ title: "Policies applied", description: `${selectedPolicies.length} policy(s) applied to this project.` })
+      onUpdated?.()
+    } catch (e: any) {
+      toast({ title: "Could not apply", description: e.message, variant: "destructive" })
+    } finally {
+      setApplying(false)
+    }
   }
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-md p-0">
-        {/* Header banner */}
-        <div className="relative overflow-hidden bg-gradient-to-br from-zinc-900 via-neutral-800 to-zinc-900 text-white px-5 py-6">
-          <div
-            className="absolute inset-0 opacity-20"
-            style={{ backgroundImage: "radial-gradient(circle at 20% 10%, rgba(255,255,255,0.2), transparent 40%)" }}
-          />
-          <div className="relative z-10 flex items-start gap-3">
-            <div className="bg-white/10 rounded-md p-2">
-              <TypeIcon />
-            </div>
-            <div className="min-w-0">
-              <SheetTitle className="truncate">{project.name}</SheetTitle>
-              <SheetDescription className="text-zinc-200 truncate">
-                {project.description || "No description"}
-              </SheetDescription>
-              <div className="mt-2 flex items-center gap-2">
-                <Badge variant="secondary" className="bg-white/10 text-white border-white/20">
-                  {project.type}
-                </Badge>
-                {project.pinned && (
-                  <Badge variant="outline" className="border-white/30 text-white bg-white/10">
-                    Pinned
-                  </Badge>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-4xl">
+        <DialogHeader>
+          <DialogTitle>Project Quick View</DialogTitle>
+        </DialogHeader>
+
+        <div className="grid gap-4 md:grid-cols-3">
+          <Card className="md:col-span-2">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <GitBranch className="h-5 w-5" />
+                {project.name}
+                {project.pinned && <Badge variant="secondary">Pinned</Badge>}
+              </CardTitle>
+              <CardDescription>{project.description || "No description provided"}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <Label>Type</Label>
+                  <div className="rounded border px-3 py-2 text-sm bg-muted/50">{project.type}</div>
+                </div>
+                <div className="space-y-1">
+                  <Label>Created</Label>
+                  <div className="rounded border px-3 py-2 text-sm bg-muted/50">
+                    {project.created_at ? new Date(project.created_at).toLocaleString() : "—"}
+                  </div>
+                </div>
+                {project.repo_url && (
+                  <div className="space-y-1 sm:col-span-2">
+                    <Label>Repository</Label>
+                    <div className="flex gap-2">
+                      <Input readOnly value={project.repo_url} />
+                      <Button variant="outline" onClick={() => copy(project.repo_url, "repo")} title="Copy repo link">
+                        {copied === "repo" ? <ClipboardCheck className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                      </Button>
+                      <Button variant="outline" asChild>
+                        <a href={project.repo_url} target="_blank" rel="noreferrer">
+                          <LinkIcon className="h-4 w-4" />
+                        </a>
+                      </Button>
+                    </div>
+                  </div>
                 )}
               </div>
-            </div>
-          </div>
 
-          <div className="relative z-10 mt-4 flex flex-wrap gap-2">
-            <Button size="sm" onClick={openPrimary} className="bg-white text-black hover:bg-white/90">
-              {isNative ? "Open workspace" : "Open"}
-            </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={openSettings}
-              className="bg-white/10 text-white hover:bg-white/20"
-            >
-              <Cog className="h-4 w-4 mr-1" /> Settings
-            </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={togglePin}
-              disabled={working}
-              className="bg-white/10 text-white hover:bg-white/20"
-            >
-              {project.pinned ? <PinOff className="h-4 w-4 mr-1" /> : <Pin className="h-4 w-4 mr-1" />}
-              {project.pinned ? "Unpin" : "Pin"}
-            </Button>
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="p-5 space-y-4">
-          {/* Identity */}
-          <Card>
-            <CardContent className="p-4 text-sm space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Project ID</span>
-                <button
-                  onClick={() => copy(project.id, "Project ID copied")}
-                  className="inline-flex items-center gap-2 hover:underline"
-                >
-                  <span className="font-mono text-xs truncate max-w-[60%]" title={project.id}>
-                    {project.id}
-                  </span>
-                  <Clipboard className="h-3.5 w-3.5" />
-                </button>
-              </div>
               <Separator />
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Created</span>
-                <span className="inline-flex items-center gap-2">
-                  <CalendarClock className="h-4 w-4 text-muted-foreground" />
-                  {new Date(project.created_at).toLocaleString()}
-                </span>
-              </div>
-              {(isGithub || isExternal) && project.repo_url && (
-                <>
-                  <Separator />
-                  <a
-                    href={project.repo_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center justify-between hover:underline"
-                  >
-                    <span className="inline-flex items-center gap-2">
-                      <Link2 className="h-4 w-4 text-muted-foreground" />
-                      Link
-                    </span>
-                    <span className="inline-flex items-center gap-1">
-                      {project.repo_url}
-                      <ExternalLink className="h-3.5 w-3.5" />
-                    </span>
-                  </a>
-                  <div className="flex justify-end">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={(e) => {
-                        e.preventDefault()
-                        copy(project.repo_url!, "Repository URL copied")
-                      }}
-                      className="mt-2"
-                    >
-                      <LinkIcon className="h-4 w-4 mr-2" />
-                      Copy repo URL
+
+              <div className="space-y-2">
+                <Label>Apply Policies</Label>
+                <div className="grid gap-2">
+                  <div className="grid gap-2 md:grid-cols-2">
+                    {policies.map((p) => {
+                      const s = selectedPolicies.includes(p.id)
+                      return (
+                        <Button
+                          key={p.id}
+                          variant={s ? "default" : "outline"}
+                          onClick={() =>
+                            setSelectedPolicies((arr) =>
+                              arr.includes(p.id) ? arr.filter((x) => x !== p.id) : [...arr, p.id],
+                            )
+                          }
+                          className="justify-start"
+                        >
+                          <ShieldCheck className="h-4 w-4 mr-2" />
+                          {p.name}
+                          {s && <Check className="h-4 w-4 ml-auto" />}
+                        </Button>
+                      )
+                    })}
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" onClick={() => setSelectedPolicies([])}>
+                      Clear
+                    </Button>
+                    <Button onClick={applyPolicies} disabled={applying || selectedPolicies.length === 0}>
+                      {applying ? "Applying..." : "Apply"}
                     </Button>
                   </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Health and actions */}
-          <Card>
-            <CardContent className="p-4 space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="font-medium">Project health</div>
-                <div className="flex items-center gap-2">
-                  {testing === "ok" && (
-                    <Badge variant="secondary" className="text-green-700 bg-green-100 border-green-200">
-                      <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Healthy
-                    </Badge>
-                  )}
-                  {testing === "error" && (
-                    <Badge variant="secondary" className="text-red-700 bg-red-100 border-red-200">
-                      <AlertCircle className="h-3.5 w-3.5 mr-1" /> Issue
-                    </Badge>
-                  )}
-                  {lastTestAt && <span className="text-xs text-muted-foreground">Last test {lastTestAt}</span>}
                 </div>
               </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <ActionTile
-                  icon={<Activity className="h-4 w-4" />}
-                  title="Run SDK connectivity"
-                  desc="Verify API keys and endpoints"
-                  onClick={runConnectivityTest}
-                />
-                <ActionTile
-                  icon={<Network className="h-4 w-4" />}
-                  title="Sync agents"
-                  desc="Refresh connected agents"
-                  onClick={syncAgents}
-                  disabled={isPending}
-                />
-                <ActionTile
-                  icon={<ShieldCheck className="h-4 w-4" />}
-                  title="Assign policies"
-                  desc="Open policy manager"
-                  onClick={assignPolicies}
-                />
-                <ActionTile
-                  icon={<FileDown className="h-4 w-4" />}
-                  title="Export report"
-                  desc="Download project summary"
-                  onClick={exportReport}
-                />
-              </div>
             </CardContent>
           </Card>
 
-          {/* Next steps */}
-          <div className="space-y-2">
-            <h3 className="text-sm font-medium">Next steps</h3>
-            <div className="grid gap-2">
-              {isNative ? (
-                <>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      router.push("/agent-management")
-                      onOpenChange(false)
-                    }}
-                  >
-                    Open workspace
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      router.push("/analytics")
-                      onOpenChange(false)
-                    }}
-                  >
-                    See analytics
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Button variant="outline" onClick={openPrimary}>
-                    Open repository
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      router.push("/analytics")
-                      onOpenChange(false)
-                    }}
-                  >
-                    See analytics
-                  </Button>
-                </>
-              )}
-              <Button
-                variant="outline"
-                onClick={() => {
-                  onDefault?.(project.id)
-                  toast({ title: "Default set", description: `${project.name} is your default workspace.` })
-                }}
-              >
-                {/* Parent can also persist this server-side */}
-                <Star className="h-4 w-4 mr-2" /> Make default
-              </Button>
-            </div>
+          <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Agent Sync</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <p className="text-sm text-muted-foreground">
+                  Sync connected agents for this project to pull latest health and versions.
+                </p>
+                <Button className="w-full">
+                  <Activity className="h-4 w-4 mr-2" />
+                  Sync Agents
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Reports</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <p className="text-sm text-muted-foreground">
+                  Generate an audit/compliance report scoped to this project.
+                </p>
+                <Select defaultValue="soc2">
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select template" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="soc2">SOC 2</SelectItem>
+                    <SelectItem value="gdpr">GDPR</SelectItem>
+                    <SelectItem value="security-audit">Security Audit</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button
+                  className="w-full"
+                  onClick={async () => {
+                    const type =
+                      (document.querySelector('[role="combobox"][aria-expanded="false"] input') as HTMLInputElement)
+                        ?.value || "soc2"
+                    const r = await fetch("/api/reports/generate", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ type }),
+                    })
+                    if (r.ok) toast({ title: "Report started" })
+                  }}
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  Generate
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Set as Default</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <p className="text-sm text-muted-foreground">Select as your default workspace project.</p>
+                <Button className="w-full" onClick={() => onDefault?.(project.id)}>
+                  <Bot className="h-4 w-4 mr-2" />
+                  Set Default
+                </Button>
+              </CardContent>
+            </Card>
           </div>
         </div>
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   )
 }
+
+export default ProjectQuickView

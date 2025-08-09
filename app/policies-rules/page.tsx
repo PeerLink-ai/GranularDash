@@ -75,7 +75,7 @@ export default function PoliciesRulesPage() {
   )
 
   return (
-    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+    <main className="container mx-auto px-4 py-8">
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <h2 className="text-3xl font-bold tracking-tight">Policies & Rules</h2>
         <div className="text-sm text-muted-foreground">
@@ -121,6 +121,6 @@ export default function PoliciesRulesPage() {
 
       {/* Policy List */}
       <PolicyList />
-    </div>
+    </main>
   )
 }

@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
@@ -13,11 +14,41 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/contexts/auth-context"
 import { ModeToggle } from "@/components/mode-toggle"
-import { Bell, Settings, LogOut } from "lucide-react"
+import { Bell, Settings, LogOut, UserCog } from "lucide-react"
 import Link from "next/link"
+
+const ROLES = ["admin", "developer", "analyst", "viewer"] as const
+type Role = (typeof ROLES)[number]
 
 export function TopNav() {
   const { user, signOut } = useAuth()
+  const [previewRole, setPreviewRole] = useState<Role | null>(null)
+
+  useEffect(() => {
+    const stored = localStorage.getItem("rolePreview") as Role | null
+    if (stored && ROLES.includes(stored)) {
+      setPreviewRole(stored)
+      document.body.dataset.role = stored
+    }
+  }, [])
+
+  function applyPreviewRole(role: Role | null) {
+    setPreviewRole(role)
+    if (role) {
+      localStorage.setItem("rolePreview", role)
+      document.body.dataset.role = role
+      window.dispatchEvent(new CustomEvent("role-preview-change", { detail: { role } }))
+    } else {
+      localStorage.removeItem("rolePreview")
+      delete document.body.dataset.role
+      window.dispatchEvent(new CustomEvent("role-preview-change", { detail: { role: null } }))
+    }
+  }
+
+  const effectiveRole = useMemo<Role | null>(() => {
+    if (!user) return null
+    return (previewRole || (user.role as Role)) ?? null
+  }, [user, previewRole])
 
   if (!user) return null
 
@@ -39,15 +70,36 @@ export function TopNav() {
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-14 items-center justify-between max-w-7xl mx-auto px-6">
-        <div className="flex items-center space-x-4">
-          <h2 className="text-lg font-semibold">AI Governance Dashboard</h2>
-          <Badge className={getRoleColor(user.role)} variant="secondary">
-            {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
-          </Badge>
+        <div className="flex items-center gap-3 min-w-0">
+          <h2 className="text-lg font-semibold truncate">AI Governance Dashboard</h2>
+          {effectiveRole && (
+            <Badge className={getRoleColor(effectiveRole)} variant="secondary">
+              {effectiveRole.charAt(0).toUpperCase() + effectiveRole.slice(1)}
+            </Badge>
+          )}
         </div>
 
-        <div className="flex items-center space-x-4">
-          <Button variant="ghost" size="sm">
+        <div className="flex items-center space-x-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-2 bg-transparent">
+                <UserCog className="h-4 w-4" />
+                Preview role
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Preview as</DropdownMenuLabel>
+              {ROLES.map((r) => (
+                <DropdownMenuItem key={r} onClick={() => applyPreviewRole(r)}>
+                  {r === effectiveRole ? "✓ " : ""} {r}
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => applyPreviewRole(null)}>Clear preview</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <Button variant="ghost" size="sm" aria-label="Notifications">
             <Bell className="h-4 w-4" />
           </Button>
 
@@ -55,13 +107,13 @@ export function TopNav() {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+              <Button variant="ghost" className="relative h-8 w-8 rounded-full" aria-label="Account menu">
                 <Avatar className="h-8 w-8">
                   <AvatarImage src={user.avatar || "/placeholder.svg"} alt={user.name} />
                   <AvatarFallback>
                     {user.name
                       .split(" ")
-                      .map((n) => n[0])
+                      .map((n: string) => n[0])
                       .join("")}
                   </AvatarFallback>
                 </Avatar>

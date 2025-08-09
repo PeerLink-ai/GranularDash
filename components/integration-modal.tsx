@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { X, Bot, Zap, Shield, Brain, Code, MessageSquare, Search, Plus, ExternalLink, Check } from 'lucide-react'
+import { X, Bot, Zap, Shield, Brain, Code, ServerCog, Cloud, Boxes, Search, Plus, Check } from "lucide-react"
 import { toast } from "sonner"
 
 interface IntegrationModalProps {
@@ -19,26 +19,37 @@ interface IntegrationModalProps {
   onAgentConnected: () => void
 }
 
-const AGENT_PROVIDERS = [
+type Provider = {
+  id: string
+  name: string
+  description: string
+  icon: any
+  category: string
+  features: string[]
+  status: "popular" | "recommended" | "new" | "beta" | "advanced"
+  color: string
+}
+
+const AGENT_PROVIDERS: Provider[] = [
   {
     id: "openai",
     name: "OpenAI",
     description: "Connect GPT models for advanced language processing",
     icon: Brain,
     category: "AI Language Models",
-    features: ["GPT-4", "GPT-3.5", "Function Calling", "Embeddings"],
+    features: ["GPT-4", "Function Calling", "Embeddings"],
     status: "popular",
-    color: "bg-green-500"
+    color: "bg-green-500",
   },
   {
     id: "anthropic",
     name: "Anthropic Claude",
     description: "Constitutional AI for safe and helpful responses",
     icon: Shield,
-    category: "AI Language Models", 
-    features: ["Claude 3", "Safety First", "Long Context", "Code Analysis"],
+    category: "AI Language Models",
+    features: ["Claude 3", "Long Context"],
     status: "recommended",
-    color: "bg-orange-500"
+    color: "bg-orange-500",
   },
   {
     id: "groq",
@@ -46,9 +57,29 @@ const AGENT_PROVIDERS = [
     description: "Ultra-fast inference for real-time applications",
     icon: Zap,
     category: "High-Performance AI",
-    features: ["Lightning Fast", "Low Latency", "Mixtral", "Llama 2"],
+    features: ["Low Latency", "Mixtral", "Llama 3"],
     status: "new",
-    color: "bg-purple-500"
+    color: "bg-purple-500",
+  },
+  {
+    id: "azure-openai",
+    name: "Azure OpenAI",
+    description: "Enterprise-grade GPT with Azure security and VNet support",
+    icon: Cloud,
+    category: "Enterprise AI",
+    features: ["Private Networking", "Regional Control"],
+    status: "recommended",
+    color: "bg-blue-600",
+  },
+  {
+    id: "huggingface",
+    name: "Hugging Face",
+    description: "Deploy curated transformer models to production",
+    icon: Boxes,
+    category: "ML Platform",
+    features: ["Inference Endpoints", "Custom Models"],
+    status: "beta",
+    color: "bg-yellow-600",
   },
   {
     id: "replit",
@@ -56,9 +87,9 @@ const AGENT_PROVIDERS = [
     description: "Code generation and execution environment",
     icon: Code,
     category: "Code Generation",
-    features: ["Code Execution", "Multi-Language", "Real-time Collab", "Deployment"],
+    features: ["Code Execution", "Real-time"],
     status: "beta",
-    color: "bg-blue-500"
+    color: "bg-blue-500",
   },
   {
     id: "custom",
@@ -66,10 +97,10 @@ const AGENT_PROVIDERS = [
     description: "Connect your own custom AI agent or API",
     icon: Bot,
     category: "Custom Integration",
-    features: ["REST API", "Webhooks", "Custom Auth", "Flexible Config"],
+    features: ["REST API", "Webhooks"],
     status: "advanced",
-    color: "bg-gray-500"
-  }
+    color: "bg-gray-500",
+  },
 ]
 
 export function IntegrationModal({ isOpen, onOpenChange, onAgentConnected }: IntegrationModalProps) {
@@ -81,51 +112,52 @@ export function IntegrationModal({ isOpen, onOpenChange, onAgentConnected }: Int
     description: "",
     apiKey: "",
     endpoint: "",
-    model: ""
+    model: "",
+    azureDeployment: "",
+    huggingfaceRepo: "",
   })
 
   const handleClose = () => {
     setSelectedProvider(null)
     setActiveTab("browse")
-    setFormData({ name: "", description: "", apiKey: "", endpoint: "", model: "" })
+    setFormData({
+      name: "",
+      description: "",
+      apiKey: "",
+      endpoint: "",
+      model: "",
+      azureDeployment: "",
+      huggingfaceRepo: "",
+    })
     onOpenChange(false)
   }
 
   const handleProviderSelect = (providerId: string) => {
     setSelectedProvider(providerId)
     setActiveTab("configure")
-    
-    // Pre-fill some data based on provider
-    const provider = AGENT_PROVIDERS.find(p => p.id === providerId)
+    const provider = AGENT_PROVIDERS.find((p) => p.id === providerId)
     if (provider) {
-      setFormData(prev => ({
-        ...prev,
-        name: `${provider.name} Agent`,
-        description: provider.description
-      }))
+      setFormData((prev) => ({ ...prev, name: `${provider.name} Agent`, description: provider.description }))
     }
   }
 
   const handleConnect = async () => {
     if (!selectedProvider) return
-
     setIsConnecting(true)
-    
     try {
       // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000))
-      
+      await new Promise((r) => setTimeout(r, 1200))
       toast.success("Agent connected successfully!")
       onAgentConnected()
       handleClose()
-    } catch (error) {
+    } catch {
       toast.error("Failed to connect agent. Please try again.")
     } finally {
       setIsConnecting(false)
     }
   }
 
-  const selectedProviderData = AGENT_PROVIDERS.find(p => p.id === selectedProvider)
+  const selectedProviderData = AGENT_PROVIDERS.find((p) => p.id === selectedProvider)
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -135,15 +167,10 @@ export function IntegrationModal({ isOpen, onOpenChange, onAgentConnected }: Int
             <div>
               <DialogTitle className="text-xl font-semibold">Connect New Agent</DialogTitle>
               <p className="text-sm text-muted-foreground mt-1">
-                Choose an AI provider and configure your agent connection
+                Choose a provider and configure your agent connection. Enterprise options included.
               </p>
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleClose}
-              className="h-8 w-8 rounded-full"
-            >
+            <Button variant="ghost" size="icon" onClick={handleClose} className="h-8 w-8 rounded-full">
               <X className="h-4 w-4" />
             </Button>
           </div>
@@ -157,7 +184,7 @@ export function IntegrationModal({ isOpen, onOpenChange, onAgentConnected }: Int
                 Browse Providers
               </TabsTrigger>
               <TabsTrigger value="configure" disabled={!selectedProvider} className="flex items-center gap-2">
-                <Bot className="h-4 w-4" />
+                <ServerCog className="h-4 w-4" />
                 Configure Agent
               </TabsTrigger>
             </TabsList>
@@ -167,11 +194,9 @@ export function IntegrationModal({ isOpen, onOpenChange, onAgentConnected }: Int
                 {AGENT_PROVIDERS.map((provider) => {
                   const Icon = provider.icon
                   return (
-                    <Card 
+                    <Card
                       key={provider.id}
-                      className={`cursor-pointer transition-all hover:shadow-md border-2 ${
-                        selectedProvider === provider.id ? 'border-primary' : 'border-border'
-                      }`}
+                      className={`cursor-pointer transition-all hover:shadow-md border-2 ${selectedProvider === provider.id ? "border-primary" : "border-border"}`}
                       onClick={() => handleProviderSelect(provider.id)}
                     >
                       <CardHeader className="pb-3">
@@ -184,29 +209,33 @@ export function IntegrationModal({ isOpen, onOpenChange, onAgentConnected }: Int
                               <CardTitle className="text-lg flex items-center gap-2">
                                 {provider.name}
                                 {provider.status === "popular" && (
-                                  <Badge variant="secondary" className="text-xs">Popular</Badge>
+                                  <Badge variant="secondary" className="text-xs">
+                                    Popular
+                                  </Badge>
                                 )}
                                 {provider.status === "recommended" && (
                                   <Badge className="text-xs bg-green-100 text-green-800">Recommended</Badge>
                                 )}
                                 {provider.status === "new" && (
-                                  <Badge variant="outline" className="text-xs">New</Badge>
+                                  <Badge variant="outline" className="text-xs">
+                                    New
+                                  </Badge>
                                 )}
                                 {provider.status === "beta" && (
-                                  <Badge variant="outline" className="text-xs text-blue-600">Beta</Badge>
+                                  <Badge variant="outline" className="text-xs text-blue-600">
+                                    Beta
+                                  </Badge>
                                 )}
                                 {provider.status === "advanced" && (
-                                  <Badge variant="outline" className="text-xs text-purple-600">Advanced</Badge>
+                                  <Badge variant="outline" className="text-xs text-purple-600">
+                                    Advanced
+                                  </Badge>
                                 )}
                               </CardTitle>
-                              <CardDescription className="text-sm">
-                                {provider.description}
-                              </CardDescription>
+                              <CardDescription className="text-sm">{provider.description}</CardDescription>
                             </div>
                           </div>
-                          {selectedProvider === provider.id && (
-                            <Check className="h-5 w-5 text-primary" />
-                          )}
+                          {selectedProvider === provider.id && <Check className="h-5 w-5 text-primary" />}
                         </div>
                       </CardHeader>
                       <CardContent className="pt-0">
@@ -244,7 +273,7 @@ export function IntegrationModal({ isOpen, onOpenChange, onAgentConnected }: Int
                         id="agent-name"
                         placeholder="Enter a name for your agent"
                         value={formData.name}
-                        onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
                       />
                     </div>
 
@@ -254,11 +283,12 @@ export function IntegrationModal({ isOpen, onOpenChange, onAgentConnected }: Int
                         id="agent-description"
                         placeholder="Describe what this agent will be used for"
                         value={formData.description}
-                        onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
                         rows={3}
                       />
                     </div>
 
+                    {/* Provider-specific fields */}
                     {selectedProvider !== "custom" && (
                       <div className="grid gap-2">
                         <Label htmlFor="api-key">API Key</Label>
@@ -267,10 +297,10 @@ export function IntegrationModal({ isOpen, onOpenChange, onAgentConnected }: Int
                           type="password"
                           placeholder="Enter your API key"
                           value={formData.apiKey}
-                          onChange={(e) => setFormData(prev => ({ ...prev, apiKey: e.target.value }))}
+                          onChange={(e) => setFormData((prev) => ({ ...prev, apiKey: e.target.value }))}
                         />
                         <p className="text-xs text-muted-foreground">
-                          Your API key will be encrypted and stored securely
+                          Your API key will be encrypted and stored securely.
                         </p>
                       </div>
                     )}
@@ -282,7 +312,42 @@ export function IntegrationModal({ isOpen, onOpenChange, onAgentConnected }: Int
                           id="endpoint"
                           placeholder="https://api.example.com/v1"
                           value={formData.endpoint}
-                          onChange={(e) => setFormData(prev => ({ ...prev, endpoint: e.target.value }))}
+                          onChange={(e) => setFormData((prev) => ({ ...prev, endpoint: e.target.value }))}
+                        />
+                      </div>
+                    )}
+
+                    {selectedProvider === "azure-openai" && (
+                      <>
+                        <div className="grid gap-2">
+                          <Label htmlFor="endpoint-azure">Azure OpenAI Endpoint</Label>
+                          <Input
+                            id="endpoint-azure"
+                            placeholder="https://{resource}.openai.azure.com"
+                            value={formData.endpoint}
+                            onChange={(e) => setFormData((prev) => ({ ...prev, endpoint: e.target.value }))}
+                          />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="deployment">Deployment Name</Label>
+                          <Input
+                            id="deployment"
+                            placeholder="gpt-4o-prod"
+                            value={formData.azureDeployment}
+                            onChange={(e) => setFormData((prev) => ({ ...prev, azureDeployment: e.target.value }))}
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    {selectedProvider === "huggingface" && (
+                      <div className="grid gap-2">
+                        <Label htmlFor="hf-repo">Inference Endpoint or Model Repo</Label>
+                        <Input
+                          id="hf-repo"
+                          placeholder="https://api.endpoints.huggingface.cloud/v1 or username/model"
+                          value={formData.huggingfaceRepo}
+                          onChange={(e) => setFormData((prev) => ({ ...prev, huggingfaceRepo: e.target.value }))}
                         />
                       </div>
                     )}
@@ -290,23 +355,24 @@ export function IntegrationModal({ isOpen, onOpenChange, onAgentConnected }: Int
                     {(selectedProvider === "openai" || selectedProvider === "anthropic") && (
                       <div className="grid gap-2">
                         <Label htmlFor="model">Model</Label>
-                        <Select value={formData.model} onValueChange={(value) => setFormData(prev => ({ ...prev, model: value }))}>
+                        <Select
+                          value={formData.model}
+                          onValueChange={(value) => setFormData((prev) => ({ ...prev, model: value }))}
+                        >
                           <SelectTrigger>
                             <SelectValue placeholder="Select a model" />
                           </SelectTrigger>
                           <SelectContent>
                             {selectedProvider === "openai" && (
                               <>
-                                <SelectItem value="gpt-4">GPT-4</SelectItem>
+                                <SelectItem value="gpt-4o">GPT-4o</SelectItem>
                                 <SelectItem value="gpt-4-turbo">GPT-4 Turbo</SelectItem>
-                                <SelectItem value="gpt-3.5-turbo">GPT-3.5 Turbo</SelectItem>
                               </>
                             )}
                             {selectedProvider === "anthropic" && (
                               <>
                                 <SelectItem value="claude-3-opus">Claude 3 Opus</SelectItem>
                                 <SelectItem value="claude-3-sonnet">Claude 3 Sonnet</SelectItem>
-                                <SelectItem value="claude-3-haiku">Claude 3 Haiku</SelectItem>
                               </>
                             )}
                           </SelectContent>
@@ -319,16 +385,9 @@ export function IntegrationModal({ isOpen, onOpenChange, onAgentConnected }: Int
                     <Button variant="outline" onClick={() => setActiveTab("browse")}>
                       Back to Providers
                     </Button>
-                    <Button 
-                      onClick={handleConnect} 
-                      disabled={!formData.name || !formData.apiKey || isConnecting}
-                      className="min-w-[120px]"
-                    >
+                    <Button onClick={handleConnect} disabled={!formData.name || isConnecting} className="min-w-[140px]">
                       {isConnecting ? (
-                        <>
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                          Connecting...
-                        </>
+                        "Connecting..."
                       ) : (
                         <>
                           <Plus className="mr-2 h-4 w-4" />

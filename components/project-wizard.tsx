@@ -9,18 +9,33 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
-import { ExternalLink, Github, Hammer, FolderKanban, CheckCircle2, Terminal } from 'lucide-react'
+import { Badge } from "@/components/ui/badge"
+import { Checkbox } from "@/components/ui/checkbox"
+import { ExternalLink, Github, Hammer, FolderKanban, CheckCircle2, Shield, GitBranch, ScanSearch } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 type Props = {
-  open: boolean
-  onOpenChange: (v: boolean) => void
+  open?: boolean
+  onOpenChange?: (v: boolean) => void
   onCreated?: (project: any) => void
 }
 
-type Step = "choose" | "connect" | "new"
+type Step = "choose" | "connect" | "detect" | "policies" | "review" | "new"
 
-export function ProjectWizard({ open, onOpenChange, onCreated }: Props) {
+type DetectedAgent = {
+  name: string
+  path: string
+  id?: string
+  provider?: string
+  model?: string
+  endpoint?: string
+  metadata?: Record<string, any>
+  selected?: boolean
+}
+
+type Policy = { id: string; name: string; description?: string; category?: string; severity?: string }
+
+export function ProjectWizard({ open = false, onOpenChange = () => {}, onCreated }: Props) {
   const [step, setStep] = React.useState<Step>("choose")
 
   // Shared
@@ -30,57 +45,50 @@ export function ProjectWizard({ open, onOpenChange, onCreated }: Props) {
   // New native
   const [template, setTemplate] = React.useState<"governance" | "analytics" | "empty">("governance")
 
-  // Connect: GitHub
+  // Git connect
   const [repoUrl, setRepoUrl] = React.useState("")
   const [branch, setBranch] = React.useState("main")
-  const [repoValid, setRepoValid] = React.useState<null | { full_name: string; description?: string }>(null)
+  const [repoValid, setRepoValid] = React.useState<null | {
+    owner: string
+    repo: string
+    branch: string
+    default_branch?: string
+  }>(null)
   const [repoChecking, setRepoChecking] = React.useState(false)
-  const lastValidatedRef = React.useRef<string | null>(null)
 
-  // External
-  const [externalLink, setExternalLink] = React.useState("")
+  // Detection
+  const [agents, setAgents] = React.useState<DetectedAgent[]>([])
+  const [scanning, setScanning] = React.useState(false)
+
+  // Policies
+  const [policies, setPolicies] = React.useState<Policy[]>([])
+  const [selectedPolicies, setSelectedPolicies] = React.useState<Record<string, boolean>>({})
+
+  // Review
+  const [userId, setUserId] = React.useState("") // required for agent insert
 
   const { toast } = useToast()
 
   React.useEffect(() => {
     if (!open) {
-      setStep("choose")
-      setName("")
-      setDescription("")
-      setTemplate("governance")
-      setRepoUrl("")
-      setBranch("main")
-      setRepoValid(null)
-      setExternalLink("")
-      lastValidatedRef.current = null
+      resetAll()
     }
   }, [open])
 
-  // Auto-validate GitHub URL (debounced)
-  React.useEffect(() => {
-    if (!repoUrl) {
-      setRepoValid(null)
-      lastValidatedRef.current = null
-      return
-    }
-    const parsed = parseGitHubUrl(repoUrl)
-    if (!parsed) {
-      setRepoValid(null)
-      lastValidatedRef.current = null
-      return
-    }
-    if (lastValidatedRef.current === repoUrl || repoChecking) return
-    const t = setTimeout(() => {
-      validateGitHub().then(() => {
-        lastValidatedRef.current = repoUrl
-      }).catch(() => {})
-    }, 600)
-    return () => clearTimeout(t)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [repoUrl])
-
-  function onPick(type: "connect" | "new") {
-    setStep(type === "connect" ? "connect" : "new")
+  function resetAll() {
+    setStep("choose")
+    setName("")
+    setDescription("")
+    setTemplate("governance")
+    setRepoUrl("")
+    setBranch("main")
+    setRepoValid(null)
+    setAgents([])
+    setPolicies([])
+    setSelectedPolicies({})
+    setScanning(false)
+    setRepoChecking(false)
+    setUserId("")
   }
 
   async function validateGitHub() {
@@ -89,17 +97,71 @@ export function ProjectWizard({ open, onOpenChange, onCreated }: Props) {
       setRepoValid(null)
       const parsed = parseGitHubUrl(repoUrl)
       if (!parsed) throw new Error("Please enter a valid GitHub repository URL.")
+      // Validate reachability
       const res = await fetch(`https://api.github.com/repos/${parsed.owner}/${parsed.repo}`)
       if (!res.ok) throw new Error(`Repository not accessible (${res.status}).`)
       const data = await res.json()
-      setRepoValid({ full_name: data.full_name, description: data.description ?? undefined })
+      setRepoValid({ owner: parsed.owner, repo: parsed.repo, branch, default_branch: data.default_branch })
       if (!name) setName(data.name)
       if (!description && data.description) setDescription(data.description)
+      toast({ title: "Repository verified", description: `${parsed.owner}/${parsed.repo}` })
     } catch (e: any) {
+      toast({ title: "Validation failed", description: e.message, variant: "destructive" })
       setRepoValid(null)
-      throw e
     } finally {
       setRepoChecking(false)
+    }
+  }
+
+  async function scanForAgents() {
+    try {
+      if (!repoValid) {
+        toast({ title: "Validate repository first", variant: "destructive" })
+        return
+      }
+      setScanning(true)
+      const res = await fetch("/api/projects/connect-git", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ repo_url: repoUrl, branch }),
+      })
+      const payload = await res.json()
+      if (!res.ok) throw new Error(payload?.error || "Scan failed")
+      const detected = (payload?.detectedAgents ?? []) as DetectedAgent[]
+      // Default select all
+      setAgents(
+        detected.map((a) => ({
+          ...a,
+          selected: true,
+          provider: a.provider || "openai",
+          model: a.model || "gpt-4o",
+        })),
+      )
+      setStep("detect")
+      toast({ title: "Scan complete", description: `Found ${detected.length} potential agent(s)` })
+    } catch (e: any) {
+      toast({ title: "Could not scan repository", description: e.message, variant: "destructive" })
+    } finally {
+      setScanning(false)
+    }
+  }
+
+  async function loadPolicies() {
+    try {
+      const res = await fetch("/api/policies/list", { cache: "no-store" })
+      const data = await res.json()
+      const list: Policy[] = Array.isArray(data?.policies) ? data.policies : []
+      setPolicies(list)
+      setSelectedPolicies((prev) => {
+        const next = { ...prev }
+        for (const p of list) {
+          if (!(p.id in next)) next[p.id] = false
+        }
+        return next
+      })
+      setStep("policies")
+    } catch (e: any) {
+      toast({ title: "Could not load policies", description: e.message, variant: "destructive" })
     }
   }
 
@@ -126,100 +188,126 @@ export function ProjectWizard({ open, onOpenChange, onCreated }: Props) {
       if (!res.ok) throw new Error(payload?.error || "Failed to create project")
       toast({ title: "Project created", description: "Your native project is ready." })
       onCreated?.(payload.project)
+      onOpenChange(false)
     } catch (e: any) {
       toast({ title: "Could not create project", description: e.message, variant: "destructive" })
     }
   }
 
-  async function connectGitHub() {
+  async function finalizeConnection() {
     try {
-      const parsed = parseGitHubUrl(repoUrl)
-      if (!parsed) {
-        toast({ title: "Invalid URL", description: "Enter a valid GitHub repo URL.", variant: "destructive" })
+      if (!repoValid) {
+        toast({ title: "Validate repository first", variant: "destructive" })
         return
       }
-      const body = {
-        name: name || parsed.repo,
-        description: description || undefined,
-        type: "github" as const,
-        repo_url: repoUrl,
-        metadata: { owner: parsed.owner, repo: parsed.repo, branch },
-        pinned: true,
+      if (!name.trim()) {
+        toast({ title: "Name required", description: "Please provide a project name.", variant: "destructive" })
+        return
       }
-      const res = await fetch("/api/projects", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      })
-      const payload = await res.json().catch(() => null)
-      if (!res.ok) throw new Error(payload?.error || "Failed to connect repository")
-      toast({ title: "Repository connected", description: "Linked to your dashboard." })
-      onCreated?.(payload.project)
-    } catch (e: any) {
-      toast({ title: "Could not connect", description: e.message, variant: "destructive" })
-    }
-  }
+      const selectedAgents = agents.filter((a) => a.selected)
+      if (!userId) {
+        toast({
+          title: "User ID required",
+          description: "Provide a user ID to link agents (matches users.id in your DB).",
+          variant: "destructive",
+        })
+        return
+      }
 
-  async function connectExternal() {
-    try {
-      if (!name.trim() || !externalLink.trim()) {
-        toast({ title: "Missing fields", description: "Provide a name and an external link.", variant: "destructive" })
-        return
-      }
       const body = {
         name: name.trim(),
         description: description.trim() || undefined,
-        type: "external" as const,
-        repo_url: externalLink.trim(),
-        metadata: { how: "terminal" },
-        pinned: false,
+        type: "github" as const,
+        repo_url: repoUrl,
+        pinned: true,
+        metadata: { created_via: "wizard" },
+        repo: repoValid,
+        user_id: userId,
+        agents: selectedAgents.map(({ selected, ...a }) => a),
+        policy_ids: Object.entries(selectedPolicies)
+          .filter(([, v]) => v)
+          .map(([k]) => k),
       }
-      const res = await fetch("/api/projects", {
+      const res = await fetch("/api/projects/finalize-connection", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       })
-      const payload = await res.json().catch(() => null)
-      if (!res.ok) throw new Error(payload?.error || "Failed to create external reference")
-      toast({ title: "External project added" })
+      const payload = await res.json()
+      if (!res.ok) throw new Error(payload?.error || "Failed to connect project")
+
+      toast({
+        title: "Project connected",
+        description: `Linked ${payload?.agentIds?.length ?? 0} agent(s) and ${payload?.policyIds?.length ?? 0} policy(ies).`,
+      })
       onCreated?.(payload.project)
+      onOpenChange(false)
     } catch (e: any) {
-      toast({ title: "Could not add", description: e.message, variant: "destructive" })
+      toast({ title: "Connection failed", description: e.message, variant: "destructive" })
     }
+  }
+
+  function onPick(type: "connect" | "new") {
+    setStep(type === "connect" ? "connect" : "new")
+  }
+
+  function toggleAgent(index: number, field: keyof DetectedAgent, value: any) {
+    setAgents((prev) => {
+      const next = [...prev]
+      // @ts-expect-error dynamic
+      next[index][field] = value
+      return next
+    })
+  }
+
+  function summaryCounts() {
+    const selected = agents.filter((a) => a.selected).length
+    const policiesCount = Object.values(selectedPolicies).filter(Boolean).length
+    return { selected, policiesCount }
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle>New Project</DialogTitle>
         </DialogHeader>
 
         {step === "choose" && (
           <div className="grid gap-4 sm:grid-cols-2">
-            <Card role="button" tabIndex={0} onClick={() => onPick("connect")} className="hover:shadow-md transition-shadow">
+            <Card
+              role="button"
+              tabIndex={0}
+              onClick={() => onPick("connect")}
+              className="hover:shadow-md transition-shadow"
+            >
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Github className="h-5 w-5" />
                   Connect existing
                 </CardTitle>
-                <CardDescription>Link a GitHub repository or reference a terminal-based project.</CardDescription>
+                <CardDescription>Link a GitHub repository and auto-detect agents.</CardDescription>
               </CardHeader>
               <CardContent className="text-sm text-muted-foreground">
-                Validate repo URL, set branch, and connect in seconds.
+                Validate repo URL, scan for agents, apply governance in one flow.
               </CardContent>
             </Card>
 
-            <Card role="button" tabIndex={0} onClick={() => onPick("new")} className="hover:shadow-md transition-shadow">
+            <Card
+              role="button"
+              tabIndex={0}
+              onClick={() => onPick("new")}
+              className="hover:shadow-md transition-shadow"
+            >
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Hammer className="h-5 w-5" />
                   Start native
                 </CardTitle>
-                <CardDescription>Use our governance templates to start quickly.</CardDescription>
+                <CardDescription>Use a template to scaffold a new project.</CardDescription>
               </CardHeader>
               <CardContent className="text-sm text-muted-foreground">
-                Opinionated setup designed for AI governance and analytics.
+                Governance-first setup with recommended defaults.
               </CardContent>
             </Card>
           </div>
@@ -228,12 +316,9 @@ export function ProjectWizard({ open, onOpenChange, onCreated }: Props) {
         {step === "connect" && (
           <div className="space-y-6">
             <Tabs defaultValue="github">
-              <TabsList className="grid w-full grid-cols-2">
+              <TabsList className="grid w-full grid-cols-1">
                 <TabsTrigger value="github" className="gap-2">
                   <Github className="h-4 w-4" /> GitHub Repo
-                </TabsTrigger>
-                <TabsTrigger value="terminal" className="gap-2">
-                  <Terminal className="h-4 w-4" /> Terminal/External
                 </TabsTrigger>
               </TabsList>
 
@@ -248,46 +333,63 @@ export function ProjectWizard({ open, onOpenChange, onCreated }: Props) {
                     aria-describedby="repo-help"
                   />
                   <p id="repo-help" className="text-xs text-muted-foreground">
-                    Public repos auto-validate after you paste a valid URL.
+                    We use the GitHub API for validation and scanning. Public repos require no token.
                   </p>
-                  <div className="grid sm:grid-cols-2 gap-3">
-                    <div>
+                  <div className="grid sm:grid-cols-3 gap-3">
+                    <div className="sm:col-span-1">
                       <Label htmlFor="branch">Branch</Label>
                       <Input id="branch" value={branch} onChange={(e) => setBranch(e.target.value)} />
                     </div>
-                    <div>
+                    <div className="sm:col-span-1">
                       <Label htmlFor="proj-name">Project name</Label>
-                      <Input id="proj-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Optional; defaults to repo name" />
+                      <Input
+                        id="proj-name"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="Optional; defaults to repo name"
+                      />
                     </div>
-                  </div>
-                  <div>
-                    <Label htmlFor="desc">Description</Label>
-                    <Input id="desc" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Optional" />
+                    <div className="sm:col-span-1">
+                      <Label htmlFor="desc">Description</Label>
+                      <Input
+                        id="desc"
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        placeholder="Optional"
+                      />
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" onClick={validateGitHub} disabled={!repoUrl || repoChecking} className="sm:hidden">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button variant="outline" onClick={validateGitHub} disabled={!repoUrl || repoChecking}>
                     {repoChecking ? "Validating..." : "Validate"}
                   </Button>
-                  <Button onClick={connectGitHub} disabled={!repoUrl || !repoValid || repoChecking}>
-                    {repoChecking ? "Checking..." : "Connect"}
+                  <Button onClick={scanForAgents} disabled={!repoValid || scanning} className="gap-2">
+                    <ScanSearch className="h-4 w-4" />
+                    {scanning ? "Scanning..." : "Scan for agents"}
                   </Button>
                 </div>
 
                 {repoValid && (
                   <Card aria-live="polite">
                     <CardHeader>
-                      <CardTitle className="flex items-center gap-2 text-green-600">
-                        <CheckCircle2 className="h-5 w-5" />
-                        {repoValid.full_name}
+                      <CardTitle className="flex items-center gap-2">
+                        <CheckCircle2 className="h-5 w-5 text-green-600" />
+                        {repoValid.owner}/{repoValid.repo}
                       </CardTitle>
-                      {repoValid.description && <CardDescription>{repoValid.description}</CardDescription>}
+                      <CardDescription className="flex items-center gap-2">
+                        <GitBranch className="h-4 w-4" />
+                        Branch: <Badge variant="secondary">{repoValid.branch}</Badge>
+                        {repoValid.default_branch && (
+                          <span className="text-xs">Default: {repoValid.default_branch}</span>
+                        )}
+                      </CardDescription>
                     </CardHeader>
                     <CardContent>
                       <a
                         className="inline-flex items-center gap-1 text-sm text-primary underline"
-                        href={`https://github.com/${repoValid.full_name}`}
+                        href={`https://github.com/${repoValid.owner}/${repoValid.repo}`}
                         target="_blank"
                         rel="noreferrer"
                       >
@@ -297,47 +399,243 @@ export function ProjectWizard({ open, onOpenChange, onCreated }: Props) {
                   </Card>
                 )}
               </TabsContent>
-
-              <TabsContent value="terminal" className="space-y-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Terminal className="h-5 w-5" /> Initialize locally
-                    </CardTitle>
-                    <CardDescription>Run these commands to scaffold with Next.js App Router and Tailwind.</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <code className="block rounded-md bg-muted p-3 text-sm">
-                      npx create-next-app@latest my-app --ts --tailwind --app --eslint --import-alias "@/*"
-                    </code>
-                    <Separator />
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium">Link to Vercel (optional)</p>
-                      <code className="block rounded-md bg-muted p-3 text-sm">npx vercel link</code>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <div className="grid gap-3">
-                  <Label htmlFor="ext-name">Project name</Label>
-                  <Input id="ext-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="My external app" />
-                  <Label htmlFor="ext-link">External link (repo or docs)</Label>
-                  <Input id="ext-link" value={externalLink} onChange={(e) => setExternalLink(e.target.value)} placeholder="https://github.com/org/repo or https://project-url.com" />
-                  <Label htmlFor="ext-desc">Description</Label>
-                  <Input id="ext-desc" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Optional" />
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" onClick={() => window.open("https://github.com/new", "_blank")}>
-                    Create repo <ExternalLink className="ml-2 h-4 w-4" />
-                  </Button>
-                  <Button onClick={connectExternal}>Save reference</Button>
-                </div>
-              </TabsContent>
             </Tabs>
 
             <div className="flex justify-between">
-              <Button variant="ghost" onClick={() => setStep("choose")}>Back</Button>
+              <Button variant="ghost" onClick={() => setStep("choose")}>
+                Back
+              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={validateGitHub} disabled={!repoUrl || repoChecking}>
+                  {repoChecking ? "Validating..." : "Validate"}
+                </Button>
+                <Button onClick={scanForAgents} disabled={!repoValid || scanning} className="gap-2">
+                  <ScanSearch className="h-4 w-4" />
+                  {scanning ? "Scanning..." : "Scan for agents"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {step === "detect" && (
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ScanSearch className="h-5 w-5" />
+                  Detected agents
+                </CardTitle>
+                <CardDescription>Select which agents to connect and adjust details if needed.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {agents.length === 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    No agents detected. You can go back or continue to policies.
+                  </p>
+                )}
+                <div className="grid gap-4">
+                  {agents.map((a, i) => (
+                    <div key={a.path} className="rounded-lg border p-3">
+                      <div className="flex items-center gap-3">
+                        <Checkbox
+                          checked={!!a.selected}
+                          onCheckedChange={(v) => toggleAgent(i, "selected", Boolean(v))}
+                        />
+                        <div className="flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant="outline">File</Badge>
+                            <span className="text-sm text-muted-foreground">{a.path}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 grid gap-3 sm:grid-cols-4">
+                        <div>
+                          <Label>Name</Label>
+                          <Input value={a.name} onChange={(e) => toggleAgent(i, "name", e.target.value)} />
+                        </div>
+                        <div>
+                          <Label>Provider</Label>
+                          <Select value={a.provider || "openai"} onValueChange={(v) => toggleAgent(i, "provider", v)}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Provider" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="openai">OpenAI</SelectItem>
+                              <SelectItem value="anthropic">Anthropic</SelectItem>
+                              <SelectItem value="xai">xAI</SelectItem>
+                              <SelectItem value="google">Google</SelectItem>
+                              <SelectItem value="unknown">Unknown</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label>Model</Label>
+                          <Input
+                            value={a.model || ""}
+                            onChange={(e) => toggleAgent(i, "model", e.target.value)}
+                            placeholder="e.g., gpt-4o"
+                          />
+                        </div>
+                        <div>
+                          <Label>Endpoint</Label>
+                          <Input
+                            value={a.endpoint || ""}
+                            onChange={(e) => toggleAgent(i, "endpoint", e.target.value)}
+                            placeholder="Optional"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="flex justify-between">
+              <Button variant="ghost" onClick={() => setStep("connect")}>
+                Back
+              </Button>
+              <Button onClick={loadPolicies} className="gap-2">
+                <Shield className="h-4 w-4" />
+                Configure policies
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {step === "policies" && (
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Shield className="h-5 w-5" />
+                  Governance policies
+                </CardTitle>
+                <CardDescription>Select policies to apply to this project and its agents.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {policies.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No policies found. You can proceed without policies.</p>
+                ) : (
+                  <div className="grid gap-3">
+                    {policies.map((p) => (
+                      <label key={p.id} className="flex items-start gap-3 rounded-md border p-3 hover:bg-muted/30">
+                        <Checkbox
+                          checked={!!selectedPolicies[p.id]}
+                          onCheckedChange={(v) => setSelectedPolicies((prev) => ({ ...prev, [p.id]: Boolean(v) }))}
+                        />
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{p.name}</span>
+                            {p.severity && <Badge variant="secondary">{p.severity}</Badge>}
+                          </div>
+                          {p.description && <p className="text-sm text-muted-foreground mt-1">{p.description}</p>}
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <div className="flex justify-between">
+              <Button variant="ghost" onClick={() => setStep("detect")}>
+                Back
+              </Button>
+              <Button onClick={() => setStep("review")}>Review</Button>
+            </div>
+          </div>
+        )}
+
+        {step === "review" && (
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FolderKanban className="h-5 w-5" />
+                  Review & connect
+                </CardTitle>
+                <CardDescription>Confirm details before connecting your project and agents.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div>
+                    <Label>Project name</Label>
+                    <Input value={name} onChange={(e) => setName(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label>Description</Label>
+                    <Input value={description} onChange={(e) => setDescription(e.target.value)} />
+                  </div>
+                </div>
+
+                <div className="grid sm:grid-cols-3 gap-4">
+                  <div>
+                    <Label>Repository</Label>
+                    <Input value={repoUrl} readOnly />
+                  </div>
+                  <div>
+                    <Label>Branch</Label>
+                    <Input value={branch} readOnly />
+                  </div>
+                  <div>
+                    <Label>User ID (for agent linking)</Label>
+                    <Input
+                      value={userId}
+                      placeholder="UUID matching users.id"
+                      onChange={(e) => setUserId(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <Separator />
+
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div className="rounded-lg border p-3">
+                    <div className="font-medium">Agents to connect</div>
+                    <p className="text-sm text-muted-foreground">
+                      {summaryCounts().selected} selected of {agents.length} detected
+                    </p>
+                    <ul className="mt-2 space-y-1 text-sm">
+                      {agents
+                        .filter((a) => a.selected)
+                        .map((a) => (
+                          <li key={a.path} className="flex items-center justify-between">
+                            <span className="truncate">{a.name}</span>
+                            <Badge variant="outline">{a.provider || "unknown"}</Badge>
+                          </li>
+                        ))}
+                    </ul>
+                  </div>
+
+                  <div className="rounded-lg border p-3">
+                    <div className="font-medium">Policies to apply</div>
+                    <p className="text-sm text-muted-foreground">{summaryCounts().policiesCount} selected</p>
+                    <ul className="mt-2 space-y-1 text-sm">
+                      {policies
+                        .filter((p) => selectedPolicies[p.id])
+                        .map((p) => (
+                          <li key={p.id} className="flex items-center justify-between">
+                            <span className="truncate">{p.name}</span>
+                            {p.severity && <Badge variant="secondary">{p.severity}</Badge>}
+                          </li>
+                        ))}
+                    </ul>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="flex justify-between">
+              <Button variant="ghost" onClick={() => setStep("policies")}>
+                Back
+              </Button>
+              <Button onClick={finalizeConnection} className="gap-2">
+                <Github className="h-4 w-4" />
+                Connect Project and Agents
+              </Button>
             </div>
           </div>
         )}
@@ -346,15 +644,27 @@ export function ProjectWizard({ open, onOpenChange, onCreated }: Props) {
           <div className="space-y-6">
             <div className="grid gap-3">
               <Label htmlFor="name">Project name</Label>
-              <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Granular Governance" />
+              <Input
+                id="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Granular Governance"
+              />
               <Label htmlFor="description">Description</Label>
-              <Input id="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Optional" />
+              <Input
+                id="description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Optional"
+              />
             </div>
 
             <div className="grid gap-3">
               <Label>Template</Label>
               <Select value={template} onValueChange={(v: any) => setTemplate(v)}>
-                <SelectTrigger><SelectValue placeholder="Choose a template" /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose a template" />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="governance">AI Governance (recommended)</SelectItem>
                   <SelectItem value="analytics">Analytics Starter</SelectItem>
@@ -367,7 +677,9 @@ export function ProjectWizard({ open, onOpenChange, onCreated }: Props) {
             </div>
 
             <div className="flex justify-between">
-              <Button variant="ghost" onClick={() => setStep("choose")}>Back</Button>
+              <Button variant="ghost" onClick={() => setStep("choose")}>
+                Back
+              </Button>
               <Button onClick={createNative} className="gap-2">
                 <FolderKanban className="h-4 w-4" />
                 Create

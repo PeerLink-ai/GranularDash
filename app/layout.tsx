@@ -1,20 +1,22 @@
-import "./globals.css"
-import { Inter } from "next/font/google"
-import { ThemeProvider } from "@/components/theme-provider"
-import { TopNav } from "@/components/top-nav"
-import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
-import { AppSidebar } from "@/components/app-sidebar"
-import { SettingsProvider } from "@/contexts/settings-context"
-import { AuthProvider } from "@/contexts/auth-context"
-import { Toaster } from "@/components/ui/toaster"
 import type React from "react"
+import type { Metadata } from "next"
+import { Inter } from "next/font/google"
+import "./globals.css"
+import { ThemeProvider } from "@/components/theme-provider"
+import { Toaster } from "@/components/ui/toaster"
+import { AuthProvider } from "@/contexts/auth-context"
+import { SettingsProvider } from "@/contexts/settings-context"
+import Layout from "@/components/layout"
 
 const inter = Inter({ subsets: ["latin"] })
 
-export const metadata = {
-  title: "Granular - AI Governance Dashboard",
-  description: "A transparent, auditable, and trustworthy force for progress in the AI economy.",
-  generator: "v0.dev",
+export const metadata: Metadata = {
+  title: "Granular - AI Governance Platform",
+  description: "Enterprise AI governance and compliance platform",
+  icons: {
+    icon: "/favicon.ico",
+  },
+    generator: 'v0.dev'
 }
 
 export default function RootLayout({
@@ -25,18 +27,10 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <AuthProvider>
             <SettingsProvider>
-              <SidebarProvider>
-                <AppSidebar />
-                <SidebarInset>
-                  <TopNav />
-                  <div className="container mx-auto p-6 max-w-7xl">
-                    <main className="w-full">{children}</main>
-                  </div>
-                </SidebarInset>
-              </SidebarProvider>
+              <Layout>{children}</Layout>
               <Toaster />
             </SettingsProvider>
           </AuthProvider>

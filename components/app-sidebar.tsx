@@ -2,7 +2,25 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, BarChart2, Building2, FolderKanban, GitFork, Video, Shield, FileText, Receipt, MessageSquare, Users2, Key, Settings, HelpCircle, Menu, ChevronDown } from 'lucide-react'
+import {
+  Home,
+  BarChart2,
+  Building2,
+  FolderKanban,
+  GitFork,
+  Video,
+  Shield,
+  FileText,
+  Receipt,
+  MessageSquare,
+  Users2,
+  Key,
+  Settings,
+  HelpCircle,
+  Menu,
+  ChevronDown,
+  CreditCard,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Sidebar,
@@ -65,6 +83,7 @@ export function AppSidebar() {
   ]
 
   const bottomNavigation = [
+    { title: "Billing", href: "/billing", icon: CreditCard },
     { title: "Settings", href: "/settings", icon: Settings },
     { title: "Help", href: "/help", icon: HelpCircle },
   ]

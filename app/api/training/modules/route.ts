@@ -23,39 +23,31 @@ export async function GET(request: NextRequest) {
 
     const user = userResult[0]
 
-    const simulations = await sql`
+    const modules = await sql`
       SELECT 
         id,
         name,
         type,
-        status,
-        last_run,
-        completed_at,
-        score,
         description,
-        duration_minutes,
-        participants_count,
-        pass_threshold,
-        difficulty_level,
-        configuration,
-        results,
+        content,
+        status,
         created_at,
         updated_at
-      FROM training_simulations 
+      FROM training_modules 
       WHERE organization_id = ${user.organization}
       ORDER BY created_at DESC
     `
 
     return NextResponse.json({
       success: true,
-      simulations: simulations || [],
+      modules: modules || [],
     })
   } catch (error) {
-    console.error("Training simulations error:", error)
+    console.error("Training modules error:", error)
     return NextResponse.json(
       {
         success: false,
-        error: "Failed to fetch simulations",
+        error: "Failed to fetch modules",
       },
       { status: 500 },
     )
@@ -84,56 +76,39 @@ export async function POST(request: NextRequest) {
 
     const user = userResult[0]
     const body = await request.json()
-    const {
-      name,
-      type,
-      description,
-      duration_minutes = 60,
-      participants_count = 0,
-      pass_threshold = 80,
-      difficulty_level = "intermediate",
-      configuration = {},
-    } = body
+    const { name, type, description, content = {} } = body
 
     const result = await sql`
-      INSERT INTO training_simulations (
+      INSERT INTO training_modules (
         organization_id, 
         name, 
         type, 
         description, 
+        content,
         status,
-        duration_minutes,
-        participants_count,
-        pass_threshold,
-        difficulty_level,
-        configuration,
         created_at
       ) VALUES (
         ${user.organization},
         ${name},
         ${type},
         ${description},
-        'scheduled',
-        ${duration_minutes},
-        ${participants_count},
-        ${pass_threshold},
-        ${difficulty_level},
-        ${JSON.stringify(configuration)},
+        ${JSON.stringify(content)},
+        'active',
         NOW()
       )
-      RETURNING id, name, type, status, duration_minutes, pass_threshold, difficulty_level, created_at
+      RETURNING id, name, type, description, status, created_at
     `
 
     return NextResponse.json({
       success: true,
-      simulation: result[0],
+      module: result[0],
     })
   } catch (error) {
-    console.error("Create training simulation error:", error)
+    console.error("Create training module error:", error)
     return NextResponse.json(
       {
         success: false,
-        error: "Failed to create simulation",
+        error: "Failed to create module",
       },
       { status: 500 },
     )

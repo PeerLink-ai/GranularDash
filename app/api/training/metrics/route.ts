@@ -25,8 +25,8 @@ export async function GET(request: NextRequest) {
 
     const user = userResult[0]
 
-    const [moduleCount, completedCount, averageScore] = await Promise.all([
-      sql`SELECT COUNT(*)::int as count FROM training_modules WHERE organization_id = ${user.organization}`,
+    const [moduleCount, completedCount, averageScore, activeSimulations, totalParticipants] = await Promise.all([
+      sql`SELECT COUNT(*)::int as count FROM training_modules WHERE organization_id = ${user.organization} AND status = 'active'`,
       sql`
         SELECT COUNT(*)::int as count 
         FROM training_simulations 
@@ -35,27 +35,43 @@ export async function GET(request: NextRequest) {
           AND completed_at >= NOW() - INTERVAL '6 months'
       `,
       sql`
-        SELECT COALESCE(AVG(score), 88)::numeric as avg_score 
+        SELECT COALESCE(ROUND(AVG(score)), 0)::int as avg_score 
         FROM training_simulations 
         WHERE organization_id = ${user.organization} 
           AND status = 'completed' 
           AND score IS NOT NULL
       `,
+      sql`
+        SELECT COUNT(*)::int as count 
+        FROM training_simulations 
+        WHERE organization_id = ${user.organization} 
+          AND status IN ('in_progress', 'scheduled')
+      `,
+      sql`
+        SELECT COALESCE(SUM(participants_count), 0)::int as total 
+        FROM training_simulations 
+        WHERE organization_id = ${user.organization} 
+          AND status = 'completed'
+          AND completed_at >= NOW() - INTERVAL '6 months'
+      `,
     ])
 
     const metrics = {
-      totalModules: Number(moduleCount[0]?.count ?? 15),
-      completedSimulations: Number(completedCount[0]?.count ?? 8),
-      averageScore: Math.round(Number(averageScore[0]?.avg_score ?? 88)),
+      totalModules: Number(moduleCount[0]?.count || 0),
+      completedSimulations: Number(completedCount[0]?.count || 0),
+      averageScore: Number(averageScore[0]?.avg_score || 0),
+      activeSimulations: Number(activeSimulations[0]?.count || 0),
+      totalParticipants: Number(totalParticipants[0]?.total || 0),
     }
 
     return NextResponse.json(metrics)
   } catch (error) {
     console.error("Training metrics error:", error)
-    return NextResponse.json({
-      totalModules: 15,
-      completedSimulations: 8,
-      averageScore: 88,
-    })
+    return NextResponse.json(
+      {
+        error: "Failed to fetch training metrics",
+      },
+      { status: 500 },
+    )
   }
 }

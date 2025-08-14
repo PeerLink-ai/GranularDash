@@ -33,16 +33,16 @@ interface UserProfile {
 export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [userProfile, setUserProfile] = useState<UserProfile>({
-    name: "Dollar Gill",
-    email: "dollar@example.com",
-    company: "Acme Inc.",
+    name: "Dollar Singh",
+    email: "dollar.singh@example.com",
+    company: "Financial Analytics Corp",
     phone: "+1 (555) 123-4567",
     accountNumber: "1234567890",
-    bankName: "Global Bank",
+    bankName: "Global Financial Bank",
     cards: [
-      { type: "Visa", number: "************1387", expiry: "12/24" },
-      { type: "Amex", number: "***********2468", expiry: "06/25" },
-      { type: "Mastercard", number: "************9876", expiry: "03/26" },
+      { type: "Visa Business", number: "************1387", expiry: "12/24" },
+      { type: "Amex Corporate", number: "***********2468", expiry: "06/25" },
+      { type: "Mastercard Business", number: "************9876", expiry: "03/26" },
     ],
   })
 
@@ -72,7 +72,7 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
         <div className="grid gap-4 py-4">
           <div className="flex items-center gap-4">
             <Avatar className="h-20 w-20">
-              <AvatarImage src="https://github.com/shadcn.png" alt={userProfile.name} />
+              <AvatarImage src="/professional-business-headshot.png" alt={userProfile.name} />
               <AvatarFallback>
                 {userProfile.name
                   .split(" ")
@@ -87,7 +87,7 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
             <Button
               variant="outline"
               size="icon"
-              className="ml-auto"
+              className="ml-auto bg-transparent"
               onClick={() => (isEditing ? handleSave() : setIsEditing(true))}
             >
               {isEditing ? <Save className="h-4 w-4" /> : <Edit2 className="h-4 w-4" />}
@@ -106,12 +106,7 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
               </div>
               <div>
                 <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  value={userProfile.email}
-                  readOnly={!isEditing}
-                  onChange={(e) => handleInputChange("email", e.target.value)}
-                />
+                <Input id="email" value={userProfile.email} readOnly className="bg-muted cursor-not-allowed" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">

@@ -1,98 +1,103 @@
 import { sql } from "@/lib/db"
 
-// Ensures projects and related governance tables exist.
-// These mirror the intent of scripts/019 and 021 with idempotent guards.
+async function tableExists(name: string) {
+  const rows = await sql`SELECT to_regclass(${`public.${name}`}) AS exists`
+  return rows?.[0]?.exists !== null
+}
+
 export async function ensureProjectsSchema() {
-  await sql`
-    create table if not exists projects (
-      id uuid primary key,
-      name text not null,
-      description text,
-      type text not null check (type in ('native', 'github', 'external')),
-      repo_url text,
-      metadata jsonb not null default '{}'::jsonb,
-      pinned boolean not null default false,
-      created_at timestamptz not null default now(),
-      updated_at timestamptz not null default now()
-    );
-  `
-  await sql`
-    create index if not exists idx_projects_pinned_created_at on projects (pinned desc, created_at desc);
-  `
-  await sql`
-    create or replace function set_updated_at()
-    returns trigger as $$
-    begin
-      new.updated_at = now();
-      return new;
-    end;
-    $$ language plpgsql;
-  `
-  await sql`drop trigger if exists trg_projects_updated_at on projects;`
-  await sql`
-    create trigger trg_projects_updated_at
-    before update on projects
-    for each row
-    execute function set_updated_at();
-  `
+  if (!(await tableExists("projects"))) {
+    await sql`
+      CREATE TABLE IF NOT EXISTS projects (
+        id uuid PRIMARY KEY,
+        name text NOT NULL,
+        description text,
+        type text NOT NULL CHECK (type IN ('native','github','external')),
+        repo_url text,
+        metadata jsonb DEFAULT '{}'::jsonb,
+        pinned boolean DEFAULT false,
+        created_at timestamptz DEFAULT now(),
+        updated_at timestamptz DEFAULT now()
+      )
+    `
+    await sql`CREATE INDEX IF NOT EXISTS idx_projects_pinned ON projects(pinned)`
+    await sql`CREATE INDEX IF NOT EXISTS idx_projects_type ON projects(type)`
+  }
+}
+
+export async function ensurePoliciesSchema() {
+  if (!(await tableExists("policies"))) {
+    await sql`
+      CREATE TABLE IF NOT EXISTS policies (
+        id uuid PRIMARY KEY,
+        name text NOT NULL,
+        description text,
+        category text,
+        severity text,
+        created_at timestamptz DEFAULT now()
+      )
+    `
+  }
 }
 
 export async function ensureProjectRelationsSchema() {
-  // project_policies table
-  await sql`
-    create table if not exists project_policies (
-      project_id uuid not null,
-      policy_id uuid not null,
-      linked_at timestamptz not null default now(),
-      primary key (project_id, policy_id)
-    );
-  `
-  await sql`create index if not exists idx_project_policies_policy on project_policies (policy_id);`
-
-  // policy_agent_assignments table
-  await sql`
-    create table if not exists policy_agent_assignments (
-      policy_id uuid not null,
-      agent_id uuid not null,
-      assigned_at timestamptz not null default now(),
-      status varchar(20) not null default 'active',
-      primary key (policy_id, agent_id)
-    );
-  `
-
-  // Ensure connected_agents has project_id column + index (safe no-op if present)
-  await sql`
-    do $$
-    begin
-      if not exists (
-        select 1 from information_schema.columns 
-        where table_schema = 'public' and table_name = 'connected_agents' and column_name = 'project_id'
-      ) then
-        alter table connected_agents add column project_id uuid;
-        create index if not exists idx_connected_agents_project on connected_agents (project_id);
-      end if;
-    end $$;
-  `
+  if (!(await tableExists("project_policies"))) {
+    await sql`
+      CREATE TABLE IF NOT EXISTS project_policies (
+        project_id uuid NOT NULL,
+        policy_id uuid NOT NULL,
+        PRIMARY KEY (project_id, policy_id)
+      )
+    `
+  }
+  if (!(await tableExists("policy_agent_assignments"))) {
+    await sql`
+      CREATE TABLE IF NOT EXISTS policy_agent_assignments (
+        policy_id uuid NOT NULL,
+        agent_id text NOT NULL,
+        status text DEFAULT 'active',
+        PRIMARY KEY (policy_id, agent_id)
+      )
+    `
+  }
 }
 
-// Minimal safety net for audit logs; aligns with scripts/005 semantics (simplified)
 export async function ensureAuditLogsSchema() {
-  await sql`
-    create extension if not exists "pgcrypto";
-    create table if not exists audit_logs (
-      id uuid primary key default gen_random_uuid(),
-      user_id uuid not null,
-      organization varchar(255) not null default 'default',
-      action varchar(255) not null,
-      resource_type varchar(100) not null,
-      resource_id varchar(255),
-      description text not null,
-      status varchar(50) not null default 'info',
-      ip_address text,
-      user_agent text,
-      metadata jsonb,
-      timestamp timestamptz not null default now()
-    );
-  `
-  await sql`create index if not exists idx_audit_logs_timestamp on audit_logs (timestamp desc);`
+  if (!(await tableExists("audit_logs"))) {
+    await sql`
+      CREATE TABLE IF NOT EXISTS audit_logs (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id text NOT NULL,
+        organization text NOT NULL,
+        action text NOT NULL,
+        resource_type text NOT NULL,
+        resource_id text,
+        description text,
+        status text,
+        ip_address text,
+        user_agent text,
+        metadata jsonb,
+        timestamp timestamptz DEFAULT now()
+      )
+    `
+    await sql`CREATE INDEX IF NOT EXISTS idx_audit_logs_ts ON audit_logs(timestamp DESC)`
+  }
+}
+
+export async function ensureSDKLogsSchema() {
+  if (!(await tableExists("sdk_logs"))) {
+    await sql`
+      CREATE TABLE IF NOT EXISTS sdk_logs (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        agent_id text NOT NULL,
+        user_id text,
+        type text NOT NULL,
+        level text NOT NULL,
+        payload jsonb NOT NULL,
+        timestamp timestamptz DEFAULT now()
+      )
+    `
+    await sql`CREATE INDEX IF NOT EXISTS idx_sdk_logs_agent_ts ON sdk_logs(agent_id, timestamp DESC)`
+    await sql`CREATE INDEX IF NOT EXISTS idx_sdk_logs_type_ts ON sdk_logs(type, timestamp DESC)`
+  }
 }

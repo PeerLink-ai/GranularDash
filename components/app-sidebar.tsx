@@ -123,7 +123,15 @@ export function AppSidebar() {
                           asChild
                           isActive={pathname === item.href}
                           tooltip={item.title}
-                          className="px-4 py-2 rounded-md hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground"
+                          className={`
+                            relative px-4 py-2 mx-2 rounded-md transition-all duration-200 ease-in-out
+                            hover:bg-sidebar-accent hover:text-sidebar-accent-foreground
+                            data-[active=true]:bg-primary/10 data-[active=true]:text-primary 
+                            data-[active=true]:font-semibold data-[active=true]:shadow-sm
+                            before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 
+                            before:bg-primary before:rounded-r-full before:opacity-0 before:transition-opacity
+                            data-[active=true]:before:opacity-100
+                          `}
                         >
                           <Link href={item.href}>
                             <item.icon className="h-4 w-4" />
@@ -147,7 +155,15 @@ export function AppSidebar() {
                 asChild
                 isActive={pathname === item.href}
                 tooltip={item.title}
-                className="px-4 py-2 rounded-md hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground"
+                className={`
+                  relative px-4 py-2 mx-2 rounded-md transition-all duration-200 ease-in-out
+                  hover:bg-sidebar-accent hover:text-sidebar-accent-foreground
+                  data-[active=true]:bg-primary/10 data-[active=true]:text-primary 
+                  data-[active=true]:font-semibold data-[active=true]:shadow-sm
+                  before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 
+                  before:bg-primary before:rounded-r-full before:opacity-0 before:transition-opacity
+                  data-[active=true]:before:opacity-100
+                `}
               >
                 <Link href={item.href}>
                   <item.icon className="h-4 w-4" />

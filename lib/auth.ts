@@ -6,16 +6,12 @@ import type { NextRequest } from "next/server"
 const SESSION_COOKIE_NAME = "session_token"
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 
-export type DbUser = {
+export type AuthUser = {
   id: string
   email: string
   name: string
+  role: "admin" | "developer" | "analyst" | "viewer"
   organization: string
-  role: string
-  password_hash?: string
-  onboarding_completed: boolean
-  created_at: string
-  last_login?: string | null
 }
 
 export type ConnectedAgent = {
@@ -73,25 +69,36 @@ async function getConnectedAgents(userId: string): Promise<ConnectedAgent[]> {
   }
 }
 
-export async function getUserBySession(sessionToken: string) {
-  const rows = await sql`
-    SELECT u.id, u.email, u.name, u.organization, u.role, u.onboarding_completed, u.created_at, u.last_login
-    FROM users u
-    JOIN user_sessions s ON u.id = s.user_id
-    WHERE s.session_token = ${sessionToken} AND s.expires_at > NOW()
-    LIMIT 1
-  `
-  const user = (rows as DbUser[])[0]
-  if (!user) return null
-  const [permissions, connectedAgents] = await Promise.all([getPermissions(user.id), getConnectedAgents(user.id)])
-  return { ...user, permissions, connectedAgents }
+export async function getUserBySession(sessionToken: string | undefined | null): Promise<AuthUser | null> {
+  if (!sessionToken) return null
+  try {
+    const rows = await sql`
+      SELECT u.id, u.email, u.name, u.role, u.organization
+      FROM user_sessions s
+      JOIN users u ON u.id = s.user_id
+      WHERE s.session_token = ${sessionToken}
+        AND s.expires_at > NOW()
+      LIMIT 1
+    `
+    if (!rows || rows.length === 0) return null
+    const u = rows[0]
+    return {
+      id: String(u.id),
+      email: String(u.email),
+      name: String(u.name),
+      role: (u.role as any) || "viewer",
+      organization: String(u.organization ?? "default"),
+    }
+  } catch {
+    return null
+  }
 }
 
 export async function signInUser(email: string, password: string) {
   const rows = await sql`SELECT * FROM users WHERE email = ${email} LIMIT 1`
   if (!rows || (rows as any[]).length === 0) return null
 
-  const user = rows[0] as DbUser & { password_hash: string }
+  const user = rows[0] as AuthUser & { password_hash: string }
   const ok = await verifyPassword(password, user.password_hash)
   if (!ok) return null
 
@@ -143,11 +150,11 @@ export async function signUpUser(email: string, password: string, name: string, 
 
   const sessionToken = await createSession(id)
   const [userRows, connectedAgents] = await Promise.all([
-    sql`SELECT id, email, name, organization, role, onboarding_completed, created_at, last_login FROM users WHERE id = ${id}`,
+    sql`SELECT id, email, name, organization, role FROM users WHERE id = ${id}`,
     getConnectedAgents(id),
   ])
 
-  const user = (userRows as DbUser[])[0]
+  const user = (userRows as AuthUser[])[0]
   return { user: { ...user, permissions: allPermissions, connectedAgents }, sessionToken }
 }
 
@@ -168,4 +175,10 @@ export async function getUser(request: NextRequest) {
   } catch {
     return null
   }
+}
+
+export async function getUserIdFromCookie(): Promise<string | null> {
+  // Convenience helper if you use next/headers cookies in routes;
+  // Prefer using getUserBySession in routes to get full user context.
+  return null
 }

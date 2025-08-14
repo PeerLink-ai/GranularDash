@@ -1,16 +1,11 @@
 "use client"
 
 import * as React from "react"
-import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { Plus, Pin, PinOff, FolderKanban, Settings, Trash2, ExternalLink, Search } from 'lucide-react'
 import { Button } from "@/components/ui/button"
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { useToast } from "@/hooks/use-toast"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ProjectWizard } from "@/components/project-wizard"
 import { ProjectCard } from "@/components/project-card"
-import { ProjectQuickView } from "@/components/project-quick-view"
+import { Plus, RefreshCw } from "lucide-react"
 
 export type Project = {
   id: string
@@ -18,204 +13,99 @@ export type Project = {
   description?: string | null
   type: "native" | "github" | "external"
   repo_url?: string | null
-  metadata?: Record<string, any>
+  metadata?: any
   pinned?: boolean
-  created_at: string
-  updated_at: string
+  created_at?: string
+  updated_at?: string
 }
 
-const DEFAULT_KEY = "granular.defaultProjectId"
-
 export default function ProjectsPage() {
-  const [projects, setProjects] = React.useState<Project[]>([])
-  const [loading, setLoading] = React.useState(true)
-  const [query, setQuery] = React.useState("")
   const [open, setOpen] = React.useState(false)
+  const [projects, setProjects] = React.useState<Project[]>([])
   const [defaultId, setDefaultId] = React.useState<string | null>(null)
-  const [quickView, setQuickView] = React.useState<Project | null>(null)
-  const { toast } = useToast()
-  const router = useRouter()
+  const [loading, setLoading] = React.useState(true)
 
-  React.useEffect(() => {
-    const def = localStorage.getItem(DEFAULT_KEY)
-    if (def) setDefaultId(def)
-  }, [])
-
-  const load = React.useCallback(async () => {
+  async function load() {
     setLoading(true)
     try {
       const res = await fetch("/api/projects", { cache: "no-store" })
       const data = await res.json()
-      setProjects(data.projects ?? [])
-    } catch (e: any) {
-      toast({ title: "Failed to load projects", description: e.message, variant: "destructive" })
+      setProjects(Array.isArray(data.projects) ? data.projects : [])
+      // restore default from localStorage
+      setDefaultId(localStorage.getItem("default_project") || null)
     } finally {
       setLoading(false)
     }
-  }, [toast])
+  }
 
   React.useEffect(() => {
     load()
-  }, [load])
+  }, [])
 
-  const filtered = React.useMemo(() => {
-    const q = query.toLowerCase().trim()
-    if (!q) return projects
-    return projects.filter((p) => (p.name + " " + (p.description ?? "") + " " + p.type).toLowerCase().includes(q))
-  }, [projects, query])
-
-  async function togglePin(p: Project) {
-    try {
-      const res = await fetch(`/api/projects/${p.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pinned: !p.pinned }),
-      })
-      if (!res.ok) throw new Error("Failed to update")
-      await load()
-    } catch (e: any) {
-      toast({ title: "Could not update", description: e.message, variant: "destructive" })
-    }
+  const onPin = async (p: Project) => {
+    const res = await fetch(`/api/projects/${p.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pinned: !p.pinned }),
+    })
+    if (res.ok) load()
   }
-
-  function setDefault(id: string) {
-    localStorage.setItem(DEFAULT_KEY, id)
-    setDefaultId(id)
-    toast({ title: "Default project set", description: "This project will be selected by default." })
+  const onDefault = (p: Project) => {
+    localStorage.setItem("default_project", p.id)
+    setDefaultId(p.id)
   }
-
-  async function deleteProject(id: string) {
-    if (!confirm("Delete this project? This cannot be undone.")) return
-    try {
-      const res = await fetch(`/api/projects/${id}`, { method: "DELETE" })
-      if (!res.ok) throw new Error("Failed to delete")
-      await load()
-      if (defaultId === id) {
-        localStorage.removeItem(DEFAULT_KEY)
-        setDefaultId(null)
-      }
-      toast({ title: "Project deleted" })
-    } catch (e: any) {
-      toast({ title: "Could not delete", description: e.message, variant: "destructive" })
-    }
+  const onDelete = async (p: Project) => {
+    const ok = confirm(`Delete project "${p.name}"? This cannot be undone.`)
+    if (!ok) return
+    const res = await fetch(`/api/projects/${p.id}`, { method: "DELETE" })
+    if (res.ok) load()
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <main className="mx-auto w-full max-w-6xl p-6 space-y-6">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Projects</h1>
-          <p className="text-muted-foreground">Connect an existing repository or start a native project.</p>
+          <h1 className="text-2xl font-semibold">Projects</h1>
+          <p className="text-sm text-muted-foreground">Connect Git repos or create native workspaces.</p>
         </div>
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <div className="relative flex-1 sm:w-64">
-            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search projects..."
-              className="pl-8"
-              aria-label="Search projects"
-            />
-          </div>
-          <Button className="gap-2" onClick={() => setOpen(true)}>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={load} disabled={loading} className="gap-2 bg-transparent">
+            <RefreshCw className="h-4 w-4" />
+            Refresh
+          </Button>
+          <Button onClick={() => setOpen(true)} className="gap-2">
             <Plus className="h-4 w-4" />
-            New
+            New Project
           </Button>
         </div>
       </div>
 
-      {loading ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Card key={i} className="animate-pulse h-40" />
-          ))}
-        </div>
-      ) : projects.length === 0 ? (
+      {projects.length === 0 ? (
         <Card>
           <CardHeader>
-            <CardTitle>Get started with your first project</CardTitle>
-            <CardDescription>
-              Connect a GitHub repository or create a new native project.
-            </CardDescription>
+            <CardTitle>No projects yet</CardTitle>
+            <CardDescription>Connect your first repository or create a native workspace.</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button onClick={() => setOpen(true)} className="gap-2">
-              <Plus className="h-4 w-4" />
-              Create project
-            </Button>
+            <Button onClick={() => setOpen(true)}>Get started</Button>
           </CardContent>
         </Card>
       ) : (
-        <>
-          {filtered.some((p) => p.pinned) && (
-            <section className="space-y-3">
-              <h2 className="text-sm font-medium">Pinned</h2>
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {filtered
-                  .filter((p) => p.pinned)
-                  .map((p) => (
-                    <ProjectCard
-                      key={p.id}
-                      project={p}
-                      isDefault={defaultId === p.id}
-                      onPin={() => togglePin(p)}
-                      onDefault={() => setDefault(p.id)}
-                      onDelete={() => deleteProject(p.id)}
-                    />
-                  ))}
-              </div>
-            </section>
-          )}
-          <section className="space-y-3">
-            <h2 className="text-sm font-medium">All projects</h2>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {filtered
-                .filter((p) => !p.pinned)
-                .map((p) => (
-                  <ProjectCard
-                    key={p.id}
-                    project={p}
-                    isDefault={defaultId === p.id}
-                    onPin={() => togglePin(p)}
-                    onDefault={() => setDefault(p.id)}
-                    onDelete={() => deleteProject(p.id)}
-                  />
-                ))}
-            </div>
-          </section>
-        </>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {projects.map((p) => (
+            <ProjectCard
+              key={p.id}
+              project={p as any}
+              isDefault={defaultId === p.id}
+              onPin={() => onPin(p)}
+              onDefault={() => onDefault(p)}
+              onDelete={() => onDelete(p)}
+            />
+          ))}
+        </div>
       )}
 
-      <ProjectWizard
-        open={open}
-        onOpenChange={setOpen}
-        onCreated={async (proj) => {
-          setOpen(false)
-          await load()
-          setDefault(proj.id)
-          setQuickView(proj) // Open the slide-over with project details
-        }}
-      />
-
-      <ProjectQuickView
-        open={!!quickView}
-        project={quickView}
-        onOpenChange={(o) => {
-          if (!o) setQuickView(null)
-        }}
-        onUpdated={async () => {
-          await load()
-          // keep quickView in sync with latest data
-          if (quickView) {
-            const updated = projects.find(p => p.id === quickView.id)
-            if (updated) setQuickView(updated)
-          }
-        }}
-        onDefault={(id) => {
-          setDefault(id)
-        }}
-      />
-    </div>
+      <ProjectWizard open={open} onOpenChange={setOpen} onCreated={() => load()} />
+    </main>
   )
 }

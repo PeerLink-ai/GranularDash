@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server"
 
-// Lightweight repo scanner using GitHub API; no clone required.
-// Scans up to MAX_FILES files to detect "agents" by heuristic matches.
 const MAX_FILES = 250
 const MAX_DEPTH = 4
 
@@ -33,7 +31,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid GitHub URL" }, { status: 400 })
     }
 
-    // Basic repo validation
     const repoRes = await fetch(`https://api.github.com/repos/${parsed.owner}/${parsed.repo}`)
     if (!repoRes.ok) {
       return NextResponse.json({ error: `Repository not accessible (${repoRes.status})` }, { status: 400 })
@@ -87,16 +84,13 @@ async function scanRepoForAgents(owner: string, repo: string, branch: string) {
       visited++
 
       const lowerPath = String(item.path).toLowerCase()
-      // Quick path-based hints
       const pathHints = ["agents/", "src/agents/", "agent.config", "agents.json", "ai-agent", "governance", "policy"]
       const pathSuggestsAgent = pathHints.some((h) => lowerPath.includes(h))
 
-      // Only fetch file content if hints say likely relevant or a recognized config filename.
       if (!pathSuggestsAgent && !/package\.json$|\.ya?ml$|\.json$|\.ts$|\.js$/.test(lowerPath)) {
         continue
       }
 
-      // Skip large files
       if (item.size && item.size > 256 * 1024) continue
 
       const fileRes = await fetch(item.download_url)
@@ -109,26 +103,18 @@ async function scanRepoForAgents(owner: string, repo: string, branch: string) {
   }
 
   await listDir("", 0)
-  // De-duplicate by path
   const unique = new Map(detected.map((a) => [a.path, a]))
   return Array.from(unique.values()).slice(0, 50)
 }
 
 function detectAgentFromFile(path: string, content: string) {
-  const lower = content.toLowerCase()
-  const isConfigJson = path.toLowerCase().endsWith(".json")
-
-  // Heuristics:
-  // - Looks for governance SDK imports, "agentId", "provider", "model", "endpoint"
-  // - Recognizes files named like agents.json, agent.config.json, etc.
-  const nameFromPath = path.split("/").pop() || "agent"
-
   const likelyAgent =
     /aigovernance|ai-governance|governance-sdk|agentid|policy|agents?\s*[:=]\s*\[|registerAgent/i.test(content) ||
     /(agents?\.(json|ya?ml)|agent\.config\.(json|ya?ml))/i.test(path)
 
   if (!likelyAgent) return null
 
+  const nameFromPath = (path.split("/").pop() || "agent").replace(/\.(json|js|ts|yaml|yml)$/i, "")
   const provider = /openai|gpt|azure-openai/i.test(content)
     ? "openai"
     : /anthropic|claude/i.test(content)
@@ -139,14 +125,12 @@ function detectAgentFromFile(path: string, content: string) {
           ? "google"
           : undefined
 
-  const modelMatch = content.match(/model["'\s:]*["'\s]*([a-zA-Z0-9._-]+)/) || content.match(/"model"\s*:\s*"([^"]+)"/)
-  const endpointMatch =
-    content.match(/endpoint["'\s:]*["'\s]*([a-zA-Z0-9:/._-]+)/) || content.match(/"endpoint"\s*:\s*"([^"]+)"/)
-  const agentIdMatch =
-    content.match(/agentId["'\s:]*["'\s]*([a-zA-Z0-9._-]+)/) || content.match(/"agentId"\s*:\s*"([^"]+)"/)
+  const modelMatch = content.match(/"model"\s*:\s*"([^"]+)"/) || content.match(/model['"\s:]*([a-zA-Z0-9._-]+)/)
+  const endpointMatch = content.match(/"endpoint"\s*:\s*"([^"]+)"/)
+  const agentIdMatch = content.match(/"agentId"\s*:\s*"([^"]+)"/)
 
   return {
-    name: nameFromPath.replace(/\.(json|js|ts|yaml|yml)$/i, ""),
+    name: nameFromPath,
     path,
     id: agentIdMatch?.[1],
     provider,

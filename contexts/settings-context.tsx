@@ -1,5 +1,7 @@
 "use client"
 
+import type React from "react"
+
 import { createContext, useContext, useEffect, useState } from "react"
 
 export interface UserSettings {
@@ -34,7 +36,7 @@ export interface UserSettings {
 }
 
 const defaultSettings: UserSettings = {
-  avatar: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/38184074.jpg-M4vCjTSSWVw5RwWvvmrxXBcNVU8MBU.jpeg",
+  avatar: "/professional-business-headshot.png",
   fullName: "Dollar Singh",
   email: "dollar.singh@example.com",
   phone: "+1 (555) 123-4567",

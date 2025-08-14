@@ -9,11 +9,6 @@ import { RecentActivity } from "@/components/recent-activity"
 import { SystemHealth } from "@/components/system-health"
 import { Bot, Shield, AlertTriangle, CheckCircle } from "lucide-react"
 
-// Base shapes kept stable to avoid re-render churn; they are aligned to current values.
-const BASE_CONNECTED = [4, 5, 6, 7, 8, 9, 9, 10]
-const BASE_PERMS = [2, 3, 3, 4, 4, 5, 5, 6]
-const BASE_ALERTS = [1, 1, 0, 0, 0, 0, 0, 0]
-
 function alignSeriesToLast(base: number[], target: number) {
   const n = base.length
   if (n === 0) return []
@@ -29,18 +24,26 @@ function withTime(values: number[], stepMs: number): SeriesPoint[] {
 
 export function DashboardOverview() {
   const { user } = useAuth()
-  const hasConnectedAgents = user ? user.connectedAgents.length > 0 : false
+
+  // Provide safe fallbacks to avoid reading `.length` on undefined.
+  const connectedCount = user?.connectedAgents?.length ?? 0
+  const permissionsCount = user?.permissions?.length ?? 0
+  const role = user?.role ?? "viewer"
+  const organization = user?.organization ?? "Organization"
+  const firstName = user?.name?.split(" ")?.[0] ?? "User"
+
+  const hasConnectedAgents = connectedCount > 0
 
   const series = useMemo(() => {
     const day = 24 * 60 * 60 * 1000
-    const connected = user ? withTime(alignSeriesToLast(BASE_CONNECTED, user.connectedAgents.length), day) : []
-    const perms = user ? withTime(alignSeriesToLast(BASE_PERMS, user.permissions.length), day) : []
-    const alerts = withTime(alignSeriesToLast(BASE_ALERTS, 0), day)
+    const connected = withTime(alignSeriesToLast([4, 5, 6, 7, 8, 9, 9, 10], connectedCount), day)
+    const perms = withTime(alignSeriesToLast([2, 3, 3, 4, 4, 5, 5, 6], permissionsCount), day)
+    const alerts = withTime(alignSeriesToLast([1, 1, 0, 0, 0, 0, 0, 0], 0), day)
     return { connected, perms, alerts }
-  }, [user])
+  }, [connectedCount, permissionsCount])
 
-  const getRoleBadge = (role: string) => {
-    switch (role) {
+  const getRoleBadge = (r: string) => {
+    switch (r) {
       case "admin":
         return "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200"
       case "developer":
@@ -54,8 +57,7 @@ export function DashboardOverview() {
   }
 
   const getWelcomeMessage = () => {
-    if (!user) return "Welcome to your AI governance dashboard."
-    switch (user.role) {
+    switch (role) {
       case "admin":
         return "You have full administrative access to all AI governance features."
       case "developer":
@@ -63,12 +65,13 @@ export function DashboardOverview() {
       case "analyst":
         return "Access analytics and reporting features for AI governance insights."
       case "viewer":
-        return "View dashboard metrics and system status information."
       default:
-        return "Welcome to your AI governance dashboard."
+        return "View dashboard metrics and system status information."
     }
   }
 
+  // If your app expects authentication before showing the overview,
+  // keep this guard. It also prevents rendering with an undefined user.
   if (!user) return null
 
   return (
@@ -78,15 +81,15 @@ export function DashboardOverview() {
         <div className="min-w-0">
           <h1 className="truncate text-3xl font-bold tracking-tight">
             {"Welcome back, "}
-            {user.name.split(" ")[0]}
+            {firstName}
           </h1>
           <p className="mt-1 text-muted-foreground">{getWelcomeMessage()}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <span className={`rounded px-2 py-1 text-sm font-medium ${getRoleBadge(user.role)}`}>
-            {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
+          <span className={`rounded px-2 py-1 text-sm font-medium ${getRoleBadge(role)}`}>
+            {role.charAt(0).toUpperCase() + role.slice(1)}
           </span>
-          <span className="rounded bg-muted px-2 py-1 text-sm font-medium">{user.organization}</span>
+          <span className="rounded bg-muted px-2 py-1 text-sm font-medium">{organization}</span>
         </div>
       </div>
 
@@ -95,7 +98,7 @@ export function DashboardOverview() {
         <StatCard
           title="Connected Agents"
           subtitle={hasConnectedAgents ? "Active and monitored" : "No agents connected"}
-          value={user.connectedAgents.length}
+          value={connectedCount}
           icon={<Bot className="h-5 w-5" />}
           series={series.connected}
           delta={hasConnectedAgents ? { label: "Stable", positive: true } : undefined}
@@ -104,7 +107,7 @@ export function DashboardOverview() {
         <StatCard
           title="Permissions"
           subtitle="Access levels granted"
-          value={user.permissions.length}
+          value={permissionsCount}
           icon={<Shield className="h-5 w-5" />}
           series={series.perms}
           className="min-w-0"

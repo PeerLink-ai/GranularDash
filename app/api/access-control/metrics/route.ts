@@ -9,21 +9,38 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Get access control metrics for the user's organization
-    const [totalRules, activeRules, recentActivity] = await Promise.all([
-      sql`SELECT COUNT(*) as count FROM access_rules WHERE organization = ${user.organization}`,
-      sql`SELECT COUNT(*) as count FROM access_rules WHERE organization = ${user.organization} AND status = 'active'`,
-      sql`SELECT COUNT(*) as count FROM audit_logs WHERE organization = ${user.organization} AND action LIKE '%access%' AND timestamp > NOW() - INTERVAL '24 hours'`,
+    console.log("User organization:", user.organization)
+
+    // Get access control metrics for the user's organization using correct column names
+    const [totalRules, activeRules, recentActivity, violations] = await Promise.all([
+      sql`SELECT COUNT(*) as count FROM governance_policies WHERE organization_id = ${user.organization}`,
+      sql`SELECT COUNT(*) as count FROM governance_policies WHERE organization_id = ${user.organization} AND status = 'active'`,
+      sql`SELECT COUNT(*) as count FROM audit_logs WHERE organization = ${user.organization} AND action ILIKE '%access%' AND timestamp > NOW() - INTERVAL '24 hours'`,
+      sql`SELECT COUNT(*) as count FROM policy_violations WHERE organization_id = ${user.organization} AND status = 'open'`,
     ])
 
-    return NextResponse.json({
-      totalRules: Number.parseInt(totalRules[0]?.count || "0"),
-      activeRules: Number.parseInt(activeRules[0]?.count || "0"),
-      recentActivity: Number.parseInt(recentActivity[0]?.count || "0"),
-      complianceScore: 95, // Calculate based on policy adherence
-    })
+    const totalPolicies = Number.parseInt(String(totalRules[0]?.count || 0))
+    const activePolicies = Number.parseInt(String(activeRules[0]?.count || 0))
+    const recentActivityCount = Number.parseInt(String(recentActivity[0]?.count || 0))
+    const openViolations = Number.parseInt(String(violations[0]?.count || 0))
+
+    const complianceScore =
+      totalPolicies > 0 ? Math.max(0, Math.round(((totalPolicies - openViolations) / totalPolicies) * 100)) : 100
+
+    const result = {
+      totalRules: totalPolicies,
+      activeRules: activePolicies,
+      recentActivity: recentActivityCount,
+      complianceScore,
+    }
+
+    console.log("Access control metrics result:", result)
+    return NextResponse.json(result)
   } catch (error) {
     console.error("Failed to fetch access control metrics:", error)
-    return NextResponse.json({ error: "Failed to fetch metrics" }, { status: 500 })
+    return NextResponse.json(
+      { error: "Failed to fetch metrics", details: error instanceof Error ? error.message : String(error) },
+      { status: 500 },
+    )
   }
 }

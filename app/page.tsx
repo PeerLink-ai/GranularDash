@@ -3,18 +3,9 @@
 import { useAuth } from "@/contexts/auth-context"
 import { SignInForm } from "@/components/sign-in-form"
 import { DashboardOverview } from "@/components/dashboard-overview"
-import { OnboardingModal } from "@/components/onboarding-modal"
-import { useState, useEffect } from "react"
 
 export default function HomePage() {
   const { user, isLoading } = useAuth()
-  const [showOnboarding, setShowOnboarding] = useState(false)
-
-  useEffect(() => {
-    if (user && !user.onboarding_completed) {
-      setShowOnboarding(true)
-    }
-  }, [user])
 
   if (isLoading) {
     return (
@@ -28,10 +19,5 @@ export default function HomePage() {
     return <SignInForm />
   }
 
-  return (
-    <>
-      <DashboardOverview />
-      <OnboardingModal isOpen={showOnboarding} onClose={() => setShowOnboarding(false)} />
-    </>
-  )
+  return <DashboardOverview />
 }

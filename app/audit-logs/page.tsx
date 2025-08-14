@@ -12,9 +12,21 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Calendar } from "@/components/ui/calendar"
-import { cn } from "@/lib/utils"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
-import { CalendarRange, ChevronDown, ChevronUp, Download, Filter, LineChart, PlayCircle, RefreshCcw, Trash2, Settings2 } from 'lucide-react'
+import {
+  CalendarRange,
+  ChevronDown,
+  ChevronUp,
+  Download,
+  Filter,
+  LineChart,
+  PlayCircle,
+  RefreshCcw,
+  Trash2,
+  Settings2,
+  AlertCircle,
+} from "lucide-react"
 
 // Demo SDK audit log record type (from existing SDK endpoint)
 type AuditRecord = {
@@ -45,6 +57,7 @@ export default function AuditLogsPage() {
   const [logs, setLogs] = useState<AuditRecord[]>([])
   const [loading, setLoading] = useState(false)
   const [autoRefresh, setAutoRefresh] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   // Filters
   const [search, setSearch] = useState("")
@@ -66,12 +79,31 @@ export default function AuditLogsPage() {
 
   const loadLogs = async () => {
     setLoading(true)
+    setError(null)
     try {
       const res = await fetch("/api/sdk/log?limit=1000", { cache: "no-store" })
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.details || errorData.error || `HTTP ${res.status}: ${res.statusText}`)
+      }
+
+      const contentType = res.headers.get("content-type")
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error("API did not return JSON")
+      }
+
       const data = await res.json()
+      if (!data.success) {
+        throw new Error(data.error || "API returned unsuccessful response")
+      }
+
       setLogs(Array.isArray(data.data) ? data.data : [])
     } catch (e) {
-      console.error("Failed to load logs", e)
+      const errorMessage = e instanceof Error ? e.message : String(e)
+      console.error("Failed to load logs", errorMessage)
+      setError(errorMessage)
+      setLogs([])
     } finally {
       setLoading(false)
     }
@@ -83,20 +115,37 @@ export default function AuditLogsPage() {
 
   useEffect(() => {
     if (!autoRefresh) return
-    const id = setInterval(() => loadLogs(), 4000)
+    const id = setInterval(() => loadLogs(), 10000) // Increased to 10 seconds
     return () => clearInterval(id)
   }, [autoRefresh])
 
   const runScenario = async (scenario: "normal" | "anomaly" | "breach") => {
     if (!scenarioAgent) return
     setLoading(true)
+    setError(null)
     try {
-      await fetch("/api/sdk/test", {
+      const res = await fetch("/api/sdk/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ agentId: scenarioAgent, scenario }),
       })
-      await loadLogs()
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.details || errorData.error || `HTTP ${res.status}: ${res.statusText}`)
+      }
+
+      const data = await res.json()
+      if (!data.success) {
+        throw new Error(data.error || "Failed to generate test logs")
+      }
+
+      // Wait a moment then reload logs
+      setTimeout(() => loadLogs(), 1000)
+    } catch (e) {
+      const errorMessage = e instanceof Error ? e.message : String(e)
+      console.error("Failed to run scenario", errorMessage)
+      setError(errorMessage)
     } finally {
       setLoading(false)
     }
@@ -104,9 +153,25 @@ export default function AuditLogsPage() {
 
   const clearAll = async () => {
     setLoading(true)
+    setError(null)
     try {
-      await fetch("/api/sdk/log", { method: "DELETE" })
+      const res = await fetch("/api/sdk/log", { method: "DELETE" })
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.details || errorData.error || `HTTP ${res.status}: ${res.statusText}`)
+      }
+
+      const data = await res.json()
+      if (!data.success) {
+        throw new Error(data.error || "Failed to clear logs")
+      }
+
       await loadLogs()
+    } catch (e) {
+      const errorMessage = e instanceof Error ? e.message : String(e)
+      console.error("Failed to clear logs", errorMessage)
+      setError(errorMessage)
     } finally {
       setLoading(false)
     }
@@ -122,8 +187,10 @@ export default function AuditLogsPage() {
   }, [logs, scenarioAgent])
 
   const filtered = useMemo(() => {
-    const from = dateRange.from ? dateRange.from.getTime() : -Infinity
-    const to = dateRange.to ? new Date(dateRange.to.getFullYear(), dateRange.to.getMonth(), dateRange.to.getDate(), 23, 59, 59, 999).getTime() : Infinity
+    const from = dateRange.from ? dateRange.from.getTime() : Number.NEGATIVE_INFINITY
+    const to = dateRange.to
+      ? new Date(dateRange.to.getFullYear(), dateRange.to.getMonth(), dateRange.to.getDate(), 23, 59, 59, 999).getTime()
+      : Number.POSITIVE_INFINITY
 
     const q = search.trim().toLowerCase()
     const qMatch = (l: AuditRecord) => {
@@ -189,7 +256,10 @@ export default function AuditLogsPage() {
       l.level,
       JSON.stringify(l.payload ?? {}),
     ])
-    const csv = [headers.join(","), ...rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))].join("\n")
+    const csv = [
+      headers.join(","),
+      ...rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")),
+    ].join("\n")
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
@@ -204,7 +274,7 @@ export default function AuditLogsPage() {
       <LineChart className="h-12 w-12 mb-4 opacity-70" />
       <div className="text-lg font-medium">No logs found</div>
       <div className="text-sm mt-1 mb-4">Adjust filters or generate demo events to get started.</div>
-      <Button onClick={() => runScenario("normal")}>
+      <Button onClick={() => runScenario("normal")} disabled={loading}>
         <PlayCircle className="mr-2 h-4 w-4" />
         Generate demo events
       </Button>
@@ -223,17 +293,13 @@ export default function AuditLogsPage() {
           {/* Date Range */}
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="outline" className="justify-start">
+              <Button variant="outline" className="justify-start bg-transparent">
                 <CalendarRange className="mr-2 h-4 w-4" />
-                {dateRange.from ? (
-                  dateRange.to ? (
-                    `${dateRange.from.toLocaleDateString()} - ${dateRange.to.toLocaleDateString()}`
-                  ) : (
-                    `${dateRange.from.toLocaleDateString()}`
-                  )
-                ) : (
-                  "Pick a date range"
-                )}
+                {dateRange.from
+                  ? dateRange.to
+                    ? `${dateRange.from.toLocaleDateString()} - ${dateRange.to.toLocaleDateString()}`
+                    : `${dateRange.from.toLocaleDateString()}`
+                  : "Pick a date range"}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-3" align="end">
@@ -245,32 +311,52 @@ export default function AuditLogsPage() {
                   numberOfMonths={2}
                 />
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setDateRange(lastNDays(1))}>24h</Button>
-                  <Button variant="outline" size="sm" onClick={() => setDateRange(lastNDays(7))}>7d</Button>
-                  <Button variant="outline" size="sm" onClick={() => setDateRange(lastNDays(30))}>30d</Button>
-                  <Button variant="ghost" size="sm" onClick={() => setDateRange({ from: undefined, to: undefined })}>Clear</Button>
+                  <Button variant="outline" size="sm" onClick={() => setDateRange(lastNDays(1))}>
+                    24h
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setDateRange(lastNDays(7))}>
+                    7d
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setDateRange(lastNDays(30))}>
+                    30d
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setDateRange({ from: undefined, to: undefined })}>
+                    Clear
+                  </Button>
                 </div>
               </div>
             </PopoverContent>
           </Popover>
 
           {/* Agent selector (acts like "project" in the reference) */}
-          <Select
-            value={agentFilter}
-            onValueChange={(v) => setAgentFilter(v)}
-          >
+          <Select value={agentFilter} onValueChange={(v) => setAgentFilter(v)}>
             <SelectTrigger className="w-[200px]">
               <SelectValue placeholder="All agents" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All agents</SelectItem>
               {agents.map((a) => (
-                <SelectItem key={a} value={a}>{a}</SelectItem>
+                <SelectItem key={a} value={a}>
+                  {a}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
       </div>
+
+      {/* Error Alert */}
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            {error}
+            <Button variant="outline" size="sm" className="ml-2 bg-transparent" onClick={() => setError(null)}>
+              Dismiss
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Overall metrics */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -310,7 +396,7 @@ export default function AuditLogsPage() {
               {/* Filter popover */}
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className="sm:w-auto justify-start">
+                  <Button variant="outline" className="sm:w-auto justify-start bg-transparent">
                     <Filter className="mr-2 h-4 w-4" />
                     Filters
                   </Button>
@@ -344,9 +430,7 @@ export default function AuditLogsPage() {
               {/* Quick All toggle */}
               <Button
                 variant="ghost"
-                onClick={() =>
-                  setLevelFilter({ error: true, warning: true, info: true, success: true })
-                }
+                onClick={() => setLevelFilter({ error: true, warning: true, info: true, success: true })}
                 className="sm:w-auto"
               >
                 Select all
@@ -359,17 +443,17 @@ export default function AuditLogsPage() {
                 <RefreshCcw className="mr-2 h-4 w-4" />
                 {autoRefresh ? "Auto-refresh On" : "Auto-refresh Off"}
               </Button>
-              <Button variant="outline" onClick={exportCSV}>
+              <Button variant="outline" onClick={exportCSV} disabled={sorted.length === 0}>
                 <Download className="mr-2 h-4 w-4" />
                 Export CSV
               </Button>
-              <Button variant="destructive" onClick={clearAll}>
+              <Button variant="destructive" onClick={clearAll} disabled={loading}>
                 <Trash2 className="mr-2 h-4 w-4" />
                 Clear
               </Button>
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button>
+                  <Button disabled={loading}>
                     <Settings2 className="mr-2 h-4 w-4" />
                     Run Scenario
                   </Button>
@@ -383,9 +467,25 @@ export default function AuditLogsPage() {
                       onChange={(e) => setScenarioAgent(e.target.value)}
                     />
                     <div className="flex gap-2">
-                      <Button className="flex-1" onClick={() => runScenario("normal")}>Normal</Button>
-                      <Button variant="secondary" className="flex-1" onClick={() => runScenario("anomaly")}>Anomaly</Button>
-                      <Button variant="destructive" className="flex-1" onClick={() => runScenario("breach")}>Breach</Button>
+                      <Button className="flex-1" onClick={() => runScenario("normal")} disabled={loading}>
+                        Normal
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        className="flex-1"
+                        onClick={() => runScenario("anomaly")}
+                        disabled={loading}
+                      >
+                        Anomaly
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        className="flex-1"
+                        onClick={() => runScenario("breach")}
+                        disabled={loading}
+                      >
+                        Breach
+                      </Button>
                     </div>
                   </div>
                 </PopoverContent>
@@ -398,7 +498,7 @@ export default function AuditLogsPage() {
       {/* Table */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle>Events</CardTitle>
+          <CardTitle>Events {loading && <span className="text-sm text-muted-foreground">(Loading...)</span>}</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {sorted.length === 0 ? (
@@ -410,22 +510,50 @@ export default function AuditLogsPage() {
                   <TableRow>
                     <TableHead className="w-[220px] cursor-pointer select-none" onClick={() => toggleSort("timestamp")}>
                       <div className="inline-flex items-center gap-1">
-                        Timestamp {sortKey === "timestamp" ? (sortDir === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />) : null}
+                        Timestamp{" "}
+                        {sortKey === "timestamp" ? (
+                          sortDir === "asc" ? (
+                            <ChevronUp className="h-3 w-3" />
+                          ) : (
+                            <ChevronDown className="h-3 w-3" />
+                          )
+                        ) : null}
                       </div>
                     </TableHead>
                     <TableHead className="w-[140px] cursor-pointer select-none" onClick={() => toggleSort("level")}>
                       <div className="inline-flex items-center gap-1">
-                        Level {sortKey === "level" ? (sortDir === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />) : null}
+                        Level{" "}
+                        {sortKey === "level" ? (
+                          sortDir === "asc" ? (
+                            <ChevronUp className="h-3 w-3" />
+                          ) : (
+                            <ChevronDown className="h-3 w-3" />
+                          )
+                        ) : null}
                       </div>
                     </TableHead>
                     <TableHead className="w-[220px] cursor-pointer select-none" onClick={() => toggleSort("type")}>
                       <div className="inline-flex items-center gap-1">
-                        Type {sortKey === "type" ? (sortDir === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />) : null}
+                        Type{" "}
+                        {sortKey === "type" ? (
+                          sortDir === "asc" ? (
+                            <ChevronUp className="h-3 w-3" />
+                          ) : (
+                            <ChevronDown className="h-3 w-3" />
+                          )
+                        ) : null}
                       </div>
                     </TableHead>
                     <TableHead className="w-[220px] cursor-pointer select-none" onClick={() => toggleSort("agentId")}>
                       <div className="inline-flex items-center gap-1">
-                        Agent {sortKey === "agentId" ? (sortDir === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />) : null}
+                        Agent{" "}
+                        {sortKey === "agentId" ? (
+                          sortDir === "asc" ? (
+                            <ChevronUp className="h-3 w-3" />
+                          ) : (
+                            <ChevronDown className="h-3 w-3" />
+                          )
+                        ) : null}
                       </div>
                     </TableHead>
                     <TableHead>Details</TableHead>
@@ -434,15 +562,17 @@ export default function AuditLogsPage() {
                 <TableBody>
                   {sorted.map((l) => (
                     <TableRow key={l.id}>
-                      <TableCell className="whitespace-nowrap">
-                        {new Date(l.timestamp).toLocaleString()}
-                      </TableCell>
+                      <TableCell className="whitespace-nowrap">{new Date(l.timestamp).toLocaleString()}</TableCell>
                       <TableCell className="whitespace-nowrap">
                         <Badge
                           variant={
-                            l.level === "error" ? "destructive" :
-                            l.level === "warning" ? "secondary" :
-                            l.level === "success" ? "default" : "outline"
+                            l.level === "error"
+                              ? "destructive"
+                              : l.level === "warning"
+                                ? "secondary"
+                                : l.level === "success"
+                                  ? "default"
+                                  : "outline"
                           }
                           className="uppercase"
                         >
@@ -452,7 +582,9 @@ export default function AuditLogsPage() {
                       <TableCell className="font-medium">{l.type}</TableCell>
                       <TableCell className="text-muted-foreground">{l.agentId}</TableCell>
                       <TableCell>
-                        <pre className="text-xs bg-muted p-2 rounded-md overflow-x-auto max-h-40">{JSON.stringify(l.payload, null, 2)}</pre>
+                        <pre className="text-xs bg-muted p-2 rounded-md overflow-x-auto max-h-40">
+                          {JSON.stringify(l.payload, null, 2)}
+                        </pre>
                       </TableCell>
                     </TableRow>
                   ))}

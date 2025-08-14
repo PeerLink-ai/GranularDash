@@ -12,7 +12,6 @@ export interface User {
   organization: string
   permissions: string[]
   connectedAgents: any[]
-  onboarding_completed: boolean
   created_at: string
   last_login?: string
 }
@@ -23,7 +22,6 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<void>
   signUp: (email: string, password: string, name: string, organization: string, role?: string) => Promise<void>
   signOut: () => Promise<void>
-  completeOnboarding: () => Promise<void>
   refreshUser: () => Promise<void>
 }
 
@@ -109,20 +107,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const completeOnboarding = async () => {
-    try {
-      const response = await fetch("/api/auth/onboarding", {
-        method: "POST",
-      })
-
-      if (response.ok) {
-        setUser((prev) => (prev ? { ...prev, onboarding_completed: true } : null))
-      }
-    } catch (error) {
-      console.error("Complete onboarding error:", error)
-    }
-  }
-
   const refreshUser = async () => {
     await checkAuth()
   }
@@ -135,7 +119,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signIn,
         signUp,
         signOut,
-        completeOnboarding,
         refreshUser,
       }}
     >

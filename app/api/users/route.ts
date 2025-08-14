@@ -18,7 +18,8 @@ export async function GET(request: NextRequest) {
     }
 
     // Check if user has permission to manage users
-    if (!currentUser.permissions.includes("manage_users") && currentUser.role !== "admin") {
+    const userPermissions = currentUser.permissions || []
+    if (!userPermissions.includes("manage_users") && currentUser.role !== "admin") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
@@ -42,10 +43,10 @@ export async function GET(request: NextRequest) {
       ORDER BY created_at DESC
     `
 
-    const formattedUsers = users.map(user => ({
+    const formattedUsers = users.map((user) => ({
       ...user,
-      lastLogin: user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never',
-      status: user.status
+      lastLogin: user.last_login ? new Date(user.last_login).toLocaleDateString() : "Never",
+      status: user.status,
     }))
 
     return NextResponse.json({ users: formattedUsers })
@@ -70,7 +71,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user has permission to manage users
-    if (!currentUser.permissions.includes("manage_users") && currentUser.role !== "admin") {
+    const userPermissions = currentUser.permissions || []
+    if (!userPermissions.includes("manage_users") && currentUser.role !== "admin") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
@@ -92,19 +94,19 @@ export async function POST(request: NextRequest) {
     // Create the user
     const result = await signUpUser(email, password, name, organization, role)
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       message: "User created successfully",
       user: {
         id: result.user.id,
         name: result.user.name,
         email: result.user.email,
         role: result.user.role,
-        organization: result.user.organization
-      }
+        organization: result.user.organization,
+      },
     })
   } catch (error) {
     console.error("Create user error:", error)
-    
+
     if (error.message?.includes("duplicate key")) {
       return NextResponse.json({ error: "User with this email already exists" }, { status: 409 })
     }

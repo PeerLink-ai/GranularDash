@@ -1,13 +1,7 @@
 "use client"
 
 import * as React from "react"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import {
@@ -28,13 +22,22 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs"
-import { Download, FileJson, Filter, Focus, GitBranch, ImageIcon, Info, RotateCcw, Search, ZoomIn, ZoomOut, BadgeCheck } from 'lucide-react'
+  Download,
+  FileJson,
+  Filter,
+  Focus,
+  GitBranch,
+  ImageIcon,
+  Info,
+  RotateCcw,
+  Search,
+  ZoomIn,
+  ZoomOut,
+  BadgeCheck,
+  RefreshCw,
+} from "lucide-react"
 
 import "reactflow/dist/style.css"
 import ReactFlow, {
@@ -76,103 +79,7 @@ export interface LineageNode {
   nextNodes?: string[]
 }
 
-// Demo dataset; swap with API data when ready.
-const initialNodesData: LineageNode[] = [
-  {
-    id: "raw_csv",
-    name: "Raw Customer Data",
-    type: "dataset",
-    path: ["Raw Customer Data"],
-    metadata: {
-      sourceFile: "s3://data-lake/raw/customer_data.csv",
-      schema: "id,name,email,dob,country",
-      creationDate: "2023-01-01",
-      owner: "Data Engineering",
-      status: "Active",
-      version: "1.0.0",
-      description: "Initial raw customer data from CRM system.",
-    },
-    nextNodes: ["cleaned_table"],
-  },
-  {
-    id: "cleaned_table",
-    name: "Cleaned Customer Table",
-    type: "transformation",
-    path: ["Raw Customer Data", "Cleaned Customer Table"],
-    metadata: {
-      sourceFile: "dw/customer_cleaned",
-      schema: "id,name,email,age_group,country_encoded",
-      creationDate: "2023-01-05",
-      owner: "Data Engineering",
-      status: "Processed",
-      description: "Data cleaned, anonymized, and transformed for analysis.",
-    },
-    nextNodes: ["v1_2_model"],
-  },
-  {
-    id: "v1_2_model",
-    name: "Fraud Detection v1.2",
-    type: "model",
-    path: ["Raw Customer Data", "Cleaned Customer Table", "Fraud Detection v1.2"],
-    metadata: {
-      sourceFile: "mlflow/models/fraud_detection/v1.2",
-      schema: "features: [...], prediction: fraud_score",
-      creationDate: "2023-01-10",
-      owner: "ML Team",
-      status: "Deployed",
-      accuracy: "94%",
-      version: "1.2",
-      description: "Machine learning model for detecting fraudulent transactions.",
-    },
-    nextNodes: ["prediction_output"],
-  },
-  {
-    id: "prediction_output",
-    name: "Fraud Prediction Output",
-    type: "prediction",
-    path: [
-      "Raw Customer Data",
-      "Cleaned Customer Table",
-      "Fraud Detection v1.2",
-      "Fraud Prediction Output",
-    ],
-    metadata: {
-      sourceFile: "s3://data-lake/predictions/fraud_scores.csv",
-      schema: "transaction_id,fraud_score,model_version",
-      creationDate: "2023-01-11",
-      owner: "ML Ops",
-      status: "Archived",
-      description: "Output of the fraud detection model, containing scores for transactions.",
-    },
-    nextNodes: ["audit_report"],
-  },
-  {
-    id: "audit_report",
-    name: "Q1 2023 Audit Report",
-    type: "audit",
-    path: [
-      "Raw Customer Data",
-      "Cleaned Customer Table",
-      "Fraud Detection v1.2",
-      "Fraud Prediction Output",
-      "Q1 2023 Audit Report",
-    ],
-    metadata: {
-      sourceFile: "internal/reports/fraud_audit_2023_Q1.pdf",
-      schema: "compliance_status,findings,recommendations",
-      creationDate: "2023-01-15",
-      owner: "Compliance Team",
-      status: "Completed",
-      description: "Comprehensive audit report for Q1 2023 fraud detection activities.",
-    },
-    nextNodes: [],
-  },
-]
-
-const TYPE_THEME: Record<
-  NodeKind,
-  { bg: string; border: string; text: string; accent: string }
-> = {
+const TYPE_THEME: Record<NodeKind, { bg: string; border: string; text: string; accent: string }> = {
   dataset: {
     bg: "bg-emerald-50 dark:bg-emerald-950/40",
     border: "border-emerald-200 dark:border-emerald-900",
@@ -208,6 +115,8 @@ const TYPE_THEME: Record<
 type FocusMode = "all" | "upstream" | "downstream"
 
 function buildEdges(data: LineageNode[]): Edge[] {
+  if (!Array.isArray(data)) return []
+
   const ids = new Set(data.map((n) => n.id))
   const edges: Edge[] = []
   for (const n of data) {
@@ -224,15 +133,14 @@ function buildEdges(data: LineageNode[]): Edge[] {
   return edges
 }
 
-function layoutNodes(
-  data: LineageNode[],
-  opts: { colGap?: number; rowGap?: number } = {}
-): Node[] {
+function layoutNodes(data: LineageNode[], opts: { colGap?: number; rowGap?: number } = {}): Node[] {
+  if (!Array.isArray(data)) return []
+
   const colGap = opts.colGap ?? 360
   const rowGap = opts.rowGap ?? 140
   const byDepth = new Map<number, LineageNode[]>()
   for (const n of data) {
-    const depth = Math.max(0, n.path.length - 1)
+    const depth = Math.max(0, (n.path || []).length - 1)
     if (!byDepth.has(depth)) byDepth.set(depth, [])
     byDepth.get(depth)!.push(n)
   }
@@ -258,6 +166,8 @@ function layoutNodes(
 }
 
 function buildAdjacency(edges: Edge[]) {
+  if (!Array.isArray(edges)) return { out: new Map(), incoming: new Map() }
+
   const out = new Map<string, Set<string>>()
   const incoming = new Map<string, Set<string>>()
   for (const e of edges) {
@@ -331,10 +241,12 @@ function useDebounced<T>(value: T, delay = 250) {
 
 function MetricsBar({ data }: { data: LineageNode[] }) {
   const counts = React.useMemo(() => {
+    const safeData = Array.isArray(data) ? data : []
     const c: Record<NodeKind, number> = { dataset: 0, transformation: 0, model: 0, prediction: 0, audit: 0 }
-    data.forEach((n) => (c[n.type] += 1))
+    safeData.forEach((n) => (c[n.type] += 1))
     return c
   }, [data])
+
   const items: { label: string; key: NodeKind; value: number }[] = [
     { label: "Datasets", key: "dataset", value: counts.dataset },
     { label: "Transformations", key: "transformation", value: counts.transformation },
@@ -389,7 +301,7 @@ function Toolbar({
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="gap-2">
+            <Button variant="outline" className="gap-2 bg-transparent">
               <Filter className="h-4 w-4" />
               Filters
             </Button>
@@ -416,17 +328,17 @@ function Toolbar({
       </div>
 
       <div className="flex items-center gap-2">
-        <Button variant="outline" onClick={onFit} className="gap-2">
+        <Button variant="outline" onClick={onFit} className="gap-2 bg-transparent">
           <Focus className="h-4 w-4" />
           Fit
         </Button>
-        <Button variant="outline" onClick={onReset} className="gap-2">
+        <Button variant="outline" onClick={onReset} className="gap-2 bg-transparent">
           <RotateCcw className="h-4 w-4" />
           Reset
         </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="gap-2">
+            <Button variant="outline" className="gap-2 bg-transparent">
               <Download className="h-4 w-4" />
               Export
             </Button>
@@ -505,7 +417,9 @@ function GraphCanvas({
                 <GitBranch className={`h-3.5 w-3.5 ${theme.accent}`} />
                 <span className="capitalize">{data.node.type}</span>
                 {data.node.metadata.version && (
-                  <span className="ml-auto text-[10px] bg-muted px-1.5 py-0.5 rounded">v{data.node.metadata.version}</span>
+                  <span className="ml-auto text-[10px] bg-muted px-1.5 py-0.5 rounded">
+                    v{data.node.metadata.version}
+                  </span>
                 )}
               </div>
             </div>
@@ -527,24 +441,52 @@ function GraphCanvas({
         fitView
         proOptions={{ hideAttribution: true }}
       >
-        <MiniMap pannable zoomable className="!bg-transparent" nodeStrokeWidth={2} />
+        <MiniMap
+          pannable
+          zoomable
+          nodeStrokeWidth={2}
+          nodeColor="#3b82f6"
+          maskColor="rgba(0, 0, 0, 0.4)"
+          style={{
+            backgroundColor: "white",
+            border: "1px solid #e5e7eb",
+            borderRadius: "8px",
+            width: 200,
+            height: 140,
+          }}
+        />
         <Background />
-        <Controls position="bottom-right" className="!bg-background/80 backdrop-blur" showFitView={false}>
-          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => rf.zoomIn()} aria-label="Zoom in">
+        <Controls
+          position="bottom-right"
+          className="!bg-background/95 !border !border-border !rounded-lg !shadow-lg !backdrop-blur-sm"
+          showFitView={false}
+          showZoom={false}
+          showInteractive={false}
+        >
+          <button
+            className="react-flow__controls-button !text-foreground hover:!bg-muted hover:!text-foreground transition-colors border-0 bg-transparent"
+            onClick={() => rf.zoomIn({ duration: 150 })}
+            title="Zoom in"
+            aria-label="Zoom in"
+          >
             <ZoomIn className="h-4 w-4" />
-          </Button>
-          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => rf.zoomOut()} aria-label="Zoom out">
+          </button>
+          <button
+            className="react-flow__controls-button !text-foreground hover:!bg-muted hover:!text-foreground transition-colors border-0 bg-transparent"
+            onClick={() => rf.zoomOut({ duration: 150 })}
+            title="Zoom out"
+            aria-label="Zoom out"
+          >
             <ZoomOut className="h-4 w-4" />
-          </Button>
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-7 w-7"
+          </button>
+          <button
+            className="react-flow__controls-button !text-foreground hover:!bg-muted hover:!text-foreground transition-colors border-0 bg-transparent"
             onClick={() => rf.fitView({ duration: 350, padding: 0.2 })}
+            title="Fit view"
             aria-label="Fit view"
           >
             <Focus className="h-4 w-4" />
-          </Button>
+          </button>
         </Controls>
       </ReactFlow>
     </div>
@@ -556,11 +498,15 @@ export function DataModelLineage({
   onOpenTransformationSteps,
   onOpenModelVersionTracking,
 }: DataModelLineageProps) {
-  const [raw] = React.useState<LineageNode[]>(initialNodesData)
-  const edgesRaw = React.useMemo(() => buildEdges(raw), [raw])
+  const [serverData, setServerData] = React.useState<{
+    nodes: LineageNode[]
+    edges: { source: string; target: string }[]
+  } | null>(null)
+  const [loading, setLoading] = React.useState(false)
+  const [error, setError] = React.useState<string | null>(null)
+  const [raw, setRaw] = React.useState<LineageNode[]>([])
   const [focusMode, setFocusMode] = React.useState<FocusMode>("all")
-  const [selected, setSelected] = React.useState<LineageNode | null>(initialNodesData[0])
-
+  const [selected, setSelected] = React.useState<LineageNode | null>(null)
   const [search, setSearch] = React.useState("")
   const debouncedSearch = useDebounced(search)
   const [typeFilter, setTypeFilter] = React.useState<Record<NodeKind, boolean>>({
@@ -571,25 +517,59 @@ export function DataModelLineage({
     audit: true,
   })
 
+  React.useEffect(() => {
+    loadLineage()
+  }, [])
+
+  React.useEffect(() => {
+    if (serverData?.nodes && Array.isArray(serverData.nodes) && serverData.nodes.length > 0) {
+      const ids = new Set(serverData.nodes.map((n) => n.id))
+      const nextMap = new Map<string, string[]>()
+
+      const safeEdges = Array.isArray(serverData.edges) ? serverData.edges : []
+      for (const e of safeEdges) {
+        if (!ids.has(e.source) || !ids.has(e.target)) continue
+        const arr = nextMap.get(e.source) || []
+        arr.push(e.target)
+        nextMap.set(e.source, arr)
+      }
+
+      const normalized = serverData.nodes.map((n) => ({
+        ...n,
+        nextNodes: nextMap.get(n.id) || [],
+        path: Array.isArray(n.path) ? n.path : [],
+        metadata: n.metadata || {},
+      }))
+      setRaw(normalized as LineageNode[])
+      setSelected(normalized[0] || null)
+    } else {
+      setRaw([])
+      setSelected(null)
+    }
+  }, [serverData])
+
+  const edgesRaw = React.useMemo(() => buildEdges(raw), [raw])
+
   const activeTypes = React.useMemo(
     () => new Set((Object.keys(typeFilter) as NodeKind[]).filter((k) => typeFilter[k])),
-    [typeFilter]
+    [typeFilter],
   )
 
   const filteredData = React.useMemo(() => {
+    const safeRaw = Array.isArray(raw) ? raw : []
     const q = debouncedSearch.trim().toLowerCase()
-    return raw.filter((n) => {
+    return safeRaw.filter((n) => {
       if (!activeTypes.has(n.type)) return false
       if (!q) return true
       const hay = [
         n.name,
         n.type,
-        n.metadata.owner,
-        n.metadata.version,
-        n.metadata.schema,
-        n.metadata.sourceFile,
-        n.metadata.status,
-        n.metadata.description,
+        n.metadata?.owner,
+        n.metadata?.version,
+        n.metadata?.schema,
+        n.metadata?.sourceFile,
+        n.metadata?.status,
+        n.metadata?.description,
       ]
         .filter(Boolean)
         .join(" ")
@@ -601,7 +581,7 @@ export function DataModelLineage({
   const rfNodesBase = React.useMemo(() => layoutNodes(filteredData), [filteredData])
   const [nodes, , onNodesChange] = useNodesState(rfNodesBase)
   const [edges, , onEdgesChange] = useEdgesState(
-    edgesRaw.filter((e) => rfNodesBase.find((n) => n.id === e.source) && rfNodesBase.find((n) => n.id === e.target))
+    edgesRaw.filter((e) => rfNodesBase.find((n) => n.id === e.source) && rfNodesBase.find((n) => n.id === e.target)),
   )
 
   const { out, incoming } = React.useMemo(() => buildAdjacency(edges), [edges])
@@ -619,10 +599,17 @@ export function DataModelLineage({
   const apiRef = React.useRef<GraphApi | null>(null)
 
   const handleExportJSON = React.useCallback(() => {
-    const visibleNodes = nodes.map((n) => (n.data as any).node as LineageNode)
+    const safeNodes = Array.isArray(nodes) ? nodes : []
+    const safeEdges = Array.isArray(edges) ? edges : []
+
+    const visibleNodes = safeNodes.map((n) => (n.data as any).node as LineageNode)
     const visibleIds = new Set(visibleNodes.map((n) => n.id))
-    const visibleEdges = edges.filter((e) => visibleIds.has(e.source) && visibleIds.has(e.target))
-    downloadJSON("lineage-visible.json", { nodes: visibleNodes, edges: visibleEdges, generatedAt: new Date().toISOString() })
+    const visibleEdges = safeEdges.filter((e) => visibleIds.has(e.source) && visibleIds.has(e.target))
+    downloadJSON("lineage-visible.json", {
+      nodes: visibleNodes,
+      edges: visibleEdges,
+      generatedAt: new Date().toISOString(),
+    })
   }, [nodes, edges])
 
   const handleExportPNG = React.useCallback(async () => {
@@ -630,7 +617,26 @@ export function DataModelLineage({
     await downloadPNG("lineage-graph.png", graphRef.current)
   }, [])
 
-  const breadcrumbSegments = selected?.path ?? []
+  const breadcrumbSegments = Array.isArray(selected?.path) ? selected.path : []
+
+  const loadLineage = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch("/api/lineage", { cache: "no-store" })
+      const data = await res.json()
+      if (data && Array.isArray(data.nodes) && Array.isArray(data.edges)) {
+        setServerData(data)
+      } else {
+        setServerData({ nodes: [], edges: [] })
+      }
+    } catch (e: any) {
+      setError(e?.message || "Failed to load lineage")
+      setServerData({ nodes: [], edges: [] })
+    } finally {
+      setLoading(false)
+    }
+  }
 
   return (
     <ReactFlowProvider>
@@ -643,7 +649,11 @@ export function DataModelLineage({
                 Visualize datasets, transformations, and models from source to audit, filter, focus, and export.
               </CardDescription>
             </div>
-            <Button variant="outline" className="gap-2" onClick={handleExportJSON}>
+            <Button variant="outline" className="gap-2 bg-transparent" onClick={loadLineage} disabled={loading}>
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              {loading ? "Refreshing" : "Refresh"}
+            </Button>
+            <Button variant="outline" className="gap-2 bg-transparent" onClick={handleExportJSON}>
               <Download className="h-4 w-4" />
               Export JSON
             </Button>
@@ -661,7 +671,7 @@ export function DataModelLineage({
                           href="#"
                           onClick={(e) => {
                             e.preventDefault()
-                            const node = initialNodesData.find((n) => n.path[idx] === segment && n.path.length === idx + 1)
+                            const node = raw.find((n) => n.path[idx] === segment && n.path.length === idx + 1)
                             if (node) setSelected(node)
                           }}
                         >
@@ -696,16 +706,30 @@ export function DataModelLineage({
             onExportJSON={handleExportJSON}
             onExportPNG={handleExportPNG}
           />
+          {error && (
+            <div className="text-sm text-destructive">
+              {"Failed to load live lineage: "}
+              {error}
+            </div>
+          )}
 
           <div className="grid lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-3">
               <div className="flex items-center gap-2">
                 <span className="text-sm text-muted-foreground">Focus</span>
                 <div className="flex items-center gap-2">
-                  <Button variant={focusMode === "all" ? "default" : "outline"} size="sm" onClick={() => setFocusMode("all")}>
+                  <Button
+                    variant={focusMode === "all" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setFocusMode("all")}
+                  >
                     All
                   </Button>
-                  <Button variant={focusMode === "upstream" ? "default" : "outline"} size="sm" onClick={() => setFocusMode("upstream")}>
+                  <Button
+                    variant={focusMode === "upstream" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setFocusMode("upstream")}
+                  >
                     Upstream
                   </Button>
                   <Button
@@ -718,7 +742,6 @@ export function DataModelLineage({
                 </div>
               </div>
 
-              {/* Graph */}
               <GraphCanvas
                 nodes={nodes}
                 edges={edges}
@@ -733,7 +756,9 @@ export function DataModelLineage({
                 graphRef={graphRef}
               />
 
-              <p className="text-xs text-muted-foreground">Tip: Drag to pan, scroll to zoom, and drag nodes to adjust layout.</p>
+              <p className="text-xs text-muted-foreground">
+                Tip: Drag to pan, scroll to zoom, and drag nodes to adjust layout.
+              </p>
             </div>
 
             <div className="lg:col-span-1">
@@ -775,7 +800,7 @@ export function DataModelLineage({
                                   </div>
                                   <div className="font-medium break-words">{value}</div>
                                 </div>
-                              ) : null
+                              ) : null,
                             )}
                           </div>
                         </TabsContent>
@@ -799,7 +824,9 @@ export function DataModelLineage({
                         <Button variant="outline" size="sm" onClick={() => setFocusMode("downstream")}>
                           View Downstream
                         </Button>
-                        {(selected.type === "dataset" || selected.type === "transformation" || selected.type === "model") && (
+                        {(selected.type === "dataset" ||
+                          selected.type === "transformation" ||
+                          selected.type === "model") && (
                           <Button
                             variant="default"
                             size="sm"
@@ -817,7 +844,9 @@ export function DataModelLineage({
                       </div>
                     </div>
                   ) : (
-                    <div className="text-muted-foreground text-sm">Select a node from the graph to view its details.</div>
+                    <div className="text-muted-foreground text-sm">
+                      Select a node from the graph to view its details.
+                    </div>
                   )}
                 </CardContent>
               </Card>

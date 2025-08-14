@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { getUserBySession } from "@/lib/auth"
 import { sql } from "@/lib/db"
@@ -113,16 +113,17 @@ export async function POST(req: NextRequest) {
 
     // Live health check
     const health = await performHealthCheck(endpoint, apiKey)
-    const status: "active" | "inactive" | "error" = health.reachable
-      ? "active"
-      : "error"
+    const status: "active" | "inactive" | "error" = health.reachable ? "active" : "error"
 
     // Encrypt API key if provided
     const encrypted = encryptSecret(apiKey)
 
+    const agentId = `agent_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+
     const inserted = await sql<any[]>`
       INSERT INTO connected_agents (
         user_id,
+        agent_id,
         name,
         provider,
         model,
@@ -133,6 +134,7 @@ export async function POST(req: NextRequest) {
         last_active
       ) VALUES (
         ${user.id},
+        ${agentId},
         ${name.trim()},
         ${type},
         ${description || "default"},
@@ -159,10 +161,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Audit log
-    const ipAddress =
-      req.headers.get("x-forwarded-for") ||
-      req.headers.get("x-real-ip") ||
-      undefined
+    const ipAddress = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || undefined
     const userAgent = req.headers.get("user-agent") || undefined
 
     await addAuditLog({
@@ -188,7 +187,7 @@ export async function POST(req: NextRequest) {
         agent: agentForClient,
         health,
       },
-      { status: 201 }
+      { status: 201 },
     )
   } catch (error) {
     console.error("POST /api/agents error:", error)

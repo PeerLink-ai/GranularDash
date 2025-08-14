@@ -39,7 +39,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const response = await fetch("/api/auth/me")
       if (response.ok) {
-        const data = await response.json()
+        const data = await response.json().catch(() => ({ user: null }))
         setUser(data.user)
       }
     } catch (error) {
@@ -61,11 +61,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       })
 
       if (!response.ok) {
-        const error = await response.json()
+        const error = await response.json().catch(() => ({ error: "Sign in failed" }))
         throw new Error(error.error || "Sign in failed")
       }
 
-      const data = await response.json()
+      const data = await response.json().catch(() => ({ user: null }))
       setUser(data.user)
     } finally {
       setIsLoading(false)
@@ -84,11 +84,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       })
 
       if (!response.ok) {
-        const error = await response.json()
+        const error = await response.json().catch(() => ({ error: "Sign up failed" }))
         throw new Error(error.error || "Sign up failed")
       }
 
-      const data = await response.json()
+      const data = await response.json().catch(() => ({ user: null }))
       setUser(data.user)
     } finally {
       setIsLoading(false)

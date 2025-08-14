@@ -1,30 +1,15 @@
 import Stripe from "stripe"
 
-let stripeInstance: Stripe | null = null
-
-const getStripe = () => {
-  if (!stripeInstance) {
-    if (!process.env.STRIPE_SECRET_KEY) {
-      throw new Error("STRIPE_SECRET_KEY is not set in environment variables")
-    }
-
-    stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY, {
-      apiVersion: "2024-06-20",
-      typescript: true,
-    })
-  }
-
-  return stripeInstance
+if (!process.env.STRIPE_SECRET_KEY) {
+  throw new Error("STRIPE_SECRET_KEY is not set in environment variables")
 }
 
-export const stripe = new Proxy({} as Stripe, {
-  get(target, prop) {
-    return getStripe()[prop as keyof Stripe]
-  },
+export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+  apiVersion: "2024-06-20",
+  typescript: true,
 })
 
 export const getStripeCustomerByEmail = async (email: string) => {
-  const stripe = getStripe()
   const customers = await stripe.customers.list({
     email,
     limit: 1,
@@ -33,7 +18,6 @@ export const getStripeCustomerByEmail = async (email: string) => {
 }
 
 export const createStripeCustomer = async (email: string, name?: string) => {
-  const stripe = getStripe()
   return await stripe.customers.create({
     email,
     name,
@@ -56,7 +40,6 @@ export const createCheckoutSession = async ({
   cancelUrl: string
   trialPeriodDays?: number
 }) => {
-  const stripe = getStripe()
   const sessionParams: Stripe.Checkout.SessionCreateParams = {
     customer: customerId,
     payment_method_types: ["card"],
@@ -83,7 +66,6 @@ export const createCheckoutSession = async ({
 }
 
 export const createBillingPortalSession = async (customerId: string, returnUrl: string) => {
-  const stripe = getStripe()
   return await stripe.billingPortal.sessions.create({
     customer: customerId,
     return_url: returnUrl,
@@ -91,12 +73,10 @@ export const createBillingPortalSession = async (customerId: string, returnUrl: 
 }
 
 export const cancelSubscription = async (subscriptionId: string) => {
-  const stripe = getStripe()
   return await stripe.subscriptions.cancel(subscriptionId)
 }
 
 export const updateSubscription = async (subscriptionId: string, priceId: string) => {
-  const stripe = getStripe()
   const subscription = await stripe.subscriptions.retrieve(subscriptionId)
 
   return await stripe.subscriptions.update(subscriptionId, {

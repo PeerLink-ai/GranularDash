@@ -12,10 +12,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { priceId, trialPeriodDays } = await request.json()
+    const body = await request.json().catch(() => ({}))
+    const { priceId, trialPeriodDays } = body
 
     if (!priceId) {
       return NextResponse.json({ error: "Price ID is required" }, { status: 400 })
+    }
+
+    if (!priceId.startsWith("price_")) {
+      return NextResponse.json({ error: "Invalid price ID format" }, { status: 400 })
+    }
+
+    if (!process.env.NEXT_PUBLIC_APP_URL) {
+      console.error("NEXT_PUBLIC_APP_URL environment variable is not set")
+      return NextResponse.json({ error: "Server configuration error" }, { status: 500 })
     }
 
     // Check if customer exists in Stripe
@@ -42,9 +52,27 @@ export async function POST(request: NextRequest) {
       trialPeriodDays,
     })
 
-    return NextResponse.json({ sessionId: session.id, url: session.url })
+    if (!session || !session.url) {
+      throw new Error("Failed to create checkout session - no URL returned")
+    }
+
+    return NextResponse.json({
+      sessionId: session.id,
+      url: session.url,
+      success: true,
+    })
   } catch (error) {
     console.error("Error creating checkout session:", error)
-    return NextResponse.json({ error: "Failed to create checkout session" }, { status: 500 })
+
+    const errorMessage = error instanceof Error ? error.message : "Unknown error occurred"
+
+    return NextResponse.json(
+      {
+        error: "Failed to create checkout session",
+        details: errorMessage,
+        success: false,
+      },
+      { status: 500 },
+    )
   }
 }

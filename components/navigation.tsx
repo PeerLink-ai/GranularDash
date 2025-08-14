@@ -1,4 +1,4 @@
-import { Activity } from "some-icon-library" // Assuming Activity is an icon from a library
+import { Activity } from "lucide-react"
 
 const navigationItems = [
   {

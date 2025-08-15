@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { sql } from "@/lib/db"
+import { getUserBySession } from "@/lib/auth"
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -9,26 +10,17 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const userResult = await sql`
-      SELECT u.id, u.email, u.organization 
-      FROM users u
-      JOIN user_sessions s ON s.user_id = u.id
-      WHERE s.session_token = ${sessionToken}
-      LIMIT 1
-    `
-
-    if (userResult.length === 0) {
+    const user = await getUserBySession(sessionToken)
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const user = userResult[0]
     const simulationId = params.id
 
     const simulationResult = await sql`
       SELECT id, name, type, difficulty_level, duration_minutes, configuration, pass_threshold
       FROM training_simulations 
-      WHERE id = ${simulationId} 
-      AND organization_id = ${user.organization}
+      WHERE id = ${simulationId}
     `
 
     if (simulationResult.length === 0) {
@@ -41,13 +33,11 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       INSERT INTO training_sessions (
         simulation_id,
         user_id,
-        organization_id,
         started_at,
         status
       ) VALUES (
         ${simulationId},
         ${user.id},
-        ${user.organization},
         NOW(),
         'in_progress'
       )
@@ -63,8 +53,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         last_run = NOW(),
         participants_count = COALESCE(participants_count, 0) + 1,
         updated_at = NOW()
-      WHERE id = ${simulationId} 
-      AND organization_id = ${user.organization}
+      WHERE id = ${simulationId}
       RETURNING id, name, status, last_run, difficulty_level, duration_minutes
     `
 
@@ -107,7 +96,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         }
       },
       (simulation.duration_minutes || 60) * 100,
-    ) // Realistic duration simulation
+    )
 
     return NextResponse.json({
       success: true,
@@ -189,19 +178,18 @@ function generateSimulationScenarios(type: string, difficulty: string) {
   return scenarioTemplates[type]?.[difficulty] || scenarioTemplates["Security Awareness"]["intermediate"]
 }
 
-async function simulateAdvancedCompletion(simulation: any, sessionId: string, userId: number) {
+async function simulateAdvancedCompletion(simulation: any, sessionId: string, userId: string) {
   const scenarios = generateSimulationScenarios(simulation.type, simulation.difficulty_level)
   const baseScore =
     simulation.difficulty_level === "advanced" ? 75 : simulation.difficulty_level === "intermediate" ? 80 : 85
 
-  // Simulate realistic performance variation
-  const performanceVariation = Math.random() * 20 - 10 // -10 to +10
+  const performanceVariation = Math.random() * 20 - 10
   const finalScore = Math.max(0, Math.min(100, Math.round(baseScore + performanceVariation)))
 
   const answers = scenarios.map((scenario) => ({
     scenarioId: scenario.id,
     response: generateRealisticResponse(scenario, simulation.difficulty_level),
-    timeSpent: Math.round(Math.random() * 300 + 60), // 1-5 minutes per scenario
+    timeSpent: Math.round(Math.random() * 300 + 60),
     correct: Math.random() > (simulation.difficulty_level === "advanced" ? 0.3 : 0.2),
   }))
 
@@ -261,7 +249,7 @@ function identifyStrengths(answers: any[], scenarios: any[]) {
     const scenario = scenarios.find((s) => s.id === a.scenarioId)
     return scenario?.title || "Unknown"
   })
-  return strongAreas.slice(0, 3) // Top 3 strengths
+  return strongAreas.slice(0, 3)
 }
 
 function identifyImprovementAreas(answers: any[], scenarios: any[]) {
@@ -270,7 +258,7 @@ function identifyImprovementAreas(answers: any[], scenarios: any[]) {
     const scenario = scenarios.find((s) => s.id === a.scenarioId)
     return scenario?.title || "Unknown"
   })
-  return weakAreas.slice(0, 3) // Top 3 improvement areas
+  return weakAreas.slice(0, 3)
 }
 
 function generateRecommendations(type: string, score: number) {

@@ -4,7 +4,7 @@ import { sql } from "@/lib/db"
 
 export async function GET(request: NextRequest) {
   try {
-    const sessionToken = request.cookies.get("session")?.value
+    const sessionToken = request.cookies.get("session")?.value || request.cookies.get("session_token")?.value
 
     if (!sessionToken) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const sessionToken = request.cookies.get("session")?.value
+    const sessionToken = request.cookies.get("session")?.value || request.cookies.get("session_token")?.value
 
     if (!sessionToken) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })

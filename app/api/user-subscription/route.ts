@@ -1,12 +1,18 @@
-import { NextResponse } from "next/server"
-import { getUser } from "@/lib/auth"
+import { NextResponse, type NextRequest } from "next/server"
+import { getUserBySession } from "@/lib/auth"
 import { neon } from "@neondatabase/serverless"
 
 const sql = neon(process.env.DATABASE_URL!)
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const user = await getUser()
+    const sessionToken = request.cookies.get("session")?.value || request.cookies.get("session_token")?.value
+
+    if (!sessionToken) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const user = await getUserBySession(sessionToken)
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }

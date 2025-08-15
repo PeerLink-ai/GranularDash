@@ -2,6 +2,8 @@ import { sql } from "@/lib/db"
 import bcrypt from "bcryptjs"
 import crypto from "crypto"
 import type { NextRequest } from "next/server"
+import type { NextAuthOptions } from "next-auth"
+import CredentialsProvider from "next-auth/providers/credentials"
 
 const SESSION_COOKIE_NAME = "session_token"
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
@@ -21,6 +23,64 @@ export type ConnectedAgent = {
   name: string | null
   status: string | null
   connected_at: string
+}
+
+export const authOptions: NextAuthOptions = {
+  providers: [
+    CredentialsProvider({
+      name: "credentials",
+      credentials: {
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" },
+      },
+      async authorize(credentials) {
+        if (!credentials?.email || !credentials?.password) {
+          return null
+        }
+
+        try {
+          const result = await signInUser(credentials.email, credentials.password)
+          if (result) {
+            return {
+              id: result.user.id,
+              email: result.user.email,
+              name: result.user.name,
+              role: result.user.role,
+              organization: result.user.organization,
+            }
+          }
+          return null
+        } catch (error) {
+          console.error("Auth error:", error)
+          return null
+        }
+      },
+    }),
+  ],
+  callbacks: {
+    async jwt({ token, user }) {
+      if (user) {
+        token.role = user.role
+        token.organization = user.organization
+      }
+      return token
+    },
+    async session({ session, token }) {
+      if (token) {
+        session.user.id = token.sub!
+        session.user.role = token.role as string
+        session.user.organization = token.organization as string
+      }
+      return session
+    },
+  },
+  pages: {
+    signIn: "/auth/signin",
+    signUp: "/auth/signup",
+  },
+  session: {
+    strategy: "jwt",
+  },
 }
 
 export async function hashPassword(password: string) {

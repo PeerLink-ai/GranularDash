@@ -31,7 +31,7 @@ export async function POST(request: NextRequest, { params }: { params: { provide
   }
 
   const config = OAUTH_CONFIGS[provider]
-  const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/integrations/${provider}/callback`
+  const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/integrations/oauth/${provider}/callback`
   const state = Math.random().toString(36).substring(7)
 
   // In a real implementation, you would:

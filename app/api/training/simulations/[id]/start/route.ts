@@ -37,7 +37,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         status
       ) VALUES (
         ${simulationId},
-        ${user.id},
+        ${Number.parseInt(user.id)},
         NOW(),
         'in_progress'
       )
@@ -62,7 +62,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     setTimeout(
       async () => {
         try {
-          const completionData = await simulateAdvancedCompletion(simulation, session.id, user.id)
+          const completionData = await simulateAdvancedCompletion(simulation, session.id, Number.parseInt(user.id))
 
           await sql`
           UPDATE training_simulations 
@@ -178,7 +178,7 @@ function generateSimulationScenarios(type: string, difficulty: string) {
   return scenarioTemplates[type]?.[difficulty] || scenarioTemplates["Security Awareness"]["intermediate"]
 }
 
-async function simulateAdvancedCompletion(simulation: any, sessionId: string, userId: string) {
+async function simulateAdvancedCompletion(simulation: any, sessionId: string, userId: number) {
   const scenarios = generateSimulationScenarios(simulation.type, simulation.difficulty_level)
   const baseScore =
     simulation.difficulty_level === "advanced" ? 75 : simulation.difficulty_level === "intermediate" ? 80 : 85

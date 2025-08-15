@@ -1,16 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { sql } from "@/lib/db"
+import { getUserBySession } from "@/lib/auth"
 
 async function getUserFromSession(request: NextRequest) {
-  const sessionToken = request.cookies.get("session")?.value
+  const sessionToken = request.cookies.get("session")?.value || request.cookies.get("session_token")?.value
   if (!sessionToken) return null
-  const userResult = await sql`
-    SELECT id, email, organization 
-    FROM users
-    WHERE session_token = ${sessionToken}
-    LIMIT 1
-  `
-  return userResult[0] || null
+  return await getUserBySession(sessionToken)
 }
 
 // GET: list current agent assignments for this policy

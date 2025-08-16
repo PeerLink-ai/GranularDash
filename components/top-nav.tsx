@@ -3,7 +3,19 @@
 import * as React from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Search, Bell, User, CreditCard, FolderKanban, Home, BarChart2, UserCog, Settings, LogOut } from "lucide-react"
+import {
+  Search,
+  Bell,
+  User,
+  CreditCard,
+  FolderKanban,
+  Home,
+  BarChart2,
+  UserCog,
+  Settings,
+  LogOut,
+  Command,
+} from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -19,7 +31,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import {
-  Command,
+  Command as CommandPrimitive,
   CommandEmpty,
   CommandGroup,
   CommandItem,
@@ -27,6 +39,7 @@ import {
   CommandSeparator,
 } from "@/components/ui/command"
 import { SidebarTrigger } from "@/components/ui/sidebar"
+import { CommandPalette } from "@/components/command-palette"
 import { useAuth } from "@/contexts/auth-context"
 
 type SearchResult = {
@@ -73,6 +86,8 @@ export function TopNav() {
   const { user, signOut } = useAuth()
   const router = useRouter()
   const [previewRole, setPreviewRole] = React.useState<Role | null>(null)
+
+  const [showCommandPalette, setShowCommandPalette] = React.useState(false)
 
   // Search state
   const [query, setQuery] = React.useState("")
@@ -269,10 +284,12 @@ export function TopNav() {
     }
   }
 
-  // Global keyboard shortcut for search
   React.useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault()
+        setShowCommandPalette(true)
+      } else if ((e.metaKey || e.ctrlKey) && e.key === "/") {
         e.preventDefault()
         setOpen(true)
         inputRef.current?.focus()
@@ -285,192 +302,209 @@ export function TopNav() {
   if (!user) return null
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="mx-auto flex h-14 max-w-7xl items-center gap-3 px-4 sm:px-6">
-        {/* Hamburger to toggle sidebar */}
-        <SidebarTrigger className="h-9 w-9" aria-label="Toggle navigation" />
+    <>
+      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="mx-auto flex h-14 max-w-7xl items-center gap-3 px-4 sm:px-6">
+          {/* Hamburger to toggle sidebar */}
+          <SidebarTrigger className="h-9 w-9" aria-label="Toggle navigation" />
 
-        {/* Brand and role badge */}
-        <div className="flex items-center gap-3 min-w-0">
-          <Link href="/" className="font-semibold text-lg truncate">
-            Granular
-          </Link>
-          {effectiveRole && (
-            <Badge className={getRoleColor(effectiveRole)} variant="secondary">
-              {effectiveRole.charAt(0).toUpperCase() + effectiveRole.slice(1)}
-            </Badge>
-          )}
-        </div>
+          {/* Brand and role badge */}
+          <div className="flex items-center gap-3 min-w-0">
+            <Link href="/" className="font-semibold text-lg truncate">
+              Granular
+            </Link>
+            {effectiveRole && (
+              <Badge className={getRoleColor(effectiveRole)} variant="secondary">
+                {effectiveRole.charAt(0).toUpperCase() + effectiveRole.slice(1)}
+              </Badge>
+            )}
+          </div>
 
-        {/* Enhanced Search */}
-        <div className="relative flex-1 max-w-lg">
-          <Popover open={open} onOpenChange={handleOpenChange}>
-            <PopoverTrigger asChild>
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  ref={inputRef}
-                  value={query}
-                  onChange={handleInputChange}
-                  onFocus={handleInputFocus}
-                  onKeyDown={handleKeyDown}
-                  role="combobox"
-                  aria-expanded={open}
-                  aria-controls="search-command"
-                  aria-autocomplete="list"
-                  placeholder="Search pages, projects, agents... (⌘K)"
-                  className="w-full pl-10 pr-4 h-9"
-                />
-                {isLoading && (
-                  <div className="absolute right-3 top-2.5">
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
-                  </div>
-                )}
-              </div>
-            </PopoverTrigger>
-            <PopoverContent className="w-[min(92vw,40rem)] p-0" align="start" sideOffset={8}>
-              <Command shouldFilter={false} id="search-command">
-                <CommandList className="max-h-80">
-                  {results.length === 0 && !isLoading ? (
-                    <CommandEmpty>No results found for "{query}"</CommandEmpty>
-                  ) : (
-                    <>
-                      {results.length > 0 && (
-                        <CommandGroup heading="Search Results">
-                          {results.map((item, idx) => {
-                            const Icon = item.icon
-                            const isActive = idx === activeIndex
-                            return (
-                              <CommandItem
-                                key={item.id}
-                                value={item.href}
-                                onSelect={() => onSelectResult(item)}
-                                onMouseEnter={() => setActiveIndex(idx)}
-                                className={isActive ? "bg-accent text-accent-foreground" : ""}
-                              >
-                                {Icon ? (
-                                  <Icon className="mr-3 h-4 w-4 shrink-0 opacity-80" />
-                                ) : (
-                                  <Search className="mr-3 h-4 w-4 opacity-50" />
-                                )}
-                                <div className="flex min-w-0 flex-col">
-                                  <span className="truncate font-medium">{item.label}</span>
-                                  {item.meta && <span className="text-xs text-muted-foreground">{item.meta}</span>}
-                                </div>
-                              </CommandItem>
-                            )
-                          })}
-                        </CommandGroup>
-                      )}
-                      <CommandSeparator />
-                      <CommandGroup heading="Quick Actions">
-                        <CommandItem
-                          onSelect={() =>
-                            onSelectResult({
-                              id: "connect",
-                              label: "Connect New Agent",
-                              href: "/connect-agent",
-                              meta: "Quick Action",
-                            })
-                          }
-                        >
-                          <UserCog className="mr-3 h-4 w-4 opacity-80" />
-                          <span>Connect New Agent</span>
-                        </CommandItem>
-                        <CommandItem
-                          onSelect={() =>
-                            onSelectResult({
-                              id: "projects",
-                              label: "Create New Project",
-                              href: "/projects",
-                              meta: "Quick Action",
-                            })
-                          }
-                        >
-                          <FolderKanban className="mr-3 h-4 w-4 opacity-80" />
-                          <span>Create New Project</span>
-                        </CommandItem>
-                      </CommandGroup>
-                    </>
+          {/* Enhanced Search */}
+          <div className="relative flex-1 max-w-lg">
+            <Popover open={open} onOpenChange={handleOpenChange}>
+              <PopoverTrigger asChild>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    ref={inputRef}
+                    value={query}
+                    onChange={handleInputChange}
+                    onFocus={handleInputFocus}
+                    onKeyDown={handleKeyDown}
+                    role="combobox"
+                    aria-expanded={open}
+                    aria-controls="search-command"
+                    aria-autocomplete="list"
+                    placeholder="Search pages, projects, agents... (⌘/)"
+                    className="w-full pl-10 pr-4 h-9"
+                  />
+                  {isLoading && (
+                    <div className="absolute right-3 top-2.5">
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
+                    </div>
                   )}
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
-        </div>
-
-        {/* Right side actions */}
-        <div className="flex items-center gap-2">
-          {/* Role Preview Dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-2 bg-transparent">
-                <UserCog className="h-4 w-4" />
-                <span className="hidden sm:inline">Preview Role</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Preview as Role</DropdownMenuLabel>
-              {ROLES.map((role) => (
-                <DropdownMenuItem key={role} onClick={() => applyPreviewRole(role)}>
-                  {role === effectiveRole ? "✓ " : ""} {role.charAt(0).toUpperCase() + role.slice(1)}
-                </DropdownMenuItem>
-              ))}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => applyPreviewRole(null)}>Clear Preview</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* Notifications */}
-          <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="Notifications">
-            <Bell className="h-4 w-4" />
-          </Button>
-
-          {/* User menu */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="relative h-9 w-9 rounded-full" aria-label="Account menu">
-                <Avatar className="h-9 w-9">
-                  <AvatarImage src={user.avatar || "/placeholder.svg"} alt={user.name} />
-                  <AvatarFallback className="text-xs">
-                    {user.name
-                      .split(" ")
-                      .map((n: string) => n[0])
-                      .join("") || <User className="h-4 w-4" />}
-                  </AvatarFallback>
-                </Avatar>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-64" align="end" forceMount>
-              <DropdownMenuLabel className="font-normal">
-                <div className="flex flex-col space-y-1">
-                  <p className="text-sm font-medium leading-none">{user.name}</p>
-                  <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
-                  <p className="text-xs leading-none text-muted-foreground">{user.organization}</p>
                 </div>
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <Link href="/settings">
-                  <Settings className="mr-2 h-4 w-4" />
-                  <span>Settings</span>
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/billing">
-                  <CreditCard className="mr-2 h-4 w-4" />
-                  <span>Billing</span>
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={signOut}>
-                <LogOut className="mr-2 h-4 w-4" />
-                <span>Log out</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+              </PopoverTrigger>
+              <PopoverContent className="w-[min(92vw,40rem)] p-0" align="start" sideOffset={8}>
+                <CommandPrimitive shouldFilter={false} id="search-command">
+                  <CommandList className="max-h-80">
+                    {results.length === 0 && !isLoading ? (
+                      <CommandEmpty>No results found for "{query}"</CommandEmpty>
+                    ) : (
+                      <>
+                        {results.length > 0 && (
+                          <CommandGroup heading="Search Results">
+                            {results.map((item, idx) => {
+                              const Icon = item.icon
+                              const isActive = idx === activeIndex
+                              return (
+                                <CommandItem
+                                  key={item.id}
+                                  value={item.href}
+                                  onSelect={() => onSelectResult(item)}
+                                  onMouseEnter={() => setActiveIndex(idx)}
+                                  className={isActive ? "bg-accent text-accent-foreground" : ""}
+                                >
+                                  {Icon ? (
+                                    <Icon className="mr-3 h-4 w-4 shrink-0 opacity-80" />
+                                  ) : (
+                                    <Search className="mr-3 h-4 w-4 opacity-50" />
+                                  )}
+                                  <div className="flex min-w-0 flex-col">
+                                    <span className="truncate font-medium">{item.label}</span>
+                                    {item.meta && <span className="text-xs text-muted-foreground">{item.meta}</span>}
+                                  </div>
+                                </CommandItem>
+                              )
+                            })}
+                          </CommandGroup>
+                        )}
+                        <CommandSeparator />
+                        <CommandGroup heading="Quick Actions">
+                          <CommandItem
+                            onSelect={() =>
+                              onSelectResult({
+                                id: "connect",
+                                label: "Connect New Agent",
+                                href: "/connect-agent",
+                                meta: "Quick Action",
+                              })
+                            }
+                          >
+                            <UserCog className="mr-3 h-4 w-4 opacity-80" />
+                            <span>Connect New Agent</span>
+                          </CommandItem>
+                          <CommandItem
+                            onSelect={() =>
+                              onSelectResult({
+                                id: "projects",
+                                label: "Create New Project",
+                                href: "/projects",
+                                meta: "Quick Action",
+                              })
+                            }
+                          >
+                            <FolderKanban className="mr-3 h-4 w-4 opacity-80" />
+                            <span>Create New Project</span>
+                          </CommandItem>
+                        </CommandGroup>
+                      </>
+                    )}
+                  </CommandList>
+                </CommandPrimitive>
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          {/* Right side actions */}
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2 bg-transparent"
+              onClick={() => setShowCommandPalette(true)}
+            >
+              <Command className="h-4 w-4" />
+              <span className="hidden sm:inline">Commands</span>
+              <kbd className="pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100">
+                ⌘K
+              </kbd>
+            </Button>
+
+            {/* Role Preview Dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-2 bg-transparent">
+                  <UserCog className="h-4 w-4" />
+                  <span className="hidden sm:inline">Preview Role</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Preview as Role</DropdownMenuLabel>
+                {ROLES.map((role) => (
+                  <DropdownMenuItem key={role} onClick={() => applyPreviewRole(role)}>
+                    {role === effectiveRole ? "✓ " : ""} {role.charAt(0).toUpperCase() + role.slice(1)}
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => applyPreviewRole(null)}>Clear Preview</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* Notifications */}
+            <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="Notifications">
+              <Bell className="h-4 w-4" />
+            </Button>
+
+            {/* User menu */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="relative h-9 w-9 rounded-full" aria-label="Account menu">
+                  <Avatar className="h-9 w-9">
+                    <AvatarImage src={user.avatar || "/placeholder.svg"} alt={user.name} />
+                    <AvatarFallback className="text-xs">
+                      {user.name
+                        .split(" ")
+                        .map((n: string) => n[0])
+                        .join("") || <User className="h-4 w-4" />}
+                    </AvatarFallback>
+                  </Avatar>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-64" align="end" forceMount>
+                <DropdownMenuLabel className="font-normal">
+                  <div className="flex flex-col space-y-1">
+                    <p className="text-sm font-medium leading-none">{user.name}</p>
+                    <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
+                    <p className="text-xs leading-none text-muted-foreground">{user.organization}</p>
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href="/settings">
+                    <Settings className="mr-2 h-4 w-4" />
+                    <span>Settings</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/billing">
+                    <CreditCard className="mr-2 h-4 w-4" />
+                    <span>Billing</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={signOut}>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  <span>Log out</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
-      </div>
-    </header>
+      </header>
+
+      <CommandPalette open={showCommandPalette} onOpenChange={setShowCommandPalette} />
+    </>
   )
 }

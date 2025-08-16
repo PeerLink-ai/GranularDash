@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from "react"
 import { StatCard, type SeriesPoint } from "@/components/ui/stat-card"
 import { Bot, CheckCircle2, BarChart3, HeartPulse } from "lucide-react"
-import { AgentList } from "@/components/agent-list"
+import { InteractiveAgentManagement } from "@/components/interactive-agent-management"
 
 interface Agent {
   id: string
@@ -161,7 +161,7 @@ export default function AgentManagementPage() {
         />
       </div>
 
-      <AgentList />
+      <InteractiveAgentManagement />
     </div>
   )
 }

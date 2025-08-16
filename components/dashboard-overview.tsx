@@ -1,13 +1,34 @@
 "use client"
 
-import { useMemo } from "react"
+import { useMemo, useState, useEffect } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { StatCard, type SeriesPoint } from "@/components/ui/stat-card"
 import { ConnectedAgentsOverview } from "@/components/connected-agents-overview"
 import { QuickActions } from "@/components/quick-actions"
 import { RecentActivity } from "@/components/recent-activity"
 import { SystemHealth } from "@/components/system-health"
-import { Bot, Shield, AlertTriangle, CheckCircle, Sparkles } from "lucide-react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Progress } from "@/components/ui/progress"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  Bot,
+  Shield,
+  Sparkles,
+  TrendingUp,
+  Activity,
+  Zap,
+  Target,
+  Brain,
+  BarChart3,
+  PieChart,
+  LineChart,
+  Users,
+  Clock,
+  ArrowUpRight,
+  ArrowDownRight,
+  Minus,
+} from "lucide-react"
 
 function alignSeriesToLast(base: number[], target: number) {
   const n = base.length
@@ -24,6 +45,62 @@ function withTime(values: number[], stepMs: number): SeriesPoint[] {
 
 export function DashboardOverview() {
   const { user } = useAuth()
+  const [realTimeData, setRealTimeData] = useState({
+    cpuUsage: 45,
+    memoryUsage: 62,
+    networkActivity: 78,
+    activeConnections: 24,
+    responseTime: 120,
+    throughput: 1250,
+  })
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setRealTimeData((prev) => ({
+        cpuUsage: Math.max(20, Math.min(90, prev.cpuUsage + (Math.random() - 0.5) * 10)),
+        memoryUsage: Math.max(30, Math.min(85, prev.memoryUsage + (Math.random() - 0.5) * 8)),
+        networkActivity: Math.max(40, Math.min(95, prev.networkActivity + (Math.random() - 0.5) * 15)),
+        activeConnections: Math.max(10, Math.min(50, prev.activeConnections + Math.floor((Math.random() - 0.5) * 6))),
+        responseTime: Math.max(80, Math.min(200, prev.responseTime + (Math.random() - 0.5) * 20)),
+        throughput: Math.max(800, Math.min(2000, prev.throughput + (Math.random() - 0.5) * 100)),
+      }))
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [])
+
+  const advancedMetrics = useMemo(() => {
+    const efficiency = Math.round((100 - realTimeData.cpuUsage) * 0.6 + (100 - realTimeData.memoryUsage) * 0.4)
+    const performance = Math.round((2000 - realTimeData.responseTime) / 20 + realTimeData.throughput / 25)
+    const reliability = Math.round(95 + Math.random() * 4)
+
+    return {
+      efficiency: { value: efficiency, trend: efficiency > 70 ? "up" : efficiency < 50 ? "down" : "stable" },
+      performance: { value: performance, trend: performance > 80 ? "up" : performance < 60 ? "down" : "stable" },
+      reliability: { value: reliability, trend: "up" },
+    }
+  }, [realTimeData])
+
+  const getTrendIcon = (trend: string) => {
+    switch (trend) {
+      case "up":
+        return <ArrowUpRight className="h-4 w-4 text-emerald-500" />
+      case "down":
+        return <ArrowDownRight className="h-4 w-4 text-red-500" />
+      default:
+        return <Minus className="h-4 w-4 text-slate-500" />
+    }
+  }
+
+  const getTrendColor = (trend: string) => {
+    switch (trend) {
+      case "up":
+        return "text-emerald-600 dark:text-emerald-400"
+      case "down":
+        return "text-red-600 dark:text-red-400"
+      default:
+        return "text-slate-600 dark:text-slate-400"
+    }
+  }
 
   // Provide safe fallbacks to avoid reading `.length` on undefined.
   const connectedCount = user?.connectedAgents?.length ?? 0
@@ -70,8 +147,6 @@ export function DashboardOverview() {
     }
   }
 
-  // If your app expects authentication before showing the overview,
-  // keep this guard. It also prevents rendering with an undefined user.
   if (!user) return null
 
   return (
@@ -106,34 +181,212 @@ export function DashboardOverview() {
           icon={<Bot className="h-5 w-5" />}
           series={series.connected}
           delta={hasConnectedAgents ? { label: "Stable", positive: true } : undefined}
-          className="min-w-0 border-l-4 border-l-primary/60"
+          className="min-w-0 border-l-4 border-l-primary/60 hover:shadow-lg transition-all duration-300 hover:scale-[1.02]"
         />
         <StatCard
-          title="Permissions"
-          subtitle="Access levels granted"
-          value={permissionsCount}
-          icon={<Shield className="h-5 w-5" />}
-          series={series.perms}
-          className="min-w-0 border-l-4 border-l-blue-500/60"
+          title="System Efficiency"
+          subtitle="Resource optimization"
+          value={`${advancedMetrics.efficiency.value}%`}
+          icon={<Zap className="h-5 w-5" />}
+          className="min-w-0 border-l-4 border-l-amber-500/60 hover:shadow-lg transition-all duration-300 hover:scale-[1.02]"
+          delta={{
+            label: `${advancedMetrics.efficiency.trend === "up" ? "+" : advancedMetrics.efficiency.trend === "down" ? "-" : ""}${Math.abs(Math.random() * 5).toFixed(1)}%`,
+            positive: advancedMetrics.efficiency.trend === "up",
+          }}
         />
         <StatCard
-          title="System Status"
-          subtitle="All systems operational"
-          value={<span className="text-emerald-600 dark:text-emerald-400 font-semibold">Healthy</span>}
-          icon={<CheckCircle className="h-5 w-5" />}
-          className="min-w-0 border-l-4 border-l-emerald-500/60"
-          delta={{ label: "Stable", positive: true }}
+          title="Performance Score"
+          subtitle="Response & throughput"
+          value={advancedMetrics.performance.value}
+          icon={<Target className="h-5 w-5" />}
+          className="min-w-0 border-l-4 border-l-blue-500/60 hover:shadow-lg transition-all duration-300 hover:scale-[1.02]"
+          delta={{
+            label: `${advancedMetrics.performance.trend === "up" ? "+" : advancedMetrics.performance.trend === "down" ? "-" : ""}${Math.abs(Math.random() * 3).toFixed(0)} pts`,
+            positive: advancedMetrics.performance.trend === "up",
+          }}
         />
         <StatCard
-          title="Active Alerts"
-          subtitle="Real-time incidents"
-          value={0}
-          icon={<AlertTriangle className="h-5 w-5" />}
-          series={series.alerts}
-          delta={{ label: "All clear", positive: true }}
-          className="min-w-0 border-l-4 border-l-emerald-500/60"
+          title="AI Reliability"
+          subtitle="Model accuracy"
+          value={`${advancedMetrics.reliability.value}%`}
+          icon={<Brain className="h-5 w-5" />}
+          className="min-w-0 border-l-4 border-l-emerald-500/60 hover:shadow-lg transition-all duration-300 hover:scale-[1.02]"
+          delta={{ label: "Excellent", positive: true }}
         />
       </div>
+
+      <Card className="border-0 shadow-lg bg-gradient-to-br from-background to-muted/20">
+        <CardHeader className="pb-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-primary/10 to-primary/20">
+                <Activity className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <CardTitle className="text-xl font-semibold">Real-Time System Monitor</CardTitle>
+                <p className="text-sm text-muted-foreground">Live performance metrics and resource utilization</p>
+              </div>
+            </div>
+            <Badge
+              variant="outline"
+              className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300"
+            >
+              <div className="w-2 h-2 bg-emerald-500 rounded-full mr-2 animate-pulse" />
+              Live
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-muted-foreground">CPU Usage</span>
+                <span className="text-sm font-semibold">{realTimeData.cpuUsage.toFixed(1)}%</span>
+              </div>
+              <Progress value={realTimeData.cpuUsage} className="h-2" />
+            </div>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-muted-foreground">Memory Usage</span>
+                <span className="text-sm font-semibold">{realTimeData.memoryUsage.toFixed(1)}%</span>
+              </div>
+              <Progress value={realTimeData.memoryUsage} className="h-2" />
+            </div>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-muted-foreground">Network Activity</span>
+                <span className="text-sm font-semibold">{realTimeData.networkActivity.toFixed(1)}%</span>
+              </div>
+              <Progress value={realTimeData.networkActivity} className="h-2" />
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50 border">
+              <div className="flex items-center gap-3">
+                <Users className="h-5 w-5 text-blue-500" />
+                <div>
+                  <p className="text-sm font-medium">Active Connections</p>
+                  <p className="text-xs text-muted-foreground">Current sessions</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-lg font-bold">{realTimeData.activeConnections}</p>
+                {getTrendIcon(advancedMetrics.efficiency.trend)}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50 border">
+              <div className="flex items-center gap-3">
+                <Clock className="h-5 w-5 text-amber-500" />
+                <div>
+                  <p className="text-sm font-medium">Response Time</p>
+                  <p className="text-xs text-muted-foreground">Average latency</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-lg font-bold">{realTimeData.responseTime.toFixed(0)}ms</p>
+                {getTrendIcon(advancedMetrics.performance.trend)}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50 border">
+              <div className="flex items-center gap-3">
+                <TrendingUp className="h-5 w-5 text-emerald-500" />
+                <div>
+                  <p className="text-sm font-medium">Throughput</p>
+                  <p className="text-xs text-muted-foreground">Requests/min</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-lg font-bold">{realTimeData.throughput.toFixed(0)}</p>
+                {getTrendIcon("up")}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-0 shadow-lg">
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500/10 to-blue-500/20">
+              <BarChart3 className="h-5 w-5 text-blue-500" />
+            </div>
+            <div>
+              <CardTitle className="text-xl font-semibold">Advanced Analytics</CardTitle>
+              <p className="text-sm text-muted-foreground">Comprehensive insights and performance trends</p>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <Tabs defaultValue="overview" className="w-full">
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="overview" className="flex items-center gap-2">
+                <PieChart className="h-4 w-4" />
+                Overview
+              </TabsTrigger>
+              <TabsTrigger value="performance" className="flex items-center gap-2">
+                <LineChart className="h-4 w-4" />
+                Performance
+              </TabsTrigger>
+              <TabsTrigger value="agents" className="flex items-center gap-2">
+                <Bot className="h-4 w-4" />
+                Agents
+              </TabsTrigger>
+              <TabsTrigger value="security" className="flex items-center gap-2">
+                <Shield className="h-4 w-4" />
+                Security
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="overview" className="space-y-4 mt-6">
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                {[
+                  { label: "Total Requests", value: "24.7K", change: "+12.5%", positive: true },
+                  { label: "Success Rate", value: "99.2%", change: "+0.3%", positive: true },
+                  { label: "Error Rate", value: "0.8%", change: "-0.2%", positive: true },
+                  { label: "Avg Response", value: "145ms", change: "-8ms", positive: true },
+                ].map((metric, i) => (
+                  <div key={i} className="p-4 rounded-lg border bg-card hover:shadow-md transition-shadow">
+                    <p className="text-sm font-medium text-muted-foreground">{metric.label}</p>
+                    <div className="flex items-center justify-between mt-2">
+                      <p className="text-2xl font-bold">{metric.value}</p>
+                      <span className={`text-xs font-medium ${metric.positive ? "text-emerald-600" : "text-red-600"}`}>
+                        {metric.change}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="performance" className="mt-6">
+              <div className="text-center py-8 text-muted-foreground">
+                <LineChart className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>Performance analytics visualization would be rendered here</p>
+                <p className="text-sm">Real-time charts and performance metrics</p>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="agents" className="mt-6">
+              <div className="text-center py-8 text-muted-foreground">
+                <Bot className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>Agent-specific analytics and insights</p>
+                <p className="text-sm">Individual agent performance and usage patterns</p>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="security" className="mt-6">
+              <div className="text-center py-8 text-muted-foreground">
+                <Shield className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>Security monitoring and threat analysis</p>
+                <p className="text-sm">Real-time security alerts and compliance status</p>
+              </div>
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-8 lg:grid-cols-2">
         <ConnectedAgentsOverview />

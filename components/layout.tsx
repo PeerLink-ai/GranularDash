@@ -5,6 +5,7 @@ import type React from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { AppSidebar } from "./app-sidebar"
 import { TopNav } from "./top-nav"
+import { BreadcrumbNavigation } from "./breadcrumb-navigation"
 import MobileNav from "./mobile-nav"
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
 
@@ -35,6 +36,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <SidebarInset className="flex flex-1 flex-col overflow-hidden">
           {/* Top navigation */}
           <TopNav />
+
+          <BreadcrumbNavigation />
 
           {/* Main content with proper mobile padding */}
           <main id="main-content" className="flex-1 overflow-auto p-4 pb-20 md:pb-4 sm:p-6 lg:p-8">

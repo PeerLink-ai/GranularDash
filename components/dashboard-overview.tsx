@@ -7,7 +7,7 @@ import { ConnectedAgentsOverview } from "@/components/connected-agents-overview"
 import { QuickActions } from "@/components/quick-actions"
 import { RecentActivity } from "@/components/recent-activity"
 import { SystemHealth } from "@/components/system-health"
-import { Bot, Shield, AlertTriangle, CheckCircle } from "lucide-react"
+import { Bot, Shield, AlertTriangle, CheckCircle, Sparkles } from "lucide-react"
 
 function alignSeriesToLast(base: number[], target: number) {
   const n = base.length
@@ -45,14 +45,14 @@ export function DashboardOverview() {
   const getRoleBadge = (r: string) => {
     switch (r) {
       case "admin":
-        return "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200"
+        return "bg-gradient-to-r from-red-50 to-red-100 text-red-700 border border-red-200 dark:from-red-950/50 dark:to-red-900/50 dark:text-red-300 dark:border-red-800/50"
       case "developer":
-        return "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200"
+        return "bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 border border-blue-200 dark:from-blue-950/50 dark:to-blue-900/50 dark:text-blue-300 dark:border-blue-800/50"
       case "analyst":
-        return "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200"
+        return "bg-gradient-to-r from-emerald-50 to-emerald-100 text-emerald-700 border border-emerald-200 dark:from-emerald-950/50 dark:to-emerald-900/50 dark:text-emerald-300 dark:border-emerald-800/50"
       case "viewer":
       default:
-        return "bg-gray-100 text-gray-800 dark:bg-gray-700/60 dark:text-gray-200"
+        return "bg-gradient-to-r from-slate-50 to-slate-100 text-slate-700 border border-slate-200 dark:from-slate-950/50 dark:to-slate-900/50 dark:text-slate-300 dark:border-slate-800/50"
     }
   }
 
@@ -75,26 +75,30 @@ export function DashboardOverview() {
   if (!user) return null
 
   return (
-    <div className="space-y-6">
-      {/* Responsive header that wraps on small screens */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="truncate text-3xl font-bold tracking-tight">
-            {"Welcome back, "}
-            {firstName}
-          </h1>
-          <p className="mt-1 text-muted-foreground">{getWelcomeMessage()}</p>
+    <div className="space-y-8 p-1">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 space-y-2">
+          <div className="flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary/10 to-primary/20 ring-1 ring-primary/20">
+              <Sparkles className="h-6 w-6 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight text-foreground font-sans">Welcome back, {firstName}</h1>
+              <p className="text-base text-muted-foreground font-medium">{getWelcomeMessage()}</p>
+            </div>
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className={`rounded px-2 py-1 text-sm font-medium ${getRoleBadge(role)}`}>
+        <div className="flex flex-wrap items-center gap-3">
+          <span className={`rounded-lg px-3 py-2 text-sm font-semibold shadow-sm ${getRoleBadge(role)}`}>
             {role.charAt(0).toUpperCase() + role.slice(1)}
           </span>
-          <span className="rounded bg-muted px-2 py-1 text-sm font-medium">{organization}</span>
+          <span className="rounded-lg bg-gradient-to-r from-muted to-muted/80 px-3 py-2 text-sm font-semibold text-muted-foreground border border-border/50 shadow-sm">
+            {organization}
+          </span>
         </div>
       </div>
 
-      {/* Quick Stats */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Connected Agents"
           subtitle={hasConnectedAgents ? "Active and monitored" : "No agents connected"}
@@ -102,7 +106,7 @@ export function DashboardOverview() {
           icon={<Bot className="h-5 w-5" />}
           series={series.connected}
           delta={hasConnectedAgents ? { label: "Stable", positive: true } : undefined}
-          className="min-w-0"
+          className="min-w-0 border-l-4 border-l-primary/60"
         />
         <StatCard
           title="Permissions"
@@ -110,14 +114,14 @@ export function DashboardOverview() {
           value={permissionsCount}
           icon={<Shield className="h-5 w-5" />}
           series={series.perms}
-          className="min-w-0"
+          className="min-w-0 border-l-4 border-l-blue-500/60"
         />
         <StatCard
           title="System Status"
           subtitle="All systems operational"
-          value={<span className="text-green-600 dark:text-green-400">Healthy</span>}
+          value={<span className="text-emerald-600 dark:text-emerald-400 font-semibold">Healthy</span>}
           icon={<CheckCircle className="h-5 w-5" />}
-          className="min-w-0"
+          className="min-w-0 border-l-4 border-l-emerald-500/60"
           delta={{ label: "Stable", positive: true }}
         />
         <StatCard
@@ -127,18 +131,16 @@ export function DashboardOverview() {
           icon={<AlertTriangle className="h-5 w-5" />}
           series={series.alerts}
           delta={{ label: "All clear", positive: true }}
-          className="min-w-0"
+          className="min-w-0 border-l-4 border-l-emerald-500/60"
         />
       </div>
 
-      {/* Main Content Grid */}
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-8 lg:grid-cols-2">
         <ConnectedAgentsOverview />
         <QuickActions />
       </div>
 
-      {/* Bottom Grid */}
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-8 lg:grid-cols-2">
         <RecentActivity />
         <SystemHealth />
       </div>

@@ -1,14 +1,6 @@
-@import "tailwindcss";
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@theme inline {
-  --font-sans: var(--font-inter);
-  --font-serif: var(--font-manrope);
-  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-}
 
 @layer utilities {
   .text-balance {
@@ -96,6 +88,7 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   }
 }
 

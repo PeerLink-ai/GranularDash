@@ -3,19 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import {
-  Search,
-  Bell,
-  User,
-  CreditCard,
-  FolderKanban,
-  Home,
-  BarChart2,
-  UserCog,
-  Settings,
-  LogOut,
-  Command,
-} from "lucide-react"
+import { Search, Bell, User, CreditCard, FolderKanban, Home, BarChart2, UserCog, Settings, LogOut } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -40,6 +28,7 @@ import {
 } from "@/components/ui/command"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { CommandPalette } from "@/components/command-palette"
+import { ThemeToggle } from "@/components/theme-toggle"
 import { useAuth } from "@/contexts/auth-context"
 
 type SearchResult = {
@@ -419,18 +408,8 @@ export function TopNav() {
 
           {/* Right side actions */}
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2 bg-transparent"
-              onClick={() => setShowCommandPalette(true)}
-            >
-              <Command className="h-4 w-4" />
-              <span className="hidden sm:inline">Commands</span>
-              <kbd className="pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100">
-                ⌘K
-              </kbd>
-            </Button>
+            {/* Theme Toggle */}
+            <ThemeToggle />
 
             {/* Role Preview Dropdown */}
             <DropdownMenu>

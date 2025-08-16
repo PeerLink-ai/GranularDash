@@ -20,6 +20,12 @@ import {
   Menu,
   ChevronDown,
   CreditCard,
+  Brain,
+  FileCheck,
+  TrendingUp,
+  Workflow,
+  Palette,
+  Zap,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -57,19 +63,31 @@ export function AppSidebar() {
       ],
     },
     {
-      label: "Operations",
+      label: "AI & ML Operations",
       items: [
+        { title: "MLOps Dashboard", href: "/mlops", icon: Brain },
+        { title: "Security Center", href: "/security-center", icon: Shield },
+        { title: "Business Intelligence", href: "/business-intelligence", icon: TrendingUp },
+        { title: "Predictive Analytics", href: "/predictive-analytics", icon: Zap },
         { title: "Agent Management", href: "/agent-management", icon: Building2 },
         { title: "Training & Simulation", href: "/training-simulation", icon: Video },
         { title: "Data & Model Lineage", href: "/data-model-lineage", icon: GitFork },
       ],
     },
     {
+      label: "Automation & UX",
+      items: [
+        { title: "Workflow Automation", href: "/workflow-automation", icon: Workflow },
+        { title: "AI Assistant", href: "/ai-assistant", icon: Brain },
+        { title: "Dashboard Builder", href: "/dashboard-builder", icon: Palette },
+      ],
+    },
+    {
       label: "Governance",
       items: [
-        { title: "Policies & Rules", href: "/policies-rules", icon: Shield },
-        { title: "Audit Logs", href: "/audit-logs", icon: FileText },
-        { title: "Compliance Reports", href: "/compliance-reports", icon: Receipt },
+        { title: "Policies & Rules", href: "/policies-rules", icon: FileText },
+        { title: "Audit Logs", href: "/audit-logs", icon: Receipt },
+        { title: "Compliance Reports", href: "/compliance-reports", icon: FileCheck },
         { title: "Risk & Incidents", href: "/incident-response", icon: MessageSquare },
       ],
     },

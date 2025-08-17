@@ -4,24 +4,22 @@ import { getUserBySession } from "@/lib/auth"
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    console.log("[v0] Starting simulation with ID:", params.id)
-
     const sessionToken = request.cookies.get("session")?.value || request.cookies.get("session_token")?.value
 
     if (!sessionToken) {
-      console.log("[v0] No session token found")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const user = await getUserBySession(sessionToken)
     if (!user) {
-      console.log("[v0] User not found for session token")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    console.log("[v0] User found:", { id: user.id, organization: user.organization })
-
     const simulationId = params.id
+
+    if (!simulationId || isNaN(Number(simulationId))) {
+      return NextResponse.json({ error: "Invalid simulation ID" }, { status: 400 })
+    }
 
     const simulationResult = await sql`
       SELECT id, name, type, difficulty_level, duration_minutes, configuration, pass_threshold, organization_id
@@ -30,37 +28,44 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     `
 
     if (simulationResult.length === 0) {
-      console.log("[v0] Simulation not found:", simulationId)
       return NextResponse.json({ error: "Simulation not found" }, { status: 404 })
     }
 
     const simulation = simulationResult[0]
-    console.log("[v0] Simulation found:", simulation.name)
 
     const userId = typeof user.id === "string" ? Number.parseInt(user.id, 10) : user.id
     const organizationId = user.organization || simulation.organization_id || "Hive"
 
-    console.log("[v0] Creating training session for user:", userId, "org:", organizationId)
-
-    const sessionResult = await sql`
-      INSERT INTO training_sessions (
-        simulation_id,
-        user_id,
-        organization_id,
-        started_at,
-        status
-      ) VALUES (
-        ${simulationId},
-        ${userId},
-        ${organizationId},
-        NOW(),
-        'in_progress'
+    let sessionResult
+    try {
+      sessionResult = await sql`
+        INSERT INTO training_sessions (
+          simulation_id,
+          user_id,
+          organization_id,
+          started_at,
+          status
+        ) VALUES (
+          ${simulationId},
+          ${userId},
+          ${organizationId},
+          NOW(),
+          'in_progress'
+        )
+        RETURNING id, started_at
+      `
+    } catch (dbError) {
+      console.error("Database error creating training session:", dbError)
+      return NextResponse.json(
+        {
+          error: "Failed to create training session",
+          details: dbError instanceof Error ? dbError.message : "Database error",
+        },
+        { status: 500 },
       )
-      RETURNING id, started_at
-    `
+    }
 
     const session = sessionResult[0]
-    console.log("[v0] Training session created:", session.id)
 
     const result = await sql`
       UPDATE training_simulations 
@@ -74,12 +79,10 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     `
 
     const scenarios = generateSimulationScenarios(simulation.type, simulation.difficulty_level)
-    console.log("[v0] Generated scenarios:", scenarios.length)
 
     setTimeout(
       async () => {
         try {
-          console.log("[v0] Starting simulation completion for session:", session.id)
           const completionData = await simulateAdvancedCompletion(simulation, session.id, userId)
 
           await sql`
@@ -104,10 +107,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
             answers = ${JSON.stringify(completionData.answers)}
           WHERE id = ${session.id}
         `
-
-          console.log("[v0] Simulation completed successfully:", session.id)
         } catch (error) {
-          console.error("[v0] Failed to complete simulation:", error)
+          console.error("Failed to complete simulation:", error)
           await sql`
           UPDATE training_simulations 
           SET status = 'failed', updated_at = NOW()
@@ -118,7 +119,6 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       (simulation.duration_minutes || 60) * 100,
     )
 
-    console.log("[v0] Simulation started successfully")
     return NextResponse.json({
       success: true,
       simulation: result[0],
@@ -127,7 +127,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       estimatedDuration: simulation.duration_minutes || 60,
     })
   } catch (error) {
-    console.error("[v0] Start simulation error:", error)
+    console.error("Start simulation error:", error)
     return NextResponse.json(
       {
         success: false,

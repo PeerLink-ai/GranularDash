@@ -14,6 +14,10 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     const user = await getUserFromSession(request)
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
+    if (!params.id) {
+      return NextResponse.json({ error: "Policy ID is required" }, { status: 400 })
+    }
+
     // Confirm policy belongs to user's org
     const policy = await sql`
       SELECT id FROM governance_policies
@@ -24,11 +28,18 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({ error: "Policy not found" }, { status: 404 })
     }
 
-    const rows = await sql`
-      SELECT agent_id 
-      FROM policy_agent_assignments
-      WHERE policy_id = ${params.id}
-    `
+    let rows
+    try {
+      rows = await sql`
+        SELECT agent_id 
+        FROM policy_agent_assignments
+        WHERE policy_id = ${params.id}
+      `
+    } catch (dbError) {
+      console.error("Database error fetching assignments:", dbError)
+      return NextResponse.json({ error: "Failed to fetch assignments" }, { status: 500 })
+    }
+
     const agent_ids = rows.map((r: any) => r.agent_id as string)
     return NextResponse.json({ agent_ids })
   } catch (error) {

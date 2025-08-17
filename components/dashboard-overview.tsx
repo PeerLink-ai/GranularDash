@@ -53,8 +53,52 @@ export function DashboardOverview() {
     responseTime: 120,
     throughput: 1250,
   })
+  const [dashboardMetrics, setDashboardMetrics] = useState({
+    connectedAgents: 0,
+    systemEfficiency: 0,
+    performanceScore: 0,
+    aiReliability: 0,
+    totalRequests: 0,
+    successRate: 0,
+    errorRate: 0,
+    avgResponse: 0,
+  })
+  const [metricsLoading, setMetricsLoading] = useState(true)
+
+  const fetchDashboardMetrics = async () => {
+    try {
+      const response = await fetch("/api/dashboard/real-time-metrics")
+      if (response.ok) {
+        const data = await response.json()
+
+        const activeAgents = data.agentHealth?.filter((a) => a.status === "active").length || 0
+        const totalAgents = data.agentHealth?.length || 0
+        const avgSuccessRate =
+          data.agentHealth?.reduce((sum, agent) => sum + agent.success_rate, 0) / (totalAgents || 1)
+        const avgResponseTime =
+          data.agentHealth?.reduce((sum, agent) => sum + agent.avg_response_time, 0) / (totalAgents || 1)
+
+        setDashboardMetrics({
+          connectedAgents: totalAgents,
+          systemEfficiency: Math.round(avgSuccessRate * 0.8 + (activeAgents / (totalAgents || 1)) * 20),
+          performanceScore: Math.round(Math.max(0, 100 - avgResponseTime / 10)),
+          aiReliability: Math.round(avgSuccessRate),
+          totalRequests: data.financialMetrics?.total_transactions || 0,
+          successRate: avgSuccessRate,
+          errorRate: Math.round(100 - avgSuccessRate),
+          avgResponse: Math.round(avgResponseTime),
+        })
+      }
+    } catch (error) {
+      console.error("Failed to fetch dashboard metrics:", error)
+    } finally {
+      setMetricsLoading(false)
+    }
+  }
 
   useEffect(() => {
+    fetchDashboardMetrics()
+
     const interval = setInterval(() => {
       setRealTimeData((prev) => ({
         cpuUsage: Math.max(20, Math.min(90, prev.cpuUsage + (Math.random() - 0.5) * 10)),
@@ -64,21 +108,46 @@ export function DashboardOverview() {
         responseTime: Math.max(80, Math.min(200, prev.responseTime + (Math.random() - 0.5) * 20)),
         throughput: Math.max(800, Math.min(2000, prev.throughput + (Math.random() - 0.5) * 100)),
       }))
-    }, 3000)
+
+      fetchDashboardMetrics()
+    }, 30000)
     return () => clearInterval(interval)
   }, [])
 
   const advancedMetrics = useMemo(() => {
-    const efficiency = Math.round((100 - realTimeData.cpuUsage) * 0.6 + (100 - realTimeData.memoryUsage) * 0.4)
-    const performance = Math.round((2000 - realTimeData.responseTime) / 20 + realTimeData.throughput / 25)
-    const reliability = Math.round(95 + Math.random() * 4)
-
     return {
-      efficiency: { value: efficiency, trend: efficiency > 70 ? "up" : efficiency < 50 ? "down" : "stable" },
-      performance: { value: performance, trend: performance > 80 ? "up" : performance < 60 ? "down" : "stable" },
-      reliability: { value: reliability, trend: "up" },
+      efficiency: {
+        value: dashboardMetrics.systemEfficiency,
+        trend:
+          dashboardMetrics.systemEfficiency > 70 ? "up" : dashboardMetrics.systemEfficiency < 50 ? "down" : "stable",
+      },
+      performance: {
+        value: dashboardMetrics.performanceScore,
+        trend:
+          dashboardMetrics.performanceScore > 80 ? "up" : dashboardMetrics.performanceScore < 60 ? "down" : "stable",
+      },
+      reliability: {
+        value: dashboardMetrics.aiReliability,
+        trend: dashboardMetrics.aiReliability > 95 ? "up" : "stable",
+      },
     }
-  }, [realTimeData])
+  }, [dashboardMetrics])
+
+  const connectedCount = dashboardMetrics.connectedAgents
+  const permissionsCount = user?.permissions?.length ?? 0
+  const role = user?.role ?? "viewer"
+  const organization = user?.organization ?? "Organization"
+  const firstName = user?.name?.split(" ")?.[0] ?? "User"
+
+  const hasConnectedAgents = connectedCount > 0
+
+  const series = useMemo(() => {
+    const day = 24 * 60 * 60 * 1000
+    const connected = withTime(alignSeriesToLast([4, 5, 6, 7, 8, 9, 9, 10], connectedCount), day)
+    const perms = withTime(alignSeriesToLast([2, 3, 3, 4, 4, 5, 5, 6], permissionsCount), day)
+    const alerts = withTime(alignSeriesToLast([1, 1, 0, 0, 0, 0, 0, 0], 0), day)
+    return { connected, perms, alerts }
+  }, [connectedCount, permissionsCount])
 
   const getTrendIcon = (trend: string) => {
     switch (trend) {
@@ -101,23 +170,6 @@ export function DashboardOverview() {
         return "text-slate-600 dark:text-slate-400"
     }
   }
-
-  // Provide safe fallbacks to avoid reading `.length` on undefined.
-  const connectedCount = user?.connectedAgents?.length ?? 0
-  const permissionsCount = user?.permissions?.length ?? 0
-  const role = user?.role ?? "viewer"
-  const organization = user?.organization ?? "Organization"
-  const firstName = user?.name?.split(" ")?.[0] ?? "User"
-
-  const hasConnectedAgents = connectedCount > 0
-
-  const series = useMemo(() => {
-    const day = 24 * 60 * 60 * 1000
-    const connected = withTime(alignSeriesToLast([4, 5, 6, 7, 8, 9, 9, 10], connectedCount), day)
-    const perms = withTime(alignSeriesToLast([2, 3, 3, 4, 4, 5, 5, 6], permissionsCount), day)
-    const alerts = withTime(alignSeriesToLast([1, 1, 0, 0, 0, 0, 0, 0], 0), day)
-    return { connected, perms, alerts }
-  }, [connectedCount, permissionsCount])
 
   const getRoleBadge = (r: string) => {
     switch (r) {
@@ -182,6 +234,7 @@ export function DashboardOverview() {
           series={series.connected}
           delta={hasConnectedAgents ? { label: "Stable", positive: true } : undefined}
           className="min-w-0 border-l-4 border-l-primary/60 hover:shadow-lg transition-all duration-300 hover:scale-[1.02]"
+          loading={metricsLoading}
         />
         <StatCard
           title="System Efficiency"
@@ -193,6 +246,7 @@ export function DashboardOverview() {
             label: `${advancedMetrics.efficiency.trend === "up" ? "+" : advancedMetrics.efficiency.trend === "down" ? "-" : ""}${Math.abs(Math.random() * 5).toFixed(1)}%`,
             positive: advancedMetrics.efficiency.trend === "up",
           }}
+          loading={metricsLoading}
         />
         <StatCard
           title="Performance Score"
@@ -204,6 +258,7 @@ export function DashboardOverview() {
             label: `${advancedMetrics.performance.trend === "up" ? "+" : advancedMetrics.performance.trend === "down" ? "-" : ""}${Math.abs(Math.random() * 3).toFixed(0)} pts`,
             positive: advancedMetrics.performance.trend === "up",
           }}
+          loading={metricsLoading}
         />
         <StatCard
           title="AI Reliability"
@@ -212,6 +267,7 @@ export function DashboardOverview() {
           icon={<Brain className="h-5 w-5" />}
           className="min-w-0 border-l-4 border-l-emerald-500/60 hover:shadow-lg transition-all duration-300 hover:scale-[1.02]"
           delta={{ label: "Excellent", positive: true }}
+          loading={metricsLoading}
         />
       </div>
 
@@ -343,15 +399,30 @@ export function DashboardOverview() {
             <TabsContent value="overview" className="space-y-4 mt-6">
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 {[
-                  { label: "Total Requests", value: "24.7K", change: "+12.5%", positive: true },
-                  { label: "Success Rate", value: "99.2%", change: "+0.3%", positive: true },
-                  { label: "Error Rate", value: "0.8%", change: "-0.2%", positive: true },
-                  { label: "Avg Response", value: "145ms", change: "-8ms", positive: true },
+                  {
+                    label: "Total Requests",
+                    value: dashboardMetrics.totalRequests.toLocaleString(),
+                    change: "+12.5%",
+                    positive: true,
+                  },
+                  {
+                    label: "Success Rate",
+                    value: `${dashboardMetrics.successRate.toFixed(1)}%`,
+                    change: "+0.3%",
+                    positive: true,
+                  },
+                  {
+                    label: "Error Rate",
+                    value: `${dashboardMetrics.errorRate.toFixed(1)}%`,
+                    change: "-0.2%",
+                    positive: true,
+                  },
+                  { label: "Avg Response", value: `${dashboardMetrics.avgResponse}ms`, change: "-8ms", positive: true },
                 ].map((metric, i) => (
                   <div key={i} className="p-4 rounded-lg border bg-card hover:shadow-md transition-shadow">
                     <p className="text-sm font-medium text-muted-foreground">{metric.label}</p>
                     <div className="flex items-center justify-between mt-2">
-                      <p className="text-2xl font-bold">{metric.value}</p>
+                      <p className="text-2xl font-bold">{metricsLoading ? "..." : metric.value}</p>
                       <span className={`text-xs font-medium ${metric.positive ? "text-emerald-600" : "text-red-600"}`}>
                         {metric.change}
                       </span>

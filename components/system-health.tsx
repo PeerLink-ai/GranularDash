@@ -1,35 +1,54 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { CheckCircle, AlertTriangle, Server, Database, Wifi } from "lucide-react"
 
-const systemMetrics = [
-  {
-    name: "API Gateway",
-    status: "healthy",
-    uptime: 99.9,
-    icon: Server,
-    description: "All endpoints responding normally",
-  },
-  {
-    name: "Database",
-    status: "healthy",
-    uptime: 99.8,
-    icon: Database,
-    description: "Query performance optimal",
-  },
-  {
-    name: "Agent Connections",
-    status: "healthy",
-    uptime: 99.7,
-    icon: Wifi,
-    description: "All agents connected and responsive",
-  },
-]
+interface SystemComponent {
+  name: string
+  status: string
+  uptime: number
+  description: string
+  lastCheck: string
+}
+
+interface SystemHealthData {
+  systemComponents: SystemComponent[]
+  agentStats: {
+    total_agents: number
+    active_agents: number
+    healthy_agents: number
+    agents_with_errors: number
+  }
+  overallHealth: string
+}
 
 export function SystemHealth() {
+  const [healthData, setHealthData] = useState<SystemHealthData | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetchSystemHealth()
+    const interval = setInterval(fetchSystemHealth, 60000) // Refresh every minute
+    return () => clearInterval(interval)
+  }, [])
+
+  const fetchSystemHealth = async () => {
+    try {
+      const response = await fetch("/api/dashboard/system-health")
+      if (response.ok) {
+        const data = await response.json()
+        setHealthData(data)
+      }
+    } catch (error) {
+      console.error("Failed to fetch system health:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "healthy":
@@ -55,7 +74,67 @@ export function SystemHealth() {
     }
   }
 
-  const overallHealth = systemMetrics.every((metric) => metric.status === "healthy") ? "healthy" : "warning"
+  const getComponentIcon = (name: string) => {
+    if (name.toLowerCase().includes("api") || name.toLowerCase().includes("gateway")) return Server
+    if (name.toLowerCase().includes("database") || name.toLowerCase().includes("db")) return Database
+    if (name.toLowerCase().includes("agent") || name.toLowerCase().includes("connection")) return Wifi
+    return Server
+  }
+
+  if (loading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <span>System Health</span>
+            <div className="animate-pulse h-6 w-24 bg-muted rounded"></div>
+          </CardTitle>
+          <CardDescription>Loading system status...</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="animate-pulse space-y-2">
+                <div className="h-4 bg-muted rounded w-3/4"></div>
+                <div className="h-2 bg-muted rounded"></div>
+                <div className="h-3 bg-muted rounded w-1/2"></div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  const systemMetrics = healthData?.systemComponents || [
+    {
+      name: "API Gateway",
+      status: "healthy",
+      uptime: 99.9,
+      description: "All endpoints responding normally",
+      lastCheck: new Date().toISOString(),
+    },
+    {
+      name: "Database",
+      status: "healthy",
+      uptime: 99.8,
+      description: "Query performance optimal",
+      lastCheck: new Date().toISOString(),
+    },
+    {
+      name: "Agent Connections",
+      status: healthData?.agentStats.active_agents === healthData?.agentStats.total_agents ? "healthy" : "warning",
+      uptime:
+        healthData?.agentStats.total_agents > 0
+          ? (healthData.agentStats.active_agents / healthData.agentStats.total_agents) * 100
+          : 100,
+      description: `${healthData?.agentStats.active_agents || 0} of ${healthData?.agentStats.total_agents || 0} agents active`,
+      lastCheck: new Date().toISOString(),
+    },
+  ]
+
+  const overallHealth =
+    healthData?.overallHealth || (systemMetrics.every((metric) => metric.status === "healthy") ? "healthy" : "warning")
 
   return (
     <Card>
@@ -71,7 +150,7 @@ export function SystemHealth() {
       <CardContent>
         <div className="space-y-4">
           {systemMetrics.map((metric) => {
-            const Icon = metric.icon
+            const Icon = getComponentIcon(metric.name)
             const StatusIcon = getStatusIcon(metric.status)
 
             return (
@@ -83,9 +162,9 @@ export function SystemHealth() {
                   </div>
                   <div className="flex items-center space-x-2">
                     <StatusIcon
-                      className={`h-4 w-4 ${metric.status === "healthy" ? "text-green-500" : "text-yellow-500"}`}
+                      className={`h-4 w-4 ${metric.status === "healthy" ? "text-green-500" : metric.status === "warning" ? "text-yellow-500" : "text-red-500"}`}
                     />
-                    <span className="text-sm font-medium">{metric.uptime}%</span>
+                    <span className="text-sm font-medium">{metric.uptime.toFixed(1)}%</span>
                   </div>
                 </div>
                 <Progress value={metric.uptime} className="h-2" />

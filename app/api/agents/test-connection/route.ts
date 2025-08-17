@@ -9,7 +9,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Agent ID is required" }, { status: 400 })
     }
 
-    const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/$/, "")
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL
+      ? process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")
+      : `https://${request.headers.get("host")}`
+
+    console.log("[v0] Using baseUrl:", baseUrl)
+
     const sdk = new AIGovernanceSDK({ agentId, baseUrl })
 
     const testResults = {

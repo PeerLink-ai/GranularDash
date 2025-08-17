@@ -1,13 +1,13 @@
 import { ImmutableLedger } from "./immutable-ledger"
 import { AnomalyDetector } from "./anomaly-detector"
-import {
-  type SDKConfig,
-  type SDKLevel,
-  type JSONObject,
-  type DecisionEntry,
-  type ToolCallEntry,
-  type CommunicationEntry,
-  type AlertEntry,
+import type {
+  SDKConfig,
+  SDKLevel,
+  JSONObject,
+  DecisionEntry,
+  ToolCallEntry,
+  CommunicationEntry,
+  AlertEntry,
 } from "./types"
 
 export class AIGovernanceSDK {
@@ -25,11 +25,32 @@ export class AIGovernanceSDK {
 
   private async post(type: string, payload: unknown, level: SDKLevel = "info") {
     if (!this.baseUrl) return
-    await fetch(`${this.baseUrl}/api/sdk/log`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ agentId: this.agentId, type, level, payload }),
-    })
+
+    const logData = {
+      message: `${type} event from agent ${this.agentId}`,
+      level,
+      agent_id: this.agentId,
+      action: type,
+      metadata: {
+        type,
+        payload,
+        timestamp: Date.now(),
+      },
+    }
+
+    try {
+      const response = await fetch(`${this.baseUrl}/api/sdk/log`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(logData),
+      })
+
+      if (!response.ok) {
+        console.error(`[v0] SDK log failed: ${response.status} ${response.statusText}`)
+      }
+    } catch (error) {
+      console.error(`[v0] SDK log error:`, error)
+    }
   }
 
   private isHighRiskOperation(toolName: string, params: JSONObject): boolean {
@@ -99,7 +120,7 @@ export class AIGovernanceSDK {
   async interceptToolCall<T>(
     toolName: string,
     params: JSONObject,
-    executor: (params: JSONObject) => Promise<T>
+    executor: (params: JSONObject) => Promise<T>,
   ): Promise<T> {
     // Pre-exec validation
     if (this.isHighRiskOperation(toolName, params)) {

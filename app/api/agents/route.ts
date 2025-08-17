@@ -72,17 +72,32 @@ export async function GET(_req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    console.log("[v0] Starting agent creation request")
+
     const cookieStore = await cookies()
     const sessionToken = cookieStore.get("session_token")?.value
     if (!sessionToken) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-    const user = await getUserBySession(sessionToken)
-    if (!user) {
+      console.log("[v0] No session token found")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    console.log("[v0] Getting user by session")
+    const user = await getUserBySession(sessionToken)
+    if (!user) {
+      console.log("[v0] User not found for session")
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    console.log("[v0] User found:", user.id)
+
+    console.log("[v0] Parsing request body")
     const { name, type, endpoint, apiKey, description } = await req.json()
+    console.log("[v0] Request data:", {
+      name,
+      type,
+      endpoint: endpoint?.substring(0, 50),
+      hasApiKey: !!apiKey,
+      description,
+    })
 
     // Server-side validations
     if (!name || typeof name !== "string" || name.trim().length < 2) {
@@ -101,6 +116,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid description/model." }, { status: 400 })
     }
 
+    console.log("[v0] Checking for duplicates")
     // Duplicate check (same endpoint for this user)
     const dup = await sql<{ exists: boolean }[]>`
       SELECT EXISTS (
@@ -108,18 +124,24 @@ export async function POST(req: NextRequest) {
       ) AS exists
     `
     if (dup[0]?.exists) {
+      console.log("[v0] Duplicate endpoint found")
       return NextResponse.json({ error: "An agent with this endpoint already exists." }, { status: 409 })
     }
 
+    console.log("[v0] Performing health check")
     // Live health check
     const health = await performHealthCheck(endpoint, apiKey)
     const status: "active" | "inactive" | "error" = health.reachable ? "active" : "error"
+    console.log("[v0] Health check result:", health)
 
+    console.log("[v0] Encrypting API key")
     // Encrypt API key if provided
     const encrypted = encryptSecret(apiKey)
 
     const agentId = `agent_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    console.log("[v0] Generated agent ID:", agentId)
 
+    console.log("[v0] Inserting into database")
     const inserted = await sql<any[]>`
       INSERT INTO connected_agents (
         user_id,
@@ -147,6 +169,7 @@ export async function POST(req: NextRequest) {
       RETURNING *
     `
     const newAgent = inserted[0]
+    console.log("[v0] Agent inserted successfully:", newAgent.id)
 
     // Normalize for client (type/version)
     const agentForClient = {
@@ -160,27 +183,35 @@ export async function POST(req: NextRequest) {
       last_active: newAgent.last_active ?? null,
     }
 
+    console.log("[v0] Adding audit log")
     // Audit log
     const ipAddress = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || undefined
     const userAgent = req.headers.get("user-agent") || undefined
 
-    await addAuditLog({
-      userId: user.id,
-      organization: user.organization,
-      action: "agent_connected",
-      resourceType: "agent",
-      resourceId: String(newAgent.id),
-      details: {
-        name,
-        provider: type,
-        model: description || "default",
-        endpoint,
-        health,
-      },
-      ipAddress,
-      userAgent,
-    })
+    try {
+      await addAuditLog({
+        userId: user.id,
+        organization: user.organization,
+        action: "agent_connected",
+        resourceType: "agent",
+        resourceId: String(newAgent.id),
+        details: {
+          name,
+          provider: type,
+          model: description || "default",
+          endpoint,
+          health,
+        },
+        ipAddress,
+        userAgent,
+      })
+      console.log("[v0] Audit log added successfully")
+    } catch (auditError) {
+      console.error("[v0] Audit log failed (non-critical):", auditError)
+      // Don't fail the request if audit logging fails
+    }
 
+    console.log("[v0] Agent creation completed successfully")
     return NextResponse.json(
       {
         message: "Agent connected successfully",
@@ -190,7 +221,15 @@ export async function POST(req: NextRequest) {
       { status: 201 },
     )
   } catch (error) {
-    console.error("POST /api/agents error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    console.error("[v0] POST /api/agents error:", error)
+    console.error("[v0] Error stack:", error instanceof Error ? error.stack : "No stack trace")
+
+    return NextResponse.json(
+      {
+        error: "Internal server error",
+        details: error instanceof Error ? error.message : String(error),
+      },
+      { status: 500 },
+    )
   }
 }

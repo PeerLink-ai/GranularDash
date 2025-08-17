@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server"
-import { buildLineageGraph } from "@/lib/sdk-log-store"
+import { buildDataLineage } from "@/lib/data-lineage-builder"
 
 export async function GET() {
   try {
-    const graph = await buildLineageGraph()
-    return NextResponse.json(graph)
+    const lineage = await buildDataLineage()
+    return NextResponse.json(lineage)
   } catch (e: any) {
+    console.error("Lineage API error:", e)
     return NextResponse.json({ nodes: [], edges: [] })
   }
 }

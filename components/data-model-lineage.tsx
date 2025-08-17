@@ -53,8 +53,6 @@ import ReactFlow, {
   useReactFlow,
 } from "reactflow"
 
-type NodeKind = "dataset" | "transformation" | "model" | "prediction" | "audit"
-
 export interface DataModelLineageProps {
   onOpenDatasetVersioning: () => void
   onOpenTransformationSteps: () => void
@@ -64,7 +62,16 @@ export interface DataModelLineageProps {
 export interface LineageNode {
   id: string
   name: string
-  type: NodeKind
+  type:
+    | "agent"
+    | "model"
+    | "deployment"
+    | "evaluation"
+    | "dataset"
+    | "transformation"
+    | "integration"
+    | "user"
+    | "organization"
   path: string[]
   metadata: {
     sourceFile?: string
@@ -75,11 +82,39 @@ export interface LineageNode {
     accuracy?: string
     version?: string
     description?: string
+    provider?: string
+    endpoint?: string
+    cost?: string
+    performance?: string
   }
   nextNodes?: string[]
 }
 
-const TYPE_THEME: Record<NodeKind, { bg: string; border: string; text: string; accent: string }> = {
+const TYPE_THEME: Record<LineageNode["type"], { bg: string; border: string; text: string; accent: string }> = {
+  agent: {
+    bg: "bg-blue-50 dark:bg-blue-950/40",
+    border: "border-blue-200 dark:border-blue-900",
+    text: "text-blue-800 dark:text-blue-200",
+    accent: "text-blue-500",
+  },
+  model: {
+    bg: "bg-fuchsia-50 dark:bg-fuchsia-950/40",
+    border: "border-fuchsia-200 dark:border-fuchsia-900",
+    text: "text-fuchsia-800 dark:text-fuchsia-200",
+    accent: "text-fuchsia-500",
+  },
+  deployment: {
+    bg: "bg-green-50 dark:bg-green-950/40",
+    border: "border-green-200 dark:border-green-900",
+    text: "text-green-800 dark:text-green-200",
+    accent: "text-green-500",
+  },
+  evaluation: {
+    bg: "bg-orange-50 dark:bg-orange-950/40",
+    border: "border-orange-200 dark:border-orange-900",
+    text: "text-orange-800 dark:text-orange-200",
+    accent: "text-orange-500",
+  },
   dataset: {
     bg: "bg-emerald-50 dark:bg-emerald-950/40",
     border: "border-emerald-200 dark:border-emerald-900",
@@ -92,23 +127,23 @@ const TYPE_THEME: Record<NodeKind, { bg: string; border: string; text: string; a
     text: "text-amber-800 dark:text-amber-200",
     accent: "text-amber-500",
   },
-  model: {
-    bg: "bg-fuchsia-50 dark:bg-fuchsia-950/40",
-    border: "border-fuchsia-200 dark:border-fuchsia-900",
-    text: "text-fuchsia-800 dark:text-fuchsia-200",
-    accent: "text-fuchsia-500",
+  integration: {
+    bg: "bg-purple-50 dark:bg-purple-950/40",
+    border: "border-purple-200 dark:border-purple-900",
+    text: "text-purple-800 dark:text-purple-200",
+    accent: "text-purple-500",
   },
-  prediction: {
-    bg: "bg-cyan-50 dark:bg-cyan-950/40",
-    border: "border-cyan-200 dark:border-cyan-900",
-    text: "text-cyan-800 dark:text-cyan-200",
-    accent: "text-cyan-500",
-  },
-  audit: {
+  user: {
     bg: "bg-slate-50 dark:bg-slate-900/60",
     border: "border-slate-200 dark:border-slate-800",
     text: "text-slate-800 dark:text-slate-200",
     accent: "text-slate-500",
+  },
+  organization: {
+    bg: "bg-gray-50 dark:bg-gray-900/60",
+    border: "border-gray-200 dark:border-gray-800",
+    text: "text-gray-800 dark:text-gray-200",
+    accent: "text-gray-500",
   },
 }
 
@@ -242,20 +277,33 @@ function useDebounced<T>(value: T, delay = 250) {
 function MetricsBar({ data }: { data: LineageNode[] }) {
   const counts = React.useMemo(() => {
     const safeData = Array.isArray(data) ? data : []
-    const c: Record<NodeKind, number> = { dataset: 0, transformation: 0, model: 0, prediction: 0, audit: 0 }
+    const c: Record<LineageNode["type"], number> = {
+      agent: 0,
+      model: 0,
+      deployment: 0,
+      evaluation: 0,
+      dataset: 0,
+      transformation: 0,
+      integration: 0,
+      user: 0,
+      organization: 0,
+    }
     safeData.forEach((n) => (c[n.type] += 1))
     return c
   }, [data])
 
-  const items: { label: string; key: NodeKind; value: number }[] = [
+  const items: { label: string; key: LineageNode["type"]; value: number }[] = [
+    { label: "Agents", key: "agent", value: counts.agent },
+    { label: "Models", key: "model", value: counts.model },
+    { label: "Deployments", key: "deployment", value: counts.deployment },
+    { label: "Evaluations", key: "evaluation", value: counts.evaluation },
     { label: "Datasets", key: "dataset", value: counts.dataset },
     { label: "Transformations", key: "transformation", value: counts.transformation },
-    { label: "Models", key: "model", value: counts.model },
-    { label: "Predictions", key: "prediction", value: counts.prediction },
-    { label: "Audits", key: "audit", value: counts.audit },
+    { label: "Integrations", key: "integration", value: counts.integration },
   ]
+
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3">
       {items.map((it) => (
         <Card key={it.key} className={`${TYPE_THEME[it.key].bg} ${TYPE_THEME[it.key].border}`}>
           <CardHeader className="py-3">
@@ -280,8 +328,8 @@ function Toolbar({
 }: {
   search: string
   setSearch: (s: string) => void
-  typeFilter: Record<NodeKind, boolean>
-  setTypeFilter: (f: Record<NodeKind, boolean>) => void
+  typeFilter: Record<LineageNode["type"], boolean>
+  setTypeFilter: (f: Record<LineageNode["type"], boolean>) => void
   onFit: () => void
   onReset: () => void
   onExportJSON: () => void
@@ -293,7 +341,7 @@ function Toolbar({
         <div className="relative flex-1">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search by name, type, owner, version, or schema..."
+            placeholder="Search by name, type, provider, status, or description..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-8"
@@ -309,7 +357,17 @@ function Toolbar({
           <DropdownMenuContent align="start" className="w-56">
             <DropdownMenuLabel>Types</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            {(["dataset", "transformation", "model", "prediction", "audit"] as NodeKind[]).map((t) => (
+            {(
+              [
+                "agent",
+                "model",
+                "deployment",
+                "evaluation",
+                "dataset",
+                "transformation",
+                "integration",
+              ] as LineageNode["type"][]
+            ).map((t) => (
               <DropdownMenuItem key={t} onSelect={(e) => e.preventDefault()} className="cursor-default">
                 <div className="flex items-center gap-2 w-full">
                   <Checkbox
@@ -509,12 +567,16 @@ export function DataModelLineage({
   const [selected, setSelected] = React.useState<LineageNode | null>(null)
   const [search, setSearch] = React.useState("")
   const debouncedSearch = useDebounced(search)
-  const [typeFilter, setTypeFilter] = React.useState<Record<NodeKind, boolean>>({
+  const [typeFilter, setTypeFilter] = React.useState<Record<LineageNode["type"], boolean>>({
+    agent: true,
+    model: true,
+    deployment: true,
+    evaluation: true,
     dataset: true,
     transformation: true,
-    model: true,
-    prediction: true,
-    audit: true,
+    integration: true,
+    user: false,
+    organization: false,
   })
 
   React.useEffect(() => {
@@ -551,7 +613,7 @@ export function DataModelLineage({
   const edgesRaw = React.useMemo(() => buildEdges(raw), [raw])
 
   const activeTypes = React.useMemo(
-    () => new Set((Object.keys(typeFilter) as NodeKind[]).filter((k) => typeFilter[k])),
+    () => new Set((Object.keys(typeFilter) as LineageNode["type"][]).filter((k) => typeFilter[k])),
     [typeFilter],
   )
 
@@ -570,6 +632,10 @@ export function DataModelLineage({
         n.metadata?.sourceFile,
         n.metadata?.status,
         n.metadata?.description,
+        n.metadata?.provider,
+        n.metadata?.endpoint,
+        n.metadata?.cost,
+        n.metadata?.performance,
       ]
         .filter(Boolean)
         .join(" ")
@@ -644,9 +710,10 @@ export function DataModelLineage({
         <CardHeader className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <CardTitle className="text-2xl font-bold text-foreground">End-to-End Lineage Tracking</CardTitle>
+              <CardTitle className="text-2xl font-bold text-foreground">Real-Time Data & Model Lineage</CardTitle>
               <CardDescription className="text-muted-foreground">
-                Visualize datasets, transformations, and models from source to audit, filter, focus, and export.
+                Visualize your complete AI pipeline: agents, models, deployments, evaluations, and data flows from your
+                live system.
               </CardDescription>
             </div>
             <Button variant="outline" className="gap-2 bg-transparent" onClick={loadLineage} disabled={loading}>
@@ -699,7 +766,17 @@ export function DataModelLineage({
             onFit={() => apiRef.current?.fit()}
             onReset={() => {
               setSearch("")
-              setTypeFilter({ dataset: true, transformation: true, model: true, prediction: true, audit: true })
+              setTypeFilter({
+                agent: true,
+                model: true,
+                deployment: true,
+                evaluation: true,
+                dataset: true,
+                transformation: true,
+                integration: true,
+                user: false,
+                organization: false,
+              })
               setFocusMode("all")
               apiRef.current?.fit()
             }}

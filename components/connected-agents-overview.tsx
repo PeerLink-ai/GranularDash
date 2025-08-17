@@ -5,7 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ConnectAgentModal } from "./connect-agent-modal"
-import { Plus, Activity, AlertCircle, CheckCircle, Clock } from 'lucide-react'
+import { AgentConnectionTester } from "./agent-connection-tester"
+import { Plus, Activity, AlertCircle, CheckCircle, Clock } from "lucide-react"
 
 interface Agent {
   id: string
@@ -52,11 +53,11 @@ export function ConnectedAgentsOverview() {
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'active':
+      case "active":
         return <CheckCircle className="h-4 w-4 text-green-500" />
-      case 'inactive':
+      case "inactive":
         return <Clock className="h-4 w-4 text-yellow-500" />
-      case 'error':
+      case "error":
         return <AlertCircle className="h-4 w-4 text-red-500" />
       default:
         return <Activity className="h-4 w-4 text-gray-500" />
@@ -65,11 +66,15 @@ export function ConnectedAgentsOverview() {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'active':
-        return <Badge variant="default" className="bg-green-100 text-green-800">Active</Badge>
-      case 'inactive':
+      case "active":
+        return (
+          <Badge variant="default" className="bg-green-100 text-green-800">
+            Active
+          </Badge>
+        )
+      case "inactive":
         return <Badge variant="secondary">Inactive</Badge>
-      case 'error':
+      case "error":
         return <Badge variant="destructive">Error</Badge>
       default:
         return <Badge variant="outline">Unknown</Badge>
@@ -94,60 +99,60 @@ export function ConnectedAgentsOverview() {
 
   return (
     <>
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <div>
-            <CardTitle>Connected Agents</CardTitle>
-            <CardDescription>
-              Manage your AI agents and their connections
-            </CardDescription>
-          </div>
-          <Button onClick={() => setShowConnectModal(true)} size="sm">
-            <Plus className="h-4 w-4 mr-2" />
-            Connect Agent
-          </Button>
-        </CardHeader>
-        <CardContent>
-          {agents.length === 0 ? (
-            <div className="text-center py-8">
-              <Activity className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No agents connected</h3>
-              <p className="text-muted-foreground mb-4">
-                Connect your first AI agent to start monitoring and governance.
-              </p>
-              <Button onClick={() => setShowConnectModal(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Connect Your First Agent
-              </Button>
+      <div className="space-y-6">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <div>
+              <CardTitle>Connected Agents</CardTitle>
+              <CardDescription>Manage your AI agents and their connections</CardDescription>
             </div>
-          ) : (
-            <div className="space-y-4">
-              {agents.map((agent) => (
-                <div
-                  key={agent.id}
-                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
-                >
-                  <div className="flex items-center space-x-4">
-                    {getStatusIcon(agent.status)}
-                    <div>
-                      <h4 className="font-semibold">{agent.name}</h4>
-                      <p className="text-sm text-muted-foreground">
-                        {agent.provider} • {agent.model}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Connected {new Date(agent.connected_at).toLocaleDateString()}
-                      </p>
+            <Button onClick={() => setShowConnectModal(true)} size="sm">
+              <Plus className="h-4 w-4 mr-2" />
+              Connect Agent
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {agents.length === 0 ? (
+              <div className="text-center py-8">
+                <Activity className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No agents connected</h3>
+                <p className="text-muted-foreground mb-4">
+                  Connect your first AI agent to start monitoring and governance.
+                </p>
+                <Button onClick={() => setShowConnectModal(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Connect Your First Agent
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {agents.map((agent) => (
+                  <div
+                    key={agent.id}
+                    className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                  >
+                    <div className="flex items-center space-x-4">
+                      {getStatusIcon(agent.status)}
+                      <div>
+                        <h4 className="font-semibold">{agent.name}</h4>
+                        <p className="text-sm text-muted-foreground">
+                          {agent.provider} • {agent.model}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Connected {new Date(agent.connected_at).toLocaleDateString()}
+                        </p>
+                      </div>
                     </div>
+                    <div className="flex items-center space-x-2">{getStatusBadge(agent.status)}</div>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    {getStatusBadge(agent.status)}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <AgentConnectionTester />
+      </div>
 
       <ConnectAgentModal
         open={showConnectModal}

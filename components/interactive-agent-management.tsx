@@ -11,6 +11,7 @@ import { Switch } from "@/components/ui/switch"
 import { Slider } from "@/components/ui/slider"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -216,6 +217,40 @@ export function InteractiveAgentManagement() {
     }
   }
 
+  const handleDeleteAgent = async (agentId: string) => {
+    try {
+      const response = await fetch(`/api/agents/${agentId}`, {
+        method: "DELETE",
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to delete agent")
+      }
+
+      toast({
+        title: "Success",
+        description: "Agent deleted successfully",
+      })
+
+      fetchAgents() // Refresh the list
+    } catch (error) {
+      console.error("Error deleting agent:", error)
+      toast({
+        title: "Error",
+        description: "Failed to delete agent. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleSaveAgent = (updatedAgent: Agent) => {
+    setAgents((prev) => prev.map((agent) => (agent.id === updatedAgent.id ? updatedAgent : agent)))
+    toast({
+      title: "Success",
+      description: "Agent updated successfully",
+    })
+  }
+
   const AgentCard = ({ agent }: { agent: Agent }) => (
     <Card className="group hover:shadow-lg transition-all duration-300 hover:scale-[1.02] border-0 shadow-md">
       <CardHeader className="pb-3">
@@ -272,7 +307,7 @@ export function InteractiveAgentManagement() {
                   </>
                 )}
               </DropdownMenuItem>
-              <DropdownMenuItem className="text-destructive">
+              <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteAgent(agent.id)}>
                 <Trash2 className="mr-2 h-4 w-4" />
                 Delete
               </DropdownMenuItem>
@@ -497,16 +532,80 @@ export function InteractiveAgentManagement() {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Configure Agent: {selectedAgent?.name}</DialogTitle>
-            <DialogDescription>Adjust performance settings and behavior parameters</DialogDescription>
+            <DialogDescription>Edit agent details and adjust performance settings</DialogDescription>
           </DialogHeader>
 
           {selectedAgent && (
-            <Tabs defaultValue="performance" className="w-full">
-              <TabsList className="grid w-full grid-cols-3">
+            <Tabs defaultValue="details" className="w-full">
+              <TabsList className="grid w-full grid-cols-4">
+                <TabsTrigger value="details">Details</TabsTrigger>
                 <TabsTrigger value="performance">Performance</TabsTrigger>
                 <TabsTrigger value="security">Security</TabsTrigger>
                 <TabsTrigger value="monitoring">Monitoring</TabsTrigger>
               </TabsList>
+
+              <TabsContent value="details" className="space-y-4">
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="edit-name">Agent Name</Label>
+                    <Input
+                      id="edit-name"
+                      value={selectedAgent.name}
+                      onChange={(e) => {
+                        setSelectedAgent((prev) => (prev ? { ...prev, name: e.target.value } : null))
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-endpoint">Endpoint URL</Label>
+                    <Input
+                      id="edit-endpoint"
+                      value={selectedAgent.endpoint}
+                      onChange={(e) => {
+                        setSelectedAgent((prev) => (prev ? { ...prev, endpoint: e.target.value } : null))
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-type">Agent Type</Label>
+                    <Select
+                      value={selectedAgent.type}
+                      onValueChange={(value) => {
+                        setSelectedAgent((prev) => (prev ? { ...prev, type: value } : null))
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="gpt">GPT (OpenAI)</SelectItem>
+                        <SelectItem value="claude">Claude (Anthropic)</SelectItem>
+                        <SelectItem value="gemini">Gemini (Google)</SelectItem>
+                        <SelectItem value="custom">Custom/Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={async () => {
+                        await handleSaveAgent(selectedAgent)
+                        setShowConfigModal(false)
+                      }}
+                    >
+                      Save Changes
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={async () => {
+                        await handleDeleteAgent(selectedAgent.id)
+                        setShowConfigModal(false)
+                      }}
+                    >
+                      Delete Agent
+                    </Button>
+                  </div>
+                </div>
+              </TabsContent>
 
               <TabsContent value="performance" className="space-y-4">
                 <div className="space-y-4">

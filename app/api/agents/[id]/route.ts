@@ -48,7 +48,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 
     const { id } = params
     const body = await request.json()
-    const { name, status, endpoint } = body
+    const { name, status, endpoint, type, api_key } = body
 
     // Update agent
     const [updatedAgent] = await sql`
@@ -57,6 +57,8 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
         name = COALESCE(${name}, name),
         status = COALESCE(${status}, status),
         endpoint = COALESCE(${endpoint}, endpoint),
+        provider = COALESCE(${type}, provider),
+        api_key = COALESCE(${api_key}, api_key),
         updated_at = NOW()
       WHERE id = ${id} AND user_id = ${user.id}
       RETURNING *
@@ -96,7 +98,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     // Get agent details before deletion
     const [agent] = await sql`
       SELECT * FROM connected_agents 
-      WHERE agent_id = ${id} AND user_id = ${user.id}
+      WHERE id = ${id} AND user_id = ${user.id}
     `
 
     if (!agent) {
@@ -106,7 +108,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     // Delete the agent
     await sql`
       DELETE FROM connected_agents 
-      WHERE agent_id = ${id} AND user_id = ${user.id}
+      WHERE id = ${id} AND user_id = ${user.id}
     `
 
     // Log the activity

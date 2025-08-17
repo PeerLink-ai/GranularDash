@@ -29,10 +29,33 @@ export function EditAgentModal({ isOpen, onOpenChange, agent, onSaveAgent }) {
     }
   }, [agent])
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (agentName && agentType && apiKey && endpointUrl) {
-      onSaveAgent({ ...agent, agentName, agentType, apiKey, endpointUrl })
-      onOpenChange(false)
+      try {
+        const response = await fetch(`/api/agents/${agent.id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: agentName,
+            type: agentType,
+            api_key: apiKey,
+            endpoint: endpointUrl,
+          }),
+        })
+
+        if (!response.ok) {
+          throw new Error("Failed to update agent")
+        }
+
+        const data = await response.json()
+        onSaveAgent(data.agent)
+        onOpenChange(false)
+      } catch (error) {
+        console.error("Error updating agent:", error)
+        // You might want to show a toast notification here
+      }
     }
   }
 

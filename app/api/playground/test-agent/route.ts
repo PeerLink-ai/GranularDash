@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     }
 
     const agents = await sql`
-      SELECT agent_id, name, type, endpoint, api_key_encrypted, status
+      SELECT agent_id, name, provider, endpoint, api_key_encrypted, status
       FROM connected_agents 
       WHERE agent_id = ${agentId}
     `
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
         decision: "prompt_received",
         confidence: 1.0,
         reasoning: `Processing prompt: ${prompt.substring(0, 50)}...`,
-        context: { promptLength: prompt.length, agentType: agent.type },
+        context: { promptLength: prompt.length, agentType: agent.provider },
       })
       console.log("[v0] Decision logged")
     } catch (sdkError) {
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
       console.log("[v0] Making API call to:", apiUrl)
 
       // Make actual API call based on agent type
-      if (agent.type === "OpenAI" || agent.type === "openai") {
+      if (agent.provider === "OpenAI" || agent.provider === "openai") {
         const apiResponse = await fetch(`${apiUrl}/v1/chat/completions`, {
           method: "POST",
           headers: {

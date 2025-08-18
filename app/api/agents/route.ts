@@ -48,10 +48,9 @@ export async function GET(_req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Normalize provider/model to the client’s expected shape: type/version
     const rows = await sql<any[]>`
       SELECT 
-        id,
+        agent_id as id,
         name,
         provider AS type,
         model AS version,
@@ -173,7 +172,7 @@ export async function POST(req: NextRequest) {
 
     // Normalize for client (type/version)
     const agentForClient = {
-      id: newAgent.id,
+      id: newAgent.agent_id,
       name: newAgent.name,
       type: newAgent.provider,
       version: newAgent.model,

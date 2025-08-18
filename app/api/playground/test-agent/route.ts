@@ -1,6 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
 import { decryptSecret } from "@/lib/crypto"
+import { CryptoAuditChain } from "@/lib/crypto-audit-chain"
+import { addAuditLog } from "@/lib/audit-store"
+import { ImmutableLedger } from "@/lib/sdk/immutable-ledger"
 
 const sql = neon(process.env.DATABASE_URL!)
 
@@ -180,6 +183,65 @@ export async function POST(request: NextRequest) {
 
     console.log("[v0] Creating lineage entry...")
     const lineageId = `lineage-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    const responseTime = Date.now() - startTime
+
+    console.log("[v0] Creating cryptographic audit chain entry...")
+    const auditChain = CryptoAuditChain.getInstance()
+    const auditBlock = auditChain.addInteractionBlock(agentId, "response", {
+      prompt,
+      response,
+      tokenUsage: actualTokenUsage,
+      responseTime,
+      agent: {
+        name: agent.name,
+        provider: agent.provider,
+        endpoint: agent.endpoint,
+      },
+      lineageId,
+      timestamp: Date.now(),
+    })
+
+    console.log("[v0] Creating immutable ledger entry...")
+    const ledger = new ImmutableLedger({
+      agentId,
+      baseUrl: process.env.NEXT_PUBLIC_APP_URL || `https://${request.headers.get("host")}`,
+    })
+    const ledgerRecord = await ledger.append("PLAYGROUND_TEST", {
+      prompt,
+      response,
+      tokenUsage: actualTokenUsage,
+      responseTime,
+      lineageId,
+      blockHash: auditBlock.hash,
+      signature: auditBlock.signature,
+    })
+
+    console.log("[v0] Creating database audit log entry...")
+    await addAuditLog({
+      userId: "playground-user", // In production, get from session
+      organization: "default-org", // In production, get from user context
+      action: "AGENT_PLAYGROUND_TEST",
+      resourceType: "AI_AGENT",
+      resourceId: agentId,
+      details: {
+        agentName: agent.name,
+        provider: agent.provider,
+        promptLength: prompt.length,
+        responseLength: response.length,
+        tokenUsage: actualTokenUsage,
+        responseTime,
+        lineageId,
+        blockHash: auditBlock.hash,
+        ledgerIndex: ledgerRecord.index,
+        cryptographicProof: {
+          signature: auditBlock.signature,
+          merkleRoot: auditBlock.merkleRoot,
+          chainValid: auditChain.validateChain(),
+        },
+      },
+      ipAddress: request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown",
+      userAgent: request.headers.get("user-agent") || "unknown",
+    })
 
     await sql`
       INSERT INTO lineage_mapping (
@@ -187,7 +249,7 @@ export async function POST(request: NextRequest) {
         evaluation_scores, created_at
       ) VALUES (
         ${lineageId}, ${agentId}, ${prompt}, ${response}, 
-        ${JSON.stringify(actualTokenUsage)}, ${Date.now() - startTime},
+        ${JSON.stringify(actualTokenUsage)}, ${responseTime},
         ${JSON.stringify({
           overall: 0.85,
           safety: 0.9,
@@ -199,10 +261,10 @@ export async function POST(request: NextRequest) {
     `
     console.log("[v0] Lineage entry created successfully")
 
-    console.log("[v0] Returning successful response")
+    console.log("[v0] Returning successful response with cryptographic proof")
     return NextResponse.json({
       response,
-      responseTime: Date.now() - startTime,
+      responseTime,
       tokenUsage: actualTokenUsage,
       lineageId,
       evaluation: {
@@ -213,9 +275,15 @@ export async function POST(request: NextRequest) {
         factuality: 0.8,
       },
       cryptographicProof: {
-        blockHash: `hash-${lineageId}`,
-        signature: `sig-${Date.now()}`,
-        chainValid: true,
+        blockId: auditBlock.id,
+        blockHash: auditBlock.hash,
+        signature: auditBlock.signature,
+        merkleRoot: auditBlock.merkleRoot,
+        previousHash: auditBlock.previousHash,
+        chainValid: auditChain.validateChain(),
+        ledgerIndex: ledgerRecord.index,
+        ledgerHash: ledgerRecord.hash,
+        timestamp: auditBlock.timestamp,
       },
     })
   } catch (error) {

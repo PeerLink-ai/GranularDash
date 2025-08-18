@@ -17,15 +17,27 @@ export async function POST(request: NextRequest) {
     }
 
     console.log("[v0] Querying database for agent...")
-    const agents = await sql`
+    let agents = await sql`
       SELECT agent_id, name, provider, endpoint, api_key_encrypted, status
       FROM connected_agents 
       WHERE agent_id = ${agentId}
     `
+
+    // If not found in connected_agents, try the agents table
+    if (agents.length === 0) {
+      console.log("[v0] Agent not found in connected_agents, checking agents table...")
+      const agentsFromMainTable = await sql`
+        SELECT id as agent_id, name, type as provider, endpoint, api_key, status
+        FROM agents 
+        WHERE id = ${agentId}
+      `
+      agents = agentsFromMainTable
+    }
+
     console.log("[v0] Found agents:", agents.length)
 
     if (agents.length === 0) {
-      console.log("[v0] Agent not found in database")
+      console.log("[v0] Agent not found in either table")
       return NextResponse.json({ error: "Agent not found" }, { status: 404 })
     }
 

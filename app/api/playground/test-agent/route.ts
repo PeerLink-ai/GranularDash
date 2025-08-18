@@ -4,38 +4,57 @@ import { neon } from "@neondatabase/serverless"
 const sql = neon(process.env.DATABASE_URL!)
 
 function decryptSecret(encryptedKey: string): string {
-  // Simple base64 decode for now - in production you'd use proper encryption
   try {
-    return Buffer.from(encryptedKey, "base64").toString("utf-8")
-  } catch {
-    return encryptedKey // Return as-is if not base64 encoded
+    const decoded = Buffer.from(encryptedKey, "base64").toString("utf-8")
+    // Validate that the decoded string contains only valid characters
+    const sanitized = decoded.replace(/[\u0000-\u001F\u007F-\u009F\uFFFD]/g, "")
+    console.log("[v0] API key length after decryption:", sanitized.length)
+    console.log("[v0] API key starts with:", sanitized.substring(0, 10) + "...")
+    return sanitized
+  } catch (error) {
+    console.log("[v0] Base64 decode failed, using key as-is:", error)
+    // Remove any invalid characters from the original key
+    return encryptedKey.replace(/[\u0000-\u001F\u007F-\u009F\uFFFD]/g, "")
   }
 }
 
 async function callAgentAPI(agent: any, prompt: string) {
   const apiKey = agent.api_key_encrypted ? decryptSecret(agent.api_key_encrypted) : agent.api_key
 
+  if (!apiKey || apiKey.length < 10) {
+    throw new Error("Invalid or missing API key")
+  }
+
+  // Ensure prompt is properly encoded
+  const sanitizedPrompt = prompt.replace(/[\u0000-\u001F\u007F-\u009F\uFFFD]/g, " ")
+
   console.log("[v0] Making real API call to:", agent.endpoint)
   console.log("[v0] Agent provider:", agent.provider)
+  console.log("[v0] API key validation passed")
 
   // Handle different agent types
   if (agent.provider?.toLowerCase().includes("openai") || agent.endpoint?.includes("openai")) {
-    // OpenAI API format
+    const requestBody = {
+      model: "gpt-3.5-turbo",
+      messages: [{ role: "user", content: sanitizedPrompt }],
+      max_tokens: 150,
+    }
+
+    console.log("[v0] OpenAI request body prepared")
+
     const response = await fetch(agent.endpoint || "https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        model: "gpt-3.5-turbo",
-        messages: [{ role: "user", content: prompt }],
-        max_tokens: 150,
-      }),
+      body: JSON.stringify(requestBody),
     })
 
     if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`)
+      const errorText = await response.text()
+      console.error("[v0] OpenAI API error response:", errorText)
+      throw new Error(`OpenAI API error: ${response.status} ${response.statusText} - ${errorText}`)
     }
 
     const data = await response.json()
@@ -48,7 +67,12 @@ async function callAgentAPI(agent: any, prompt: string) {
       },
     }
   } else if (agent.provider?.toLowerCase().includes("anthropic") || agent.endpoint?.includes("anthropic")) {
-    // Anthropic Claude API format
+    const requestBody = {
+      model: "claude-3-sonnet-20240229",
+      max_tokens: 150,
+      messages: [{ role: "user", content: sanitizedPrompt }],
+    }
+
     const response = await fetch(agent.endpoint || "https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -56,15 +80,13 @@ async function callAgentAPI(agent: any, prompt: string) {
         "Content-Type": "application/json",
         "anthropic-version": "2023-06-01",
       },
-      body: JSON.stringify({
-        model: "claude-3-sonnet-20240229",
-        max_tokens: 150,
-        messages: [{ role: "user", content: prompt }],
-      }),
+      body: JSON.stringify(requestBody),
     })
 
     if (!response.ok) {
-      throw new Error(`Anthropic API error: ${response.status} ${response.statusText}`)
+      const errorText = await response.text()
+      console.error("[v0] Anthropic API error response:", errorText)
+      throw new Error(`Anthropic API error: ${response.status} ${response.statusText} - ${errorText}`)
     }
 
     const data = await response.json()
@@ -77,21 +99,24 @@ async function callAgentAPI(agent: any, prompt: string) {
       },
     }
   } else {
-    // Generic API call for custom endpoints
+    const requestBody = {
+      prompt: sanitizedPrompt,
+      max_tokens: 150,
+    }
+
     const response = await fetch(agent.endpoint, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        prompt: prompt,
-        max_tokens: 150,
-      }),
+      body: JSON.stringify(requestBody),
     })
 
     if (!response.ok) {
-      throw new Error(`Agent API error: ${response.status} ${response.statusText}`)
+      const errorText = await response.text()
+      console.error("[v0] Generic API error response:", errorText)
+      throw new Error(`Agent API error: ${response.status} ${response.statusText} - ${errorText}`)
     }
 
     const data = await response.json()

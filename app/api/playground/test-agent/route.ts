@@ -1,22 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
+import { decryptSecret } from "@/lib/crypto"
 
 const sql = neon(process.env.DATABASE_URL!)
-
-function decryptSecret(encryptedKey: string): string {
-  try {
-    const decoded = Buffer.from(encryptedKey, "base64").toString("utf-8")
-    // Validate that the decoded string contains only valid characters
-    const sanitized = decoded.replace(/[\u0000-\u001F\u007F-\u009F\uFFFD]/g, "")
-    console.log("[v0] API key length after decryption:", sanitized.length)
-    console.log("[v0] API key starts with:", sanitized.substring(0, 10) + "...")
-    return sanitized
-  } catch (error) {
-    console.log("[v0] Base64 decode failed, using key as-is:", error)
-    // Remove any invalid characters from the original key
-    return encryptedKey.replace(/[\u0000-\u001F\u007F-\u009F\uFFFD]/g, "")
-  }
-}
 
 async function callAgentAPI(agent: any, prompt: string) {
   const apiKey = agent.api_key_encrypted ? decryptSecret(agent.api_key_encrypted) : agent.api_key

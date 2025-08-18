@@ -3,6 +3,109 @@ import { neon } from "@neondatabase/serverless"
 
 const sql = neon(process.env.DATABASE_URL!)
 
+function decryptSecret(encryptedKey: string): string {
+  // Simple base64 decode for now - in production you'd use proper encryption
+  try {
+    return Buffer.from(encryptedKey, "base64").toString("utf-8")
+  } catch {
+    return encryptedKey // Return as-is if not base64 encoded
+  }
+}
+
+async function callAgentAPI(agent: any, prompt: string) {
+  const apiKey = agent.api_key_encrypted ? decryptSecret(agent.api_key_encrypted) : agent.api_key
+
+  console.log("[v0] Making real API call to:", agent.endpoint)
+  console.log("[v0] Agent provider:", agent.provider)
+
+  // Handle different agent types
+  if (agent.provider?.toLowerCase().includes("openai") || agent.endpoint?.includes("openai")) {
+    // OpenAI API format
+    const response = await fetch(agent.endpoint || "https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-3.5-turbo",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 150,
+      }),
+    })
+
+    if (!response.ok) {
+      throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`)
+    }
+
+    const data = await response.json()
+    return {
+      response: data.choices[0]?.message?.content || "No response generated",
+      tokenUsage: {
+        prompt: data.usage?.prompt_tokens || 0,
+        completion: data.usage?.completion_tokens || 0,
+        total: data.usage?.total_tokens || 0,
+      },
+    }
+  } else if (agent.provider?.toLowerCase().includes("anthropic") || agent.endpoint?.includes("anthropic")) {
+    // Anthropic Claude API format
+    const response = await fetch(agent.endpoint || "https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey,
+        "Content-Type": "application/json",
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-3-sonnet-20240229",
+        max_tokens: 150,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    })
+
+    if (!response.ok) {
+      throw new Error(`Anthropic API error: ${response.status} ${response.statusText}`)
+    }
+
+    const data = await response.json()
+    return {
+      response: data.content[0]?.text || "No response generated",
+      tokenUsage: {
+        prompt: data.usage?.input_tokens || 0,
+        completion: data.usage?.output_tokens || 0,
+        total: (data.usage?.input_tokens || 0) + (data.usage?.output_tokens || 0),
+      },
+    }
+  } else {
+    // Generic API call for custom endpoints
+    const response = await fetch(agent.endpoint, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        prompt: prompt,
+        max_tokens: 150,
+      }),
+    })
+
+    if (!response.ok) {
+      throw new Error(`Agent API error: ${response.status} ${response.statusText}`)
+    }
+
+    const data = await response.json()
+    return {
+      response: data.response || data.text || data.content || "No response generated",
+      tokenUsage: {
+        prompt: Math.floor(prompt.length / 4),
+        completion: Math.floor((data.response || data.text || "").length / 4),
+        total: Math.floor((prompt.length + (data.response || data.text || "").length) / 4),
+      },
+    }
+  }
+}
+
 export async function POST(request: NextRequest) {
   console.log("[v0] Playground API endpoint hit - route is working!")
 
@@ -45,12 +148,23 @@ export async function POST(request: NextRequest) {
     const startTime = Date.now()
     console.log("[v0] Testing agent:", agent.name, "provider:", agent.provider)
 
-    const response = `Test response from ${agent.name} (${agent.provider}): This is a mock response to verify the API is working. Original prompt: "${prompt.substring(0, 50)}..."`
+    let response: string
+    let actualTokenUsage: any
 
-    const actualTokenUsage = {
-      prompt: Math.floor(prompt.length / 4),
-      completion: Math.floor(response.length / 4),
-      total: Math.floor((prompt.length + response.length) / 4),
+    try {
+      const apiResult = await callAgentAPI(agent, prompt)
+      response = apiResult.response
+      actualTokenUsage = apiResult.tokenUsage
+      console.log("[v0] Real API call successful, response length:", response.length)
+    } catch (apiError) {
+      console.error("[v0] Real API call failed:", apiError)
+      // Fallback to mock response if real API fails
+      response = `API call failed for ${agent.name} (${agent.provider}). Error: ${apiError instanceof Error ? apiError.message : "Unknown error"}. This is a fallback response.`
+      actualTokenUsage = {
+        prompt: Math.floor(prompt.length / 4),
+        completion: Math.floor(response.length / 4),
+        total: Math.floor((prompt.length + response.length) / 4),
+      }
     }
 
     console.log("[v0] Creating lineage entry...")

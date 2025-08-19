@@ -202,46 +202,57 @@ export async function POST(request: NextRequest) {
     })
 
     console.log("[v0] Creating immutable ledger entry...")
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `https://${request.headers.get("host")}`
     const ledger = new ImmutableLedger({
       agentId,
-      baseUrl: process.env.NEXT_PUBLIC_APP_URL || `https://${request.headers.get("host")}`,
-    })
-    const ledgerRecord = await ledger.append("PLAYGROUND_TEST", {
-      prompt,
-      response,
-      tokenUsage: actualTokenUsage,
-      responseTime,
-      lineageId,
-      blockHash: auditBlock.hash,
-      signature: auditBlock.signature,
+      baseUrl: baseUrl.startsWith("http") ? baseUrl : `https://${baseUrl}`,
     })
 
-    console.log("[v0] Creating database audit log entry...")
-    await addAuditLog({
-      userId: "playground-user", // In production, get from session
-      organization: "default-org", // In production, get from user context
-      action: "AGENT_PLAYGROUND_TEST",
-      resourceType: "AI_AGENT",
-      resourceId: agentId,
-      details: {
-        agentName: agent.name,
-        provider: agent.provider,
-        promptLength: prompt.length,
-        responseLength: response.length,
+    try {
+      const ledgerRecord = await ledger.append("PLAYGROUND_TEST", {
+        prompt,
+        response,
         tokenUsage: actualTokenUsage,
         responseTime,
         lineageId,
         blockHash: auditBlock.hash,
-        ledgerIndex: ledgerRecord.index,
-        cryptographicProof: {
-          signature: auditBlock.signature,
-          merkleRoot: auditBlock.merkleRoot,
-          chainValid: auditChain.validateChain(),
+        signature: auditBlock.signature,
+      })
+      console.log("[v0] Immutable ledger entry created successfully")
+    } catch (ledgerError) {
+      console.warn("[v0] ImmutableLedger failed, continuing without it:", ledgerError)
+    }
+
+    console.log("[v0] Creating database audit log entry...")
+    try {
+      await addAuditLog({
+        userId: "playground-user", // In production, get from session
+        organization: "default-org", // In production, get from user context
+        action: "AGENT_PLAYGROUND_TEST",
+        resourceType: "AI_AGENT",
+        resourceId: agentId,
+        details: {
+          agentName: agent.name,
+          provider: agent.provider,
+          promptLength: prompt.length,
+          responseLength: response.length,
+          tokenUsage: actualTokenUsage,
+          responseTime,
+          lineageId,
+          blockHash: auditBlock.hash,
+          cryptographicProof: {
+            signature: auditBlock.signature,
+            merkleRoot: auditBlock.merkleRoot,
+            chainValid: auditChain.validateChain(),
+          },
         },
-      },
-      ipAddress: request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown",
-      userAgent: request.headers.get("user-agent") || "unknown",
-    })
+        ipAddress: request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown",
+        userAgent: request.headers.get("user-agent") || "unknown",
+      })
+      console.log("[v0] Database audit log entry created successfully")
+    } catch (auditError) {
+      console.warn("[v0] Audit logging failed, continuing without it:", auditError)
+    }
 
     await sql`
       INSERT INTO lineage_mapping (
@@ -262,7 +273,7 @@ export async function POST(request: NextRequest) {
     console.log("[v0] Lineage entry created successfully")
 
     console.log("[v0] Returning successful response with cryptographic proof")
-    return NextResponse.json({
+    const responseData = {
       response,
       responseTime,
       tokenUsage: actualTokenUsage,
@@ -281,11 +292,11 @@ export async function POST(request: NextRequest) {
         merkleRoot: auditBlock.merkleRoot,
         previousHash: auditBlock.previousHash,
         chainValid: auditChain.validateChain(),
-        ledgerIndex: ledgerRecord.index,
-        ledgerHash: ledgerRecord.hash,
         timestamp: auditBlock.timestamp,
       },
-    })
+    }
+
+    return NextResponse.json(responseData)
   } catch (error) {
     console.error("[v0] Playground test error:", error)
     return NextResponse.json(

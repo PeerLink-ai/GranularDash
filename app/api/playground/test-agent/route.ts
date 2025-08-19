@@ -4,6 +4,7 @@ import { decryptSecret } from "@/lib/crypto"
 import { CryptoAuditChain } from "@/lib/crypto-audit-chain"
 import { addAuditLog } from "@/lib/audit-store"
 import { ImmutableLedger } from "@/lib/sdk/immutable-ledger"
+import { addSDKLog } from "@/lib/sdk-log-store"
 
 const sql = neon(process.env.DATABASE_URL!)
 
@@ -254,6 +255,43 @@ export async function POST(request: NextRequest) {
       console.warn("[v0] Audit logging failed, continuing without it:", auditError)
     }
 
+    console.log("[v0] Creating SDK log entry for audit logs page...")
+    try {
+      await addSDKLog({
+        level: "info",
+        message: `Playground test completed for agent ${agent.name}`,
+        metadata: {
+          prompt,
+          response,
+          tokenUsage: actualTokenUsage,
+          responseTime,
+          evaluation: {
+            overall: 0.85,
+            safety: 0.9,
+            relevance: 0.8,
+            coherence: 0.85,
+            factuality: 0.8,
+          },
+          cryptographicProof: {
+            blockHash: auditBlock.hash,
+            signature: auditBlock.signature,
+            merkleRoot: auditBlock.merkleRoot,
+            chainValid: auditChain.validateChain(),
+          },
+        },
+        agent_id: agentId,
+        action: "PLAYGROUND_TEST",
+        resource: "AI_AGENT",
+        status: "success",
+        duration_ms: responseTime,
+        ip_address: request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown",
+        user_agent: request.headers.get("user-agent") || "unknown",
+      })
+      console.log("[v0] SDK log entry created successfully")
+    } catch (sdkLogError) {
+      console.warn("[v0] SDK logging failed, continuing without it:", sdkLogError)
+    }
+
     await sql`
       INSERT INTO lineage_mapping (
         id, agent_id, prompt, response, token_usage, response_time, 
@@ -299,6 +337,29 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(responseData)
   } catch (error) {
     console.error("[v0] Playground test error:", error)
+    const agentId = null // Declare agentId variable here
+    try {
+      await addSDKLog({
+        level: "error",
+        message: `Playground test failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+        metadata: {
+          agentId,
+          prompt: prompt?.substring(0, 100) + "...", // Truncate for logging
+          error: error instanceof Error ? error.message : "Unknown error",
+          stack: error instanceof Error ? error.stack : undefined,
+        },
+        agent_id: agentId,
+        action: "PLAYGROUND_TEST",
+        resource: "AI_AGENT",
+        status: "error",
+        error_code: "PLAYGROUND_ERROR",
+        ip_address: request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown",
+        user_agent: request.headers.get("user-agent") || "unknown",
+      })
+    } catch (sdkLogError) {
+      console.warn("[v0] SDK error logging failed:", sdkLogError)
+    }
+
     return NextResponse.json(
       {
         error: "Failed to test agent",

@@ -1,5 +1,6 @@
 import { ImmutableLedger } from "./immutable-ledger"
 import { AnomalyDetector } from "./anomaly-detector"
+import { addAIThoughtLog } from "@/lib/ai-thought-audit"
 import type {
   SDKConfig,
   SDKLevel,
@@ -211,6 +212,62 @@ export class AIGovernanceSDK {
         }
         await this.post("ALERT", alert, "error")
       }
+      throw error
+    }
+  }
+
+  async logThoughtProcess(
+    thoughtType: "reasoning" | "decision" | "analysis" | "planning" | "reflection",
+    thoughtContent: string,
+    options: {
+      prompt?: string
+      contextData?: Record<string, any>
+      confidenceScore?: number
+      reasoningSteps?: string[]
+      decisionFactors?: Record<string, any>
+      alternativesConsidered?: Record<string, any>
+      outcomePrediction?: string
+      sessionId?: string
+      processingTimeMs?: number
+      modelUsed?: string
+      temperature?: number
+      tokensUsed?: number
+    } = {},
+  ) {
+    try {
+      const thoughtLog = await addAIThoughtLog({
+        agentId: this.agentId,
+        thoughtType,
+        thoughtContent,
+        sessionId: options.sessionId,
+        prompt: options.prompt,
+        contextData: options.contextData,
+        confidenceScore: options.confidenceScore,
+        reasoningSteps: options.reasoningSteps,
+        decisionFactors: options.decisionFactors,
+        alternativesConsidered: options.alternativesConsidered,
+        outcomePrediction: options.outcomePrediction,
+        processingTimeMs: options.processingTimeMs,
+        modelUsed: options.modelUsed,
+        temperature: options.temperature,
+        tokensUsed: options.tokensUsed,
+      })
+
+      // Also log to the regular audit system for cross-referencing
+      await this.post(
+        "AI_THOUGHT",
+        {
+          thoughtType,
+          thoughtContent: thoughtContent.substring(0, 200) + "...", // Truncated for regular audit
+          confidenceScore: options.confidenceScore,
+          thoughtLogId: thoughtLog.id,
+        },
+        "info",
+      )
+
+      return thoughtLog
+    } catch (error) {
+      console.error(`[v0] Failed to log thought process:`, error)
       throw error
     }
   }

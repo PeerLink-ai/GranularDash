@@ -89,7 +89,7 @@ export default function PlaygroundPage() {
       }
       setLineage([promptEntry])
 
-      const res = await fetch(`/api/agent-proxy`, {
+      const res = await fetch(`/api/playground/test-agent`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -102,21 +102,8 @@ export default function PlaygroundPage() {
         throw new Error(`Test failed: ${res.status}`)
       }
 
-      const data = await res.json()
-
-      const responseData: PlaygroundResponse = {
-        response: data.response,
-        responseTime: data.responseTime,
-        tokenUsage: data.tokenUsage,
-        lineageId: `proxy-${Date.now()}`,
-        cryptographicProof: {
-          blockHash: data.cryptographicProof,
-          signature: "proxy-generated",
-          chainValid: true,
-        },
-      }
-
-      setResponse(responseData)
+      const data: PlaygroundResponse = await res.json()
+      setResponse(data)
 
       // Add response to lineage
       const responseEntry: LineageEntry = {
@@ -126,9 +113,9 @@ export default function PlaygroundPage() {
         content: data.response,
         metadata: {
           agentId: selectedAgent,
-          lineageId: responseData.lineageId,
+          lineageId: data.lineageId,
           tokenUsage: data.tokenUsage,
-          cryptographicProof: responseData.cryptographicProof,
+          cryptographicProof: data.cryptographicProof,
         },
         duration: data.responseTime,
         tokens: data.tokenUsage.total,

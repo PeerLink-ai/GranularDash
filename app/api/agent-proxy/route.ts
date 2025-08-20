@@ -30,8 +30,18 @@ export async function POST(request: NextRequest) {
     const agent = agents[0]
     console.log("[v0] Found agent:", agent.name)
 
-    // Decrypt API key
-    const apiKey = await decryptSecret(agent.api_key_encrypted)
+    // Decrypt and validate API key
+    let apiKey
+    try {
+      apiKey = await decryptSecret(agent.api_key_encrypted)
+      // Validate API key format for OpenAI
+      if (agent.provider === "OpenAI" && (!apiKey || !apiKey.startsWith("sk-"))) {
+        throw new Error("Invalid OpenAI API key format")
+      }
+    } catch (decryptError) {
+      console.error("[v0] API key decryption failed:", decryptError)
+      return NextResponse.json({ error: "Invalid API key" }, { status: 400 })
+    }
 
     // Hidden system instruction to force structured JSON output
     const systemInstruction = `You must respond with valid JSON in exactly this format:
@@ -47,6 +57,11 @@ The reasoning should be 1-2 sentences explaining your thought process. The respo
     const startTime = Date.now()
 
     if (agent.provider === "OpenAI") {
+      // Decrypt and validate API key
+      const model = agent.model || "gpt-4o-mini" // Use a valid default model
+
+      console.log("[v0] Making OpenAI request with model:", model)
+
       const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -54,18 +69,21 @@ The reasoning should be 1-2 sentences explaining your thought process. The respo
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: agent.model || "gpt-4",
+          model,
           messages: [
             { role: "system", content: systemInstruction },
             { role: "user", content: prompt },
           ],
           temperature: 0.7,
           max_tokens: 1000,
+          response_format: { type: "json_object" }, // Force JSON response
         }),
       })
 
       if (!openaiResponse.ok) {
-        throw new Error(`OpenAI API error: ${openaiResponse.statusText}`)
+        const errorText = await openaiResponse.text()
+        console.error("[v0] OpenAI API error:", errorText)
+        throw new Error(`OpenAI API error: ${openaiResponse.status} ${openaiResponse.statusText} - ${errorText}`)
       }
 
       apiResponse = await openaiResponse.json()

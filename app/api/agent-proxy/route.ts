@@ -57,12 +57,11 @@ The reasoning should be 1-2 sentences explaining your thought process. The respo
     const startTime = Date.now()
 
     if (agent.provider === "OpenAI") {
-      // Decrypt and validate API key
-      const model = agent.model || "gpt-4o-mini" // Use a valid default model
+      const model = "gpt-3.5-turbo" // Use a more reliable model
 
-      console.log("[v0] Making OpenAI request with model:", model)
-      console.log("[v0] API key starts with:", apiKey.substring(0, 10) + "...")
-      console.log("[v0] Request endpoint:", "https://api.openai.com/v1/chat/completions")
+      console.log("[v0] Making simplified OpenAI request")
+      console.log("[v0] API key length:", apiKey.length)
+      console.log("[v0] API key format check:", apiKey.startsWith("sk-"))
 
       const requestBody = {
         model,
@@ -71,40 +70,47 @@ The reasoning should be 1-2 sentences explaining your thought process. The respo
           { role: "user", content: prompt },
         ],
         temperature: 0.7,
-        max_tokens: 1000,
-        response_format: { type: "json_object" }, // Force JSON response
+        max_tokens: 500,
       }
 
-      console.log("[v0] Request body:", JSON.stringify(requestBody, null, 2))
+      console.log("[v0] Simplified request body:", JSON.stringify(requestBody, null, 2))
 
-      const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(requestBody),
-      })
+      try {
+        const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(requestBody),
+        })
 
-      if (!openaiResponse.ok) {
-        const errorText = await openaiResponse.text()
-        console.error("[v0] OpenAI API error status:", openaiResponse.status)
-        console.error("[v0] OpenAI API error headers:", Object.fromEntries(openaiResponse.headers.entries()))
-        console.error("[v0] OpenAI API error body:", errorText)
+        console.log("[v0] OpenAI response status:", openaiResponse.status)
+        console.log("[v0] OpenAI response ok:", openaiResponse.ok)
 
-        let errorDetails = errorText
-        try {
-          const errorJson = JSON.parse(errorText)
-          errorDetails = errorJson.error?.message || errorText
-          console.error("[v0] Parsed OpenAI error:", errorJson)
-        } catch (parseError) {
-          console.error("[v0] Could not parse error response as JSON")
+        if (!openaiResponse.ok) {
+          const errorText = await openaiResponse.text()
+          console.error("[v0] OpenAI API error status:", openaiResponse.status)
+          console.error("[v0] OpenAI API error body:", errorText)
+
+          let errorDetails = errorText
+          try {
+            const errorJson = JSON.parse(errorText)
+            errorDetails = errorJson.error?.message || errorText
+            console.error("[v0] Parsed OpenAI error:", errorJson)
+          } catch (parseError) {
+            console.error("[v0] Could not parse error response as JSON")
+          }
+
+          throw new Error(`OpenAI API error: ${openaiResponse.status} - ${errorDetails}`)
         }
 
-        throw new Error(`OpenAI API error: ${openaiResponse.status} ${openaiResponse.statusText} - ${errorDetails}`)
+        apiResponse = await openaiResponse.json()
+        console.log("[v0] OpenAI response received successfully")
+      } catch (fetchError) {
+        console.error("[v0] Fetch error details:", fetchError)
+        throw fetchError
       }
-
-      apiResponse = await openaiResponse.json()
     } else {
       // Handle other providers with generic format
       const response = await fetch(agent.endpoint, {

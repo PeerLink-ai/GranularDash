@@ -258,9 +258,12 @@ export async function POST(request: NextRequest) {
     console.log("[v0] Creating SDK log entry for audit logs page...")
     try {
       await addSDKLog({
+        timestamp: BigInt(Date.now()),
         level: "info",
-        message: `Playground test completed for agent ${agent.name}`,
-        metadata: {
+        type: "playground_test",
+        agent_id: agentId,
+        payload: {
+          message: `Playground test completed for agent ${agent.name}`,
           prompt,
           response,
           tokenUsage: actualTokenUsage,
@@ -278,14 +281,13 @@ export async function POST(request: NextRequest) {
             merkleRoot: auditBlock.merkleRoot,
             chainValid: auditChain.validateChain(),
           },
+          action: "PLAYGROUND_TEST",
+          resource: "AI_AGENT",
+          status: "success",
+          duration_ms: responseTime,
+          ip_address: request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown",
+          user_agent: request.headers.get("user-agent") || "unknown",
         },
-        agent_id: agentId,
-        action: "PLAYGROUND_TEST",
-        resource: "AI_AGENT",
-        status: "success",
-        duration_ms: responseTime,
-        ip_address: request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown",
-        user_agent: request.headers.get("user-agent") || "unknown",
       })
       console.log("[v0] SDK log entry created successfully")
     } catch (sdkLogError) {
@@ -340,21 +342,22 @@ export async function POST(request: NextRequest) {
     const agentId = null // Declare agentId variable here
     try {
       await addSDKLog({
+        timestamp: BigInt(Date.now()),
         level: "error",
-        message: `Playground test failed: ${error instanceof Error ? error.message : "Unknown error"}`,
-        metadata: {
-          agentId,
+        type: "playground_error",
+        agent_id: agentId || "unknown",
+        payload: {
+          message: `Playground test failed: ${error instanceof Error ? error.message : "Unknown error"}`,
           prompt: prompt?.substring(0, 100) + "...", // Truncate for logging
           error: error instanceof Error ? error.message : "Unknown error",
           stack: error instanceof Error ? error.stack : undefined,
+          action: "PLAYGROUND_TEST",
+          resource: "AI_AGENT",
+          status: "error",
+          error_code: "PLAYGROUND_ERROR",
+          ip_address: request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown",
+          user_agent: request.headers.get("user-agent") || "unknown",
         },
-        agent_id: agentId,
-        action: "PLAYGROUND_TEST",
-        resource: "AI_AGENT",
-        status: "error",
-        error_code: "PLAYGROUND_ERROR",
-        ip_address: request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown",
-        user_agent: request.headers.get("user-agent") || "unknown",
       })
     } catch (sdkLogError) {
       console.warn("[v0] SDK error logging failed:", sdkLogError)

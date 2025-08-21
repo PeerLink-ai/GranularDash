@@ -5,7 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Search, RefreshCw } from 'lucide-react'
+import { Badge } from "@/components/ui/badge"
+import { Search, RefreshCw, Brain } from "lucide-react"
 import { AuditLogDetailsModal } from "./audit-log-details-modal"
 import { useAuth } from "@/contexts/auth-context"
 
@@ -66,6 +67,10 @@ export function AuditLogTable() {
     setIsDetailsModalOpen(true)
   }
 
+  const hasAIReasoning = (log: AuditLog) => {
+    return log.details?.ai_reasoning || log.details?.reasoning_steps || log.details?.thought_process
+  }
+
   if (loading) {
     return (
       <Card>
@@ -95,7 +100,10 @@ export function AuditLogTable() {
                 className="pl-8"
                 aria-label="Search logs"
               />
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              <Search
+                className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
+                aria-hidden="true"
+              />
             </div>
             <Button variant="outline" size="icon" onClick={() => fetchAuditLogs()} aria-label="Refresh logs">
               <RefreshCw className="h-4 w-4" />
@@ -117,6 +125,7 @@ export function AuditLogTable() {
                   <TableHead>Action</TableHead>
                   <TableHead>Resource Type</TableHead>
                   <TableHead>Resource ID</TableHead>
+                  <TableHead>AI Reasoning</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -127,6 +136,16 @@ export function AuditLogTable() {
                     <TableCell className="font-medium">{log.action}</TableCell>
                     <TableCell>{log.resource_type}</TableCell>
                     <TableCell>{log.resource_id || "-"}</TableCell>
+                    <TableCell>
+                      {hasAIReasoning(log) ? (
+                        <Badge variant="secondary" className="flex items-center gap-1 w-fit">
+                          <Brain className="h-3 w-3" />
+                          Available
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground text-sm">-</span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right">
                       <Button variant="outline" size="sm" onClick={() => handleViewDetails(log)}>
                         View Details

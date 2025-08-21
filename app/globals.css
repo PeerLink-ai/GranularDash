@@ -16,22 +16,25 @@
     --card-foreground: 215 20% 25%;
     --popover: 0 0% 100%;
     --popover-foreground: 215 25% 27%;
-    /* Changed to subtle slate colors instead of bold blue */
-    --primary: 215 20% 65%;
+    /* Updated primary color to warm orange for dynamic loading elements */
+    --primary: 20 91% 48%; /* #ea580c orange-600 */
     --primary-foreground: 0 0% 100%;
-    --secondary: 210 40% 98%;
-    --secondary-foreground: 215 20% 25%;
+    /* Updated secondary to accent orange for highlights */
+    --secondary: 24 95% 53%; /* #f97316 orange-500 */
+    --secondary-foreground: 0 0% 100%;
     --muted: 210 40% 98%;
     --muted-foreground: 215 16% 47%;
-    --accent: 215 16% 47%;
+    /* Updated accent to match secondary for artistic elements */
+    --accent: 24 95% 53%; /* #f97316 orange-500 */
     --accent-foreground: 0 0% 100%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
     --border: 220 13% 91%;
     --input: 220 13% 97%;
-    --ring: 215 20% 65%;
-    --chart-1: 215 20% 65%;
-    --chart-2: 210 40% 80%;
+    /* Updated ring to match primary with opacity */
+    --ring: 20 91% 48%;
+    --chart-1: 20 91% 48%;
+    --chart-2: 24 95% 53%;
     --chart-3: 215 25% 27%;
     --chart-4: 0 84% 60%;
     --chart-5: 45 93% 47%;
@@ -40,10 +43,12 @@
     --sidebar-foreground: 215 25% 27%;
     --sidebar-primary: 220 13% 97%;
     --sidebar-primary-foreground: 215 20% 25%;
-    --sidebar-accent: 215 16% 47%;
+    /* Updated sidebar accent to match new accent color */
+    --sidebar-accent: 24 95% 53%;
     --sidebar-accent-foreground: 0 0% 100%;
     --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 215 20% 65%;
+    /* Updated sidebar ring to match primary */
+    --sidebar-ring: 20 91% 48%;
   }
   .dark {
     --background: 222 84% 5%;
@@ -52,8 +57,8 @@
     --card-foreground: 210 40% 98%;
     --popover: 222 84% 5%;
     --popover-foreground: 210 40% 98%;
-    /* Updated dark mode to use muted slate tones */
-    --primary: 215 20% 65%;
+    /* Updated dark mode primary to maintain orange theme */
+    --primary: 20 91% 48%;
     --primary-foreground: 222 84% 5%;
     --secondary: 217 33% 17%;
     --secondary-foreground: 210 40% 98%;
@@ -65,9 +70,10 @@
     --destructive-foreground: 210 40% 98%;
     --border: 217 33% 17%;
     --input: 217 33% 17%;
-    --ring: 215 20% 65%;
-    --chart-1: 215 20% 65%;
-    --chart-2: 210 40% 80%;
+    /* Updated dark mode ring to match primary */
+    --ring: 20 91% 48%;
+    --chart-1: 20 91% 48%;
+    --chart-2: 24 95% 53%;
     --chart-3: 45 93% 47%;
     --chart-4: 0 84% 60%;
     --chart-5: 280 65% 60%;
@@ -78,7 +84,8 @@
     --sidebar-accent: 217 33% 17%;
     --sidebar-accent-foreground: 210 40% 98%;
     --sidebar-border: 217 33% 17%;
-    --sidebar-ring: 215 20% 65%;
+    /* Updated dark mode sidebar ring */
+    --sidebar-ring: 20 91% 48%;
   }
 }
 
@@ -109,7 +116,7 @@
 
 ::-webkit-scrollbar-thumb {
   border-radius: 999px;
-  background: linear-gradient(180deg, hsl(0 0% 70% / 0.35), hsl(0 0% 45% / 0.35));
+  background: linear-gradient(180deg, hsl(var(--primary) / 0.35), hsl(var(--primary) / 0.35));
   border: 2px solid transparent; /* creates padding effect */
   background-clip: padding-box;
   transition: background 200ms ease, transform 200ms ease, opacity 200ms ease;
@@ -123,28 +130,124 @@
 
 /* Hover state: slightly darker and a bit thicker illusion */
 ::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, hsl(0 0% 60% / 0.55), hsl(0 0% 35% / 0.55));
+  background: linear-gradient(180deg, hsl(var(--primary) / 0.55), hsl(var(--primary) / 0.55));
 }
 
 /* Active/grabbed */
 ::-webkit-scrollbar-thumb:active {
-  background: linear-gradient(180deg, hsl(0 0% 50% / 0.65), hsl(0 0% 25% / 0.65));
+  background: linear-gradient(180deg, hsl(var(--primary) / 0.65), hsl(var(--primary) / 0.65));
 }
 
 /* Dark mode adjustments */
 :where(.dark) ::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, hsl(0 0% 35% / 0.45), hsl(0 0% 20% / 0.45));
+  background: linear-gradient(180deg, hsl(var(--primary) / 0.45), hsl(var(--primary) / 0.45));
 }
 
 :where(.dark) ::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, hsl(0 0% 45% / 0.6), hsl(0 0% 25% / 0.6));
+  background: linear-gradient(180deg, hsl(var(--primary) / 0.6), hsl(var(--primary) / 0.6));
 }
 
 :where(.dark) ::-webkit-scrollbar-thumb:active {
-  background: linear-gradient(180deg, hsl(0 0% 50% / 0.7), hsl(0 0% 30% / 0.7));
+  background: linear-gradient(180deg, hsl(var(--primary) / 0.7), hsl(var(--primary) / 0.7));
 }
 
 /* Optional: reduce layout shift when scrollbars appear */
 html {
   scrollbar-gutter: stable both-edges;
+}
+
+/* Added modern loading animation keyframes and utilities */
+@keyframes morphing-loader {
+  0%,
+  100% {
+    border-radius: 50%;
+    transform: scale(1) rotate(0deg);
+  }
+  25% {
+    border-radius: 25%;
+    transform: scale(1.1) rotate(90deg);
+  }
+  50% {
+    border-radius: 0%;
+    transform: scale(0.9) rotate(180deg);
+  }
+  75% {
+    border-radius: 25%;
+    transform: scale(1.1) rotate(270deg);
+  }
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 20px hsl(var(--primary) / 0.3);
+    opacity: 0.8;
+  }
+  50% {
+    box-shadow: 0 0 40px hsl(var(--primary) / 0.6);
+    opacity: 1;
+  }
+}
+
+@keyframes floating-particles {
+  0% {
+    transform: translateY(0px) rotate(0deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-100px) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+@keyframes progress-wave {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes bounce-in {
+  0% {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  70% {
+    transform: scale(0.9);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-morphing-loader {
+  animation: morphing-loader 2s ease-in-out infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.animate-floating-particles {
+  animation: floating-particles 3s linear infinite;
+}
+
+.animate-progress-wave {
+  animation: progress-wave 2s ease-in-out infinite;
+}
+
+.animate-bounce-in {
+  animation: bounce-in 0.6s ease-out forwards;
 }

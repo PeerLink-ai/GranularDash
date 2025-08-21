@@ -1,8 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getSDKLogs, addSDKLog, clearSDKLogs } from "@/lib/sdk-log-store"
+import { getCurrentUser } from "@/lib/auth"
 
 export async function GET(request: NextRequest) {
   try {
+    const user = await getCurrentUser()
+    if (!user) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 })
+    }
+
     const { searchParams } = new URL(request.url)
 
     const options = {
@@ -14,6 +20,7 @@ export async function GET(request: NextRequest) {
       search: searchParams.get("search") || undefined,
       startDate: searchParams.get("startDate") ? new Date(searchParams.get("startDate")!) : undefined,
       endDate: searchParams.get("endDate") ? new Date(searchParams.get("endDate")!) : undefined,
+      organization: user.organization,
     }
 
     const result = await getSDKLogs(options)
@@ -43,6 +50,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const user = await getCurrentUser()
+    if (!user) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 })
+    }
+
     const body = await request.json()
 
     const log = await addSDKLog({
@@ -56,8 +68,8 @@ export async function POST(request: NextRequest) {
       status: body.status,
       duration_ms: body.duration_ms,
       error_code: body.error_code,
-      ip_address: body.ip_address || request.ip,
       user_agent: body.user_agent || request.headers.get("user-agent"),
+      organization: user.organization,
     })
 
     return NextResponse.json({
@@ -79,7 +91,12 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE() {
   try {
-    await clearSDKLogs()
+    const user = await getCurrentUser()
+    if (!user) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 })
+    }
+
+    await clearSDKLogs(user.organization)
 
     return NextResponse.json({
       success: true,

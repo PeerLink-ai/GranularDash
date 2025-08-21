@@ -237,6 +237,23 @@ export async function getUser(request: NextRequest) {
   }
 }
 
+export async function getCurrentUser(): Promise<AuthUser | null> {
+  try {
+    // In a server component/API route context, we need to get the session token
+    // This is a simplified version - in a real app you'd use cookies() from next/headers
+    const { cookies } = await import("next/headers")
+    const cookieStore = cookies()
+    const sessionToken = cookieStore.get(SESSION_COOKIE_NAME)?.value || cookieStore.get("session")?.value
+
+    if (!sessionToken) return null
+
+    return await getUserBySession(sessionToken)
+  } catch (error) {
+    console.error("Failed to get current user:", error)
+    return null
+  }
+}
+
 export async function getUserIdFromCookie(): Promise<string | null> {
   // Convenience helper if you use next/headers cookies in routes;
   // Prefer using getUserBySession in routes to get full user context.

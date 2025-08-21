@@ -66,6 +66,8 @@ export async function getSDKLogs(
   try {
     const { limit = 50, offset = 0, level, agentId, type, organization } = options
 
+    console.log("[v0] getSDKLogs called with options:", options)
+
     const whereConditions = []
     const params: any[] = []
 
@@ -91,9 +93,12 @@ export async function getSDKLogs(
 
     const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(" AND ")}` : ""
 
+    console.log("[v0] Executing count query with params:", params)
     const countQuery = `SELECT COUNT(*) as count FROM sdk_logs ${whereClause}`
     const countResult = await sql.unsafe(countQuery, params)
     const total = countResult && countResult[0] ? Number(countResult[0].count) : 0
+
+    console.log("[v0] Count result:", { total, countResult })
 
     const logsQuery = `
       SELECT * FROM sdk_logs 
@@ -101,19 +106,31 @@ export async function getSDKLogs(
       ORDER BY created_at DESC 
       LIMIT $${params.length + 1} OFFSET $${params.length + 2}
     `
+    console.log("[v0] Executing logs query with params:", [...params, limit, offset])
     const logs = await sql.unsafe(logsQuery, [...params, limit, offset])
 
+    console.log("[v0] Raw logs result:", { logsCount: logs?.length, firstLog: logs?.[0] })
+
+    if (!Array.isArray(logs)) {
+      console.error("[v0] Logs query did not return an array:", logs)
+      return { logs: [], total: 0 }
+    }
+
+    const processedLogs = logs.map((log) => ({
+      ...log,
+      timestamp: Number(log.timestamp),
+      created_at: new Date(log.created_at),
+      payload: typeof log.payload === "string" ? JSON.parse(log.payload) : log.payload || {},
+    }))
+
+    console.log("[v0] Processed logs:", { count: processedLogs.length, firstProcessed: processedLogs[0] })
+
     return {
-      logs: logs.map((log) => ({
-        ...log,
-        timestamp: Number(log.timestamp),
-        created_at: new Date(log.created_at),
-        payload: log.payload || {},
-      })),
+      logs: processedLogs,
       total,
     }
   } catch (error) {
-    console.error("Failed to get SDK logs:", error)
+    console.error("[v0] Failed to get SDK logs:", error)
     return { logs: [], total: 0 }
   }
 }

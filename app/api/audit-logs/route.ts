@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { getUserBySession } from "@/lib/auth"
 import { addAuditLog, listAuditLogs } from "@/lib/audit-store"
@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
     const limit = Number(searchParams.get("limit") || 50)
     const offset = Number(searchParams.get("offset") || 0)
 
-    const logs = await listAuditLogs({ userId: user.id, limit, offset })
+    const logs = await listAuditLogs({ organization: user.organization, limit, offset })
     return NextResponse.json({ logs })
   } catch (err) {
     console.error("GET /api/audit-logs error:", err)
@@ -44,10 +44,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
-    const ipAddress =
-      req.headers.get("x-forwarded-for") ||
-      req.headers.get("x-real-ip") ||
-      undefined
+    const ipAddress = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || undefined
     const userAgent = req.headers.get("user-agent") || undefined
 
     const log = await addAuditLog({

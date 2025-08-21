@@ -4,13 +4,12 @@ const sql = neon(process.env.DATABASE_URL!)
 
 export interface SDKLog {
   id: string
-  timestamp: number
+  timestamp: bigint
   level: string
   type: string
   agent_id: string
   created_at: Date
   payload?: Record<string, any>
-  organization?: string
 }
 
 // Generate a unique ID
@@ -25,25 +24,23 @@ export async function ensureSDKLogTable() {
   return
 }
 
-export async function addSDKLog(log: Omit<SDKLog, "id" | "created_at"> & { organization?: string }): Promise<SDKLog> {
+export async function addSDKLog(log: Omit<SDKLog, "id" | "created_at">): Promise<SDKLog> {
   try {
     const id = generateId()
     const created_at = new Date()
-    const timestamp = log.timestamp || Date.now()
 
     const result = await sql`
       INSERT INTO sdk_logs (
-        id, timestamp, level, type, agent_id, created_at, payload, organization
+        id, timestamp, level, type, agent_id, created_at, payload
       ) VALUES (
-        ${id}, ${timestamp}, ${log.level}, ${log.type}, 
-        ${log.agent_id}, ${created_at.toISOString()}, ${JSON.stringify(log.payload || {})}, ${log.organization || "default"}
+        ${id}, ${log.timestamp}, ${log.level}, ${log.type}, 
+        ${log.agent_id}, ${created_at.toISOString()}, ${JSON.stringify(log.payload || {})}
       ) RETURNING *
     `
 
     const savedLog = result[0]
     return {
       ...savedLog,
-      timestamp: Number(savedLog.timestamp),
       created_at: new Date(savedLog.created_at),
       payload: savedLog.payload || {},
     }
@@ -60,135 +57,105 @@ export async function getSDKLogs(
     level?: string
     agentId?: string
     type?: string
-    organization?: string
   } = {},
 ): Promise<{ logs: SDKLog[]; total: number }> {
   try {
-    const { limit = 50, offset = 0, level, agentId, type, organization } = options
+    const { limit = 50, offset = 0, level, agentId, type } = options
 
-    console.log("[v0] getSDKLogs called with options:", options)
-
-    const whereConditions = []
-    const params: any[] = []
-
-    if (organization) {
-      whereConditions.push(`organization = $${params.length + 1}`)
-      params.push(organization)
-    }
+    // Build WHERE conditions dynamically
+    let whereClause = ""
+    const conditions = []
 
     if (level) {
-      whereConditions.push(`level = $${params.length + 1}`)
-      params.push(level)
+      conditions.push(`level = '${level}'`)
     }
 
     if (agentId) {
-      whereConditions.push(`agent_id = $${params.length + 1}`)
-      params.push(agentId)
+      conditions.push(`agent_id = '${agentId}'`)
     }
 
     if (type) {
-      whereConditions.push(`type = $${params.length + 1}`)
-      params.push(type)
+      conditions.push(`type = '${type}'`)
     }
 
-    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(" AND ")}` : ""
+    if (conditions.length > 0) {
+      whereClause = `WHERE ${conditions.join(" AND ")}`
+    }
 
-    console.log("[v0] Executing count query with params:", params)
-    const countQuery = `SELECT COUNT(*) as count FROM sdk_logs ${whereClause}`
-    const countResult = await sql.unsafe(countQuery, params)
+    // Get total count using template literal
+    const countResult = await sql`
+      SELECT COUNT(*) as count FROM sdk_logs ${sql.unsafe(whereClause)}
+    `
+
+    // Handle case where no results are returned
     const total = countResult && countResult[0] ? Number(countResult[0].count) : 0
 
-    console.log("[v0] Count result:", { total, countResult })
-
-    const logsQuery = `
+    // Get logs with pagination
+    const logs = await sql`
       SELECT * FROM sdk_logs 
-      ${whereClause}
+      ${sql.unsafe(whereClause)}
       ORDER BY created_at DESC 
-      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+      LIMIT ${limit} OFFSET ${offset}
     `
-    console.log("[v0] Executing logs query with params:", [...params, limit, offset])
-    const logs = await sql.unsafe(logsQuery, [...params, limit, offset])
-
-    console.log("[v0] Raw logs result:", { logsCount: logs?.length, firstLog: logs?.[0] })
-
-    if (!Array.isArray(logs)) {
-      console.error("[v0] Logs query did not return an array:", logs)
-      return { logs: [], total: 0 }
-    }
-
-    const processedLogs = logs.map((log) => ({
-      ...log,
-      timestamp: Number(log.timestamp),
-      created_at: new Date(log.created_at),
-      payload: typeof log.payload === "string" ? JSON.parse(log.payload) : log.payload || {},
-    }))
-
-    console.log("[v0] Processed logs:", { count: processedLogs.length, firstProcessed: processedLogs[0] })
 
     return {
-      logs: processedLogs,
+      logs: logs.map((log) => ({
+        ...log,
+        created_at: new Date(log.created_at),
+        payload: log.payload || {},
+      })),
       total,
     }
   } catch (error) {
-    console.error("[v0] Failed to get SDK logs:", error)
+    console.error("Failed to get SDK logs:", error)
+    // Return empty result instead of throwing to prevent crashes
     return { logs: [], total: 0 }
   }
 }
 
-export async function clearSDKLogs(organization?: string): Promise<void> {
+export async function clearSDKLogs(): Promise<void> {
   try {
-    if (organization) {
-      await sql`DELETE FROM sdk_logs WHERE organization = ${organization}`
-    } else {
-      await sql`DELETE FROM sdk_logs`
-    }
+    await sql`DELETE FROM sdk_logs`
   } catch (error) {
     console.error("Failed to clear SDK logs:", error)
     throw error
   }
 }
 
-export async function generateDemoLogs(
-  scenario: "normal" | "anomaly" | "breach" = "normal",
-  organization?: string,
-): Promise<void> {
+export async function generateDemoLogs(scenario: "normal" | "anomaly" | "breach" = "normal"): Promise<void> {
   const scenarios = {
     normal: [
       {
-        timestamp: Date.now(),
+        timestamp: BigInt(Date.now()),
         level: "info",
         type: "request",
         agent_id: "agent-gpt4",
         payload: { action: "process_request", status: "success", duration_ms: 245 },
-        organization,
       },
       {
-        timestamp: Date.now(),
+        timestamp: BigInt(Date.now()),
         level: "info",
         type: "inference",
         agent_id: "agent-claude",
         payload: { action: "model_inference", status: "success", duration_ms: 1200 },
-        organization,
       },
     ],
     anomaly: [
       {
-        timestamp: Date.now(),
+        timestamp: BigInt(Date.now()),
         level: "warn",
         type: "performance",
         agent_id: "agent-claude",
         payload: { action: "model_inference", status: "success", duration_ms: 8500, anomaly: true },
-        organization,
       },
     ],
     breach: [
       {
-        timestamp: Date.now(),
+        timestamp: BigInt(Date.now()),
         level: "error",
         type: "security",
         agent_id: "agent-unknown",
         payload: { action: "data_access", status: "failure", security_violation: true },
-        organization,
       },
     ],
   }
@@ -223,13 +190,16 @@ export interface LineageGraph {
 
 export async function buildLineageGraph(): Promise<LineageGraph> {
   try {
+    // Get recent logs to build lineage from
     const { logs } = await getSDKLogs({ limit: 100 })
 
     const nodes: LineageNode[] = []
     const edges: LineageEdge[] = []
     const nodeIds = new Set<string>()
 
+    // Build nodes and edges from logs
     for (const log of logs) {
+      // Add agent node
       if (log.agent_id && !nodeIds.has(log.agent_id)) {
         nodes.push({
           id: log.agent_id,
@@ -240,6 +210,7 @@ export async function buildLineageGraph(): Promise<LineageGraph> {
         nodeIds.add(log.agent_id)
       }
 
+      // Add log type node
       if (log.type && !nodeIds.has(`type-${log.type}`)) {
         nodes.push({
           id: `type-${log.type}`,
@@ -250,6 +221,7 @@ export async function buildLineageGraph(): Promise<LineageGraph> {
         nodeIds.add(`type-${log.type}`)
       }
 
+      // Add resource/action nodes from payload
       if (log.payload?.action && !nodeIds.has(`action-${log.payload.action}`)) {
         nodes.push({
           id: `action-${log.payload.action}`,
@@ -260,6 +232,7 @@ export async function buildLineageGraph(): Promise<LineageGraph> {
         nodeIds.add(`action-${log.payload.action}`)
       }
 
+      // Create edges based on relationships
       if (log.agent_id && log.type) {
         edges.push({
           id: `${log.agent_id}-${log.type}-${log.id}`,

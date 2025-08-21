@@ -1,14 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getSDKLogs, addSDKLog, clearSDKLogs } from "@/lib/sdk-log-store"
-import { getCurrentUser } from "@/lib/auth"
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await getCurrentUser()
-    if (!user) {
-      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 })
-    }
-
     const { searchParams } = new URL(request.url)
 
     const options = {
@@ -20,27 +14,9 @@ export async function GET(request: NextRequest) {
       search: searchParams.get("search") || undefined,
       startDate: searchParams.get("startDate") ? new Date(searchParams.get("startDate")!) : undefined,
       endDate: searchParams.get("endDate") ? new Date(searchParams.get("endDate")!) : undefined,
-      type: searchParams.get("type") || undefined,
-      organization: user.organization,
     }
 
-    console.log("[v0] Fetching SDK logs with options:", options)
     const result = await getSDKLogs(options)
-    console.log("[v0] SDK logs result:", { logsCount: result?.logs?.length, total: result?.total })
-
-    if (!result || !Array.isArray(result.logs)) {
-      console.error("[v0] Invalid result structure from getSDKLogs:", result)
-      return NextResponse.json({
-        success: true,
-        data: [],
-        total: 0,
-        pagination: {
-          limit: options.limit,
-          offset: options.offset,
-          hasMore: false,
-        },
-      })
-    }
 
     return NextResponse.json({
       success: true,
@@ -67,35 +43,23 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await getCurrentUser()
-    if (!user) {
-      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 })
-    }
-
     const body = await request.json()
-    console.log("[v0] Creating SDK log with body:", body)
 
     const log = await addSDKLog({
-      timestamp: body.timestamp || Date.now(),
       level: body.level || "info",
-      type: body.type || "general",
-      agent_id: body.agent_id || body.agentId || "unknown",
-      payload: {
-        message: body.message || "No message provided",
-        metadata: body.metadata || {},
-        user_id: body.user_id,
-        action: body.action,
-        resource: body.resource,
-        status: body.status,
-        duration_ms: body.duration_ms,
-        error_code: body.error_code,
-        user_agent: body.user_agent || request.headers.get("user-agent"),
-        ...body.payload,
-      },
-      organization: user.organization,
+      message: body.message || "No message provided",
+      metadata: body.metadata || {},
+      user_id: body.user_id,
+      agent_id: body.agent_id,
+      action: body.action,
+      resource: body.resource,
+      status: body.status,
+      duration_ms: body.duration_ms,
+      error_code: body.error_code,
+      ip_address: body.ip_address || request.ip,
+      user_agent: body.user_agent || request.headers.get("user-agent"),
     })
 
-    console.log("[v0] Created SDK log:", log)
     return NextResponse.json({
       success: true,
       data: log,
@@ -115,12 +79,7 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE() {
   try {
-    const user = await getCurrentUser()
-    if (!user) {
-      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 })
-    }
-
-    await clearSDKLogs(user.organization)
+    await clearSDKLogs()
 
     return NextResponse.json({
       success: true,

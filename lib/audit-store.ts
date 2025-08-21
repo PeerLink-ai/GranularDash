@@ -1,4 +1,5 @@
 import { sql } from "@/lib/db"
+import { crypto } from "crypto"
 
 export type AuditLogLevel = "info" | "warn" | "error" | "debug" | "success"
 export interface CreateAuditLogInput {
@@ -71,7 +72,7 @@ export async function addAuditLog(input: CreateAuditLogInput): Promise<AuditLog>
     INSERT INTO audit_logs (
       id, user_id, organization, action, resource_type, resource_id, details, ip_address, user_agent
     ) VALUES (
-      ${id}, ${userId}, ${organization}, ${action}, ${resourceType}, ${resourceId}, ${sql.json(details)}, ${ipAddress}, ${userAgent}
+      ${id}, ${userId}, ${organization}, ${action}, ${resourceType}, ${resourceId}, ${JSON.stringify(details)}, ${ipAddress}, ${userAgent}
     )
     RETURNING *
   `

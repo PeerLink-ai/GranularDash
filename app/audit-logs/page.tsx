@@ -281,6 +281,25 @@ export default function AuditLogsPage() {
     </div>
   )
 
+  const formatDate = (timestamp: number) => {
+    return new Date(timestamp).toLocaleString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    })
+  }
+
+  const formatDateShort = (date: Date) => {
+    return date.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    })
+  }
+
   return (
     <div className="p-4 md:p-6 space-y-6">
       {/* Header with title and top-right controls */}
@@ -297,8 +316,8 @@ export default function AuditLogsPage() {
                 <CalendarRange className="mr-2 h-4 w-4" />
                 {dateRange.from
                   ? dateRange.to
-                    ? `${dateRange.from.toLocaleDateString()} - ${dateRange.to.toLocaleDateString()}`
-                    : `${dateRange.from.toLocaleDateString()}`
+                    ? `${formatDateShort(dateRange.from)} - ${formatDateShort(dateRange.to)}`
+                    : `${formatDateShort(dateRange.from)}`
                   : "Pick a date range"}
               </Button>
             </PopoverTrigger>
@@ -562,7 +581,7 @@ export default function AuditLogsPage() {
                 <TableBody>
                   {sorted.map((l) => (
                     <TableRow key={l.id}>
-                      <TableCell className="whitespace-nowrap">{new Date(l.timestamp).toLocaleString()}</TableCell>
+                      <TableCell className="whitespace-nowrap">{formatDate(l.timestamp)}</TableCell>
                       <TableCell className="whitespace-nowrap">
                         <Badge
                           variant={

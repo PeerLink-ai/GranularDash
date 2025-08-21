@@ -3,24 +3,40 @@
 import * as React from "react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-  CardFooter,
-} from "@/components/ui/card"
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
-import { Github, FolderKanban, ExternalLink, Pin, PinOff, Settings, Star, StarOff, Trash2, GitFork, Bug, TimerReset, Code2, Sparkles, ShieldCheck } from 'lucide-react'
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import {
+  Github,
+  FolderKanban,
+  ExternalLink,
+  Pin,
+  PinOff,
+  Settings,
+  Star,
+  StarOff,
+  Trash2,
+  GitFork,
+  Bug,
+  TimerReset,
+  Code2,
+  Sparkles,
+  ShieldCheck,
+} from "lucide-react"
 import type { Project } from "@/app/projects/page"
 
 type Stats = {
@@ -141,68 +157,66 @@ export function ProjectCard({
   onDefault: () => void
   onDelete: () => void
 }) {
+  const [configOpen, setConfigOpen] = React.useState(false)
+  const [configName, setConfigName] = React.useState(project.name)
+  const [configDescription, setConfigDescription] = React.useState(project.description || "")
+
   const typeMeta = getTypeMeta(project.type)
   const Icon = typeMeta.icon
 
   const stats: Stats = {
-    stars:
-      Number(
-        (project.metadata as any)?.github?.stars ??
-          (project.metadata as any)?.stars
-      ) || 0,
-    forks:
-      Number(
-        (project.metadata as any)?.github?.forks ??
-          (project.metadata as any)?.forks
-      ) || 0,
-    issues:
-      Number(
-        (project.metadata as any)?.github?.issues ??
-          (project.metadata as any)?.issues
-      ) || 0,
+    stars: Number((project.metadata as any)?.github?.stars ?? (project.metadata as any)?.stars) || 0,
+    forks: Number((project.metadata as any)?.github?.forks ?? (project.metadata as any)?.forks) || 0,
+    issues: Number((project.metadata as any)?.github?.issues ?? (project.metadata as any)?.issues) || 0,
   }
 
-  const languages: { name: string; color?: string }[] =
-    (project.metadata as any)?.languages ??
-    []
+  const languages: { name: string; color?: string }[] = (project.metadata as any)?.languages ?? []
 
-  const contributors: string[] =
-    (project.metadata as any)?.contributors ??
-    ["Ada Lovelace", "Grace Hopper", "Alan Turing"]
+  const contributors: string[] = (project.metadata as any)?.contributors ?? [
+    "Ada Lovelace",
+    "Grace Hopper",
+    "Alan Turing",
+  ]
 
-  const activity: number[] =
-    (project.metadata as any)?.activity ??
-    [2, 4, 3, 6, 5, 8, 7, 5, 6, 4, 3, 7]
+  const activity: number[] = (project.metadata as any)?.activity ?? [2, 4, 3, 6, 5, 8, 7, 5, 6, 4, 3, 7]
 
-  const externalHref =
-    project.type !== "native" && project.repo_url ? project.repo_url : undefined
+  const externalHref = project.type !== "native" && project.repo_url ? project.repo_url : undefined
 
-  const primaryCtaLabel =
-    externalHref ? "Open" : "Open workspace"
-  const primaryCtaIcon =
-    externalHref ? ExternalLink : FolderKanban
+  const primaryCtaLabel = externalHref ? "Open" : "Open workspace"
+  const primaryCtaIcon = externalHref ? ExternalLink : FolderKanban
 
-  const statusLabel =
-    (project.metadata as any)?.status ??
-    (project.type === "github" ? "Connected" : "Ready")
+  const statusLabel = (project.metadata as any)?.status ?? (project.type === "github" ? "Connected" : "Ready")
+
+  const handleSaveConfig = async () => {
+    try {
+      const res = await fetch(`/api/projects/${project.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: configName,
+          description: configDescription,
+        }),
+      })
+      if (res.ok) {
+        setConfigOpen(false)
+        window.location.reload()
+      }
+    } catch (error) {
+      console.error("Failed to update project:", error)
+    }
+  }
 
   return (
     <Card
       className={cn(
-        "group relative overflow-hidden transition-all duration-300 hover:border-foreground/20 hover:shadow-md"
+        "group relative overflow-hidden transition-all duration-300 hover:border-foreground/20 hover:shadow-md",
       )}
     >
       {/* Accent ring on hover */}
       <div className="pointer-events-none absolute inset-0 rounded-lg ring-0 ring-transparent transition-[ring] duration-300 group-hover:ring-1 group-hover:ring-foreground/10" />
 
       {/* Gradient top */}
-      <div
-        className={cn(
-          "h-16 w-full",
-          typeMeta.gradient,
-          "relative"
-        )}
-      >
+      <div className={cn("h-16 w-full", typeMeta.gradient, "relative")}>
         <div className="absolute -bottom-6 left-5 flex items-center gap-2">
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-background/80 shadow-sm ring-1 ring-border backdrop-blur">
             <Icon className="h-6 w-6 text-foreground/80" />
@@ -228,12 +242,8 @@ export function ProjectCard({
       <CardHeader className="pt-8">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <CardTitle className="truncate text-lg">
-              {project.name}
-            </CardTitle>
-            <CardDescription className="truncate">
-              {project.description || "—"}
-            </CardDescription>
+            <CardTitle className="truncate text-lg">{project.name}</CardTitle>
+            <CardDescription className="truncate">{project.description || "—"}</CardDescription>
           </div>
 
           {/* Pin */}
@@ -245,16 +255,9 @@ export function ProjectCard({
                   size="icon"
                   onClick={onPin}
                   aria-label={project.pinned ? "Unpin project" : "Pin project"}
-                  className={cn(
-                    "transition-colors",
-                    project.pinned && "text-foreground"
-                  )}
+                  className={cn("transition-colors", project.pinned && "text-foreground")}
                 >
-                  {project.pinned ? (
-                    <Pin className="h-4 w-4" />
-                  ) : (
-                    <PinOff className="h-4 w-4" />
-                  )}
+                  {project.pinned ? <Pin className="h-4 w-4" /> : <PinOff className="h-4 w-4" />}
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
@@ -324,44 +327,86 @@ export function ProjectCard({
         {/* Contributors and activity */}
         <div className="grid grid-cols-5 gap-3">
           <div className="col-span-2">
-            <p className="mb-2 text-xs text-muted-foreground">
-              Recent contributors
-            </p>
+            <p className="mb-2 text-xs text-muted-foreground">Recent contributors</p>
             <Contributors names={contributors} />
           </div>
           <div className="col-span-3">
-            <p className="mb-2 text-xs text-muted-foreground">
-              Activity
-            </p>
+            <p className="mb-2 text-xs text-muted-foreground">Activity</p>
             <ActivitySparkline data={activity} />
           </div>
         </div>
       </CardContent>
 
       <CardFooter className="pt-0">
-        <div className="w-full">
-          <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
-            {/* Primary: Open */}
-            <Button asChild variant="default" className="w-full gap-2">
-              <Link
-                href={externalHref ? (externalHref as string) : "/agent-management"}
-                target={externalHref ? "_blank" : undefined}
-                aria-label={primaryCtaLabel}
-              >
-                {React.createElement(primaryCtaIcon, { className: "h-4 w-4" })}
-                {primaryCtaLabel}
-              </Link>
-            </Button>
+        <div className="w-full space-y-3">
+          {/* Primary: Open */}
+          <Button asChild variant="default" className="w-full gap-2">
+            <Link
+              href={externalHref ? (externalHref as string) : "/agent-management"}
+              target={externalHref ? "_blank" : undefined}
+              aria-label={primaryCtaLabel}
+            >
+              {React.createElement(primaryCtaIcon, { className: "h-4 w-4" })}
+              {primaryCtaLabel}
+            </Link>
+          </Button>
 
-            {/* Secondary: Settings */}
-            <Button asChild variant="outline" className="w-full gap-2">
-              <Link href="/settings" aria-label="Settings">
-                <Settings className="h-4 w-4" />
-                Settings
-              </Link>
-            </Button>
+          <div className="grid grid-cols-2 gap-2">
+            {/* Configuration Dialog */}
+            <Dialog open={configOpen} onOpenChange={setConfigOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="w-full gap-2 bg-transparent">
+                  <Settings className="h-4 w-4" />
+                  Configure
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                  <DialogTitle>Configure Project</DialogTitle>
+                  <DialogDescription>
+                    Update project settings. {project.type === "github" ? "Repository URL cannot be changed." : ""}
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="name">Project Name</Label>
+                    <Input
+                      id="name"
+                      value={configName}
+                      onChange={(e) => setConfigName(e.target.value)}
+                      placeholder="Enter project name"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="description">Description</Label>
+                    <Textarea
+                      id="description"
+                      value={configDescription}
+                      onChange={(e) => setConfigDescription(e.target.value)}
+                      placeholder="Enter project description"
+                      rows={3}
+                    />
+                  </div>
+                  {project.type === "github" && project.repo_url && (
+                    <div className="grid gap-2">
+                      <Label htmlFor="repo">Repository URL</Label>
+                      <Input id="repo" value={project.repo_url} disabled className="bg-muted" />
+                      <p className="text-xs text-muted-foreground">
+                        Repository URL cannot be modified for GitHub projects.
+                      </p>
+                    </div>
+                  )}
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setConfigOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handleSaveConfig}>Save Changes</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
 
-            {/* Tertiary: Default */}
+            {/* Make Default */}
             <TooltipProvider>
               <Tooltip delayDuration={300}>
                 <TooltipTrigger asChild>
@@ -372,7 +417,7 @@ export function ProjectCard({
                     aria-label={isDefault ? "This is your default project" : "Make default project"}
                   >
                     {isDefault ? <Star className="h-4 w-4" /> : <StarOff className="h-4 w-4" />}
-                    {isDefault ? "Default" : "Make default"}
+                    <span className="hidden sm:inline">{isDefault ? "Default" : "Make default"}</span>
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
@@ -380,27 +425,26 @@ export function ProjectCard({
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
-
-            {/* Danger: Delete */}
-            <TooltipProvider>
-              <Tooltip delayDuration={300}>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    className="w-full gap-2 text-destructive hover:bg-destructive/10"
-                    onClick={onDelete}
-                    aria-label="Delete project"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Delete
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Delete project</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
           </div>
+
+          <TooltipProvider>
+            <Tooltip delayDuration={300}>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="w-full gap-2 text-destructive hover:bg-destructive/10"
+                  onClick={onDelete}
+                  aria-label="Delete project"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete Project
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Delete project permanently</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </CardFooter>
     </Card>

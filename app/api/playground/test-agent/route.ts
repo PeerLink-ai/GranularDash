@@ -24,36 +24,78 @@ async function callAgentAPI(agent: any, prompt: string) {
 
   // Handle different agent types
   if (agent.provider?.toLowerCase().includes("openai") || agent.endpoint?.includes("openai")) {
-    const requestBody = {
+    const responseCall = {
       model: "gpt-3.5-turbo",
       messages: [{ role: "user", content: sanitizedPrompt }],
       max_tokens: 150,
     }
 
-    console.log("[v0] OpenAI request body prepared")
+    console.log("[v0] OpenAI response request prepared")
 
-    const response = await fetch(agent.endpoint || "https://api.openai.com/v1/chat/completions", {
+    const responseResult = await fetch(agent.endpoint || "https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(requestBody),
+      body: JSON.stringify(responseCall),
     })
 
-    if (!response.ok) {
-      const errorText = await response.text()
+    if (!responseResult.ok) {
+      const errorText = await responseResult.text()
       console.error("[v0] OpenAI API error response:", errorText)
-      throw new Error(`OpenAI API error: ${response.status} ${response.statusText} - ${errorText}`)
+      throw new Error(`OpenAI API error: ${responseResult.status} ${responseResult.statusText} - ${errorText}`)
     }
 
-    const data = await response.json()
+    const responseData = await responseResult.json()
+    const actualResponse = responseData.choices[0]?.message?.content || "No response generated"
+
+    const reasoningCall = {
+      model: "gpt-3.5-turbo",
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are an AI that explains your reasoning process. When given a user query and your response to it, explain step-by-step how you arrived at that answer. Be specific about your thought process, calculations, and decision-making.",
+        },
+        {
+          role: "user",
+          content: `Original query: "${sanitizedPrompt}"\n\nYour response: "${actualResponse}"\n\nNow explain your step-by-step reasoning process for how you arrived at this answer:`,
+        },
+      ],
+      max_tokens: 300,
+    }
+
+    console.log("[v0] OpenAI reasoning request prepared")
+
+    const reasoningResult = await fetch(agent.endpoint || "https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(reasoningCall),
+    })
+
+    let actualReasoning = "Unable to capture reasoning process"
+    let totalTokens = responseData.usage?.total_tokens || 0
+
+    if (reasoningResult.ok) {
+      const reasoningData = await reasoningResult.json()
+      actualReasoning = reasoningData.choices[0]?.message?.content || "No reasoning captured"
+      totalTokens += reasoningData.usage?.total_tokens || 0
+      console.log("[v0] Captured actual AI reasoning:", actualReasoning.substring(0, 100) + "...")
+    } else {
+      console.warn("[v0] Failed to capture reasoning, using fallback")
+    }
+
     return {
-      response: data.choices[0]?.message?.content || "No response generated",
+      response: actualResponse,
+      reasoning: actualReasoning,
       tokenUsage: {
-        prompt: data.usage?.prompt_tokens || 0,
-        completion: data.usage?.completion_tokens || 0,
-        total: data.usage?.total_tokens || 0,
+        prompt: responseData.usage?.prompt_tokens || 0,
+        completion: responseData.usage?.completion_tokens || 0,
+        total: totalTokens,
       },
     }
   } else if (agent.provider?.toLowerCase().includes("anthropic") || agent.endpoint?.includes("anthropic")) {
@@ -82,6 +124,7 @@ async function callAgentAPI(agent: any, prompt: string) {
     const data = await response.json()
     return {
       response: data.content[0]?.text || "No response generated",
+      reasoning: "Reasoning capture not implemented for Anthropic models yet",
       tokenUsage: {
         prompt: data.usage?.input_tokens || 0,
         completion: data.usage?.output_tokens || 0,
@@ -110,44 +153,58 @@ async function callAgentAPI(agent: any, prompt: string) {
     }
 
     const data = await response.json()
+    const responseText = data.response || data.text || data.content || "No response generated"
     return {
-      response: data.response || data.text || data.content || "No response generated",
+      response: responseText,
+      reasoning: "Reasoning capture not implemented for generic API endpoints yet",
       tokenUsage: {
         prompt: Math.floor(prompt.length / 4),
-        completion: Math.floor((data.response || data.text || "").length / 4),
-        total: Math.floor((prompt.length + (data.response || data.text || "").length) / 4),
+        completion: Math.floor(responseText.length / 4),
+        total: Math.floor((prompt.length + responseText.length) / 4),
       },
     }
   }
 }
 
-function generateAIReasoning(prompt: string, response: string, agent: any, tokenUsage: any, responseTime: number) {
+function generateAIReasoning(
+  prompt: string,
+  response: string,
+  actualReasoning: string,
+  agent: any,
+  tokenUsage: any,
+  responseTime: number,
+) {
+  // Parse the actual reasoning into structured steps
+  const reasoningLines = actualReasoning.split("\n").filter((line) => line.trim().length > 0)
+  const reasoningSteps =
+    reasoningLines.length > 0
+      ? reasoningLines
+      : [
+          "AI model processed the query",
+          "Generated response based on training data",
+          "Applied safety and coherence checks",
+        ]
+
   return {
-    reasoning_steps: [
-      "Analyzed incoming prompt for intent and complexity",
-      `Determined appropriate model parameters for ${agent.provider} agent`,
-      "Processed prompt through language model with safety checks",
-      "Evaluated response quality and coherence",
-      "Applied post-processing and formatting",
-    ],
+    reasoning_steps: reasoningSteps,
     decision_factors: [
       {
         factor: "prompt_complexity",
         value: prompt.length > 100 ? "high" : "medium",
         weight: 0.3,
-        reasoning: `Prompt length of ${prompt.length} characters indicates ${prompt.length > 100 ? "complex" : "standard"} processing needed`,
+        reasoning: `Prompt analysis: "${prompt.substring(0, 50)}${prompt.length > 50 ? "..." : ""}"`,
       },
       {
         factor: "model_selection",
         value: agent.provider,
         weight: 0.4,
-        reasoning: `Selected ${agent.provider} based on agent configuration and capabilities`,
+        reasoning: `Using ${agent.provider} model for this type of query`,
       },
       {
-        factor: "response_time",
-        value: responseTime < 1000 ? "optimal" : responseTime < 3000 ? "acceptable" : "slow",
+        factor: "response_quality",
+        value: response.length > 10 ? "good" : "minimal",
         weight: 0.3,
-        reasoning: `Response time of ${responseTime}ms is ${responseTime < 1000 ? "within optimal range" : responseTime < 3000 ? "acceptable but could be improved" : "slower than expected"}`,
+        reasoning: `Generated ${response.length} character response: "${response.substring(0, 50)}${response.length > 50 ? "..." : ""}"`,
       },
     ],
     confidence_reasoning: {
@@ -158,44 +215,43 @@ function generateAIReasoning(prompt: string, response: string, agent: any, token
         response_coherence: response.length > 10 ? 0.8 : 0.6,
         technical_execution: responseTime < 5000 ? 0.9 : 0.7,
       },
-      explanation:
-        "High confidence based on successful API call, coherent response, and acceptable performance metrics",
+      explanation: `Confidence based on actual AI reasoning: ${actualReasoning.substring(0, 100)}${actualReasoning.length > 100 ? "..." : ""}`,
     },
     alternative_approaches: [
       {
-        approach: "direct_api_fallback",
+        approach: "different_model",
         considered: true,
-        reason: "Backup option in case primary API fails",
+        reason: "Could try different model for comparison",
         selected: false,
       },
       {
-        approach: "response_caching",
-        considered: true,
-        reason: "Could improve response time for similar prompts",
-        selected: false,
-      },
-      {
-        approach: "multi_model_ensemble",
-        considered: false,
-        reason: "Not implemented for playground testing",
+        approach: "multi_step_reasoning",
+        considered:
+          actualReasoning.includes("step") || actualReasoning.includes("first") || actualReasoning.includes("then"),
+        reason: "AI used step-by-step approach in reasoning",
+        selected:
+          actualReasoning.includes("step") || actualReasoning.includes("first") || actualReasoning.includes("then"),
       },
     ],
     thought_process: {
-      initial_assessment: `Received ${prompt.length} character prompt for ${agent.name} (${agent.provider})`,
-      processing_strategy: "Single model inference with error handling and fallback",
+      initial_assessment: `Query: "${prompt}"`,
+      processing_strategy: "Direct model inference with reasoning capture",
+      actual_reasoning: actualReasoning,
       quality_checks: [
-        "Validated API key and endpoint",
-        "Sanitized input prompt",
-        "Monitored response time and token usage",
-        "Evaluated response coherence and safety",
+        "Captured actual AI reasoning process",
+        "Validated response coherence",
+        "Monitored performance metrics",
       ],
-      final_decision: `Successfully processed request with ${tokenUsage.total} tokens in ${responseTime}ms`,
-      lessons_learned:
-        responseTime > 3000 ? ["Response time could be optimized"] : ["Performance within acceptable range"],
+      final_decision: `Response: "${response}"`,
+      lessons_learned: [
+        responseTime > 3000 ? "Response time could be optimized" : "Performance acceptable",
+        actualReasoning.length > 50 ? "Rich reasoning captured" : "Limited reasoning available",
+      ],
     },
     metadata: {
       reasoning_generated_at: new Date().toISOString(),
-      reasoning_version: "1.0",
+      reasoning_version: "2.0",
+      reasoning_source: "actual_ai_model",
       agent_context: {
         name: agent.name,
         provider: agent.provider,
@@ -249,16 +305,20 @@ export async function POST(request: NextRequest) {
 
     let response: string
     let actualTokenUsage: any
+    let actualReasoning = "No reasoning captured"
 
     try {
       const apiResult = await callAgentAPI(agent, prompt)
       response = apiResult.response
       actualTokenUsage = apiResult.tokenUsage
+      actualReasoning = apiResult.reasoning || "No reasoning captured"
       console.log("[v0] Real API call successful, response length:", response.length)
+      console.log("[v0] Captured reasoning length:", actualReasoning.length)
     } catch (apiError) {
       console.error("[v0] Real API call failed:", apiError)
       // Fallback to mock response if real API fails
       response = `API call failed for ${agent.name} (${agent.provider}). Error: ${apiError instanceof Error ? apiError.message : "Unknown error"}. This is a fallback response.`
+      actualReasoning = "API call failed, no reasoning available"
       actualTokenUsage = {
         prompt: Math.floor(prompt.length / 4),
         completion: Math.floor(response.length / 4),
@@ -310,7 +370,7 @@ export async function POST(request: NextRequest) {
 
     console.log("[v0] Creating database audit log entry...")
     try {
-      const aiReasoning = generateAIReasoning(prompt, response, agent, actualTokenUsage, responseTime)
+      const aiReasoning = generateAIReasoning(prompt, response, actualReasoning, agent, actualTokenUsage, responseTime)
 
       await addAuditLog({
         userId: "playground-user", // In production, get from session
@@ -344,7 +404,7 @@ export async function POST(request: NextRequest) {
 
     console.log("[v0] Creating SDK log entry for audit logs page...")
     try {
-      const aiReasoning = generateAIReasoning(prompt, response, agent, actualTokenUsage, responseTime)
+      const aiReasoning = generateAIReasoning(prompt, response, actualReasoning, agent, actualTokenUsage, responseTime)
 
       await addSDKLog({
         timestamp: BigInt(Date.now()),

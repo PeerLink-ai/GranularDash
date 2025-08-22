@@ -13,8 +13,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Calendar } from "@/components/ui/calendar"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 import {
   CalendarRange,
@@ -28,11 +26,6 @@ import {
   Trash2,
   Settings2,
   AlertCircle,
-  Shield,
-  CheckCircle2,
-  XCircle,
-  FileText,
-  Search,
 } from "lucide-react"
 
 // Demo SDK audit log record type (from existing SDK endpoint)
@@ -65,10 +58,6 @@ export default function AuditLogsPage() {
   const [loading, setLoading] = useState(false)
   const [autoRefresh, setAutoRefresh] = useState(true)
   const [error, setError] = useState<string | null>(null)
-
-  const [selectedLog, setSelectedLog] = useState<AuditRecord | null>(null)
-  const [showDetailsModal, setShowDetailsModal] = useState(false)
-  const [cryptographicProof, setCryptographicProof] = useState<any>(null)
 
   // Filters
   const [search, setSearch] = useState("")
@@ -118,23 +107,6 @@ export default function AuditLogsPage() {
     } finally {
       setLoading(false)
     }
-  }
-
-  const showLogDetails = async (log: AuditRecord) => {
-    setSelectedLog(log)
-
-    // Fetch cryptographic proof for this log if available
-    try {
-      const res = await fetch(`/api/agents/${log.agentId}/governance-test`)
-      if (res.ok) {
-        const data = await res.json()
-        setCryptographicProof(data.cryptographicProof)
-      }
-    } catch (e) {
-      console.error("Failed to fetch cryptographic proof:", e)
-    }
-
-    setShowDetailsModal(true)
   }
 
   useEffect(() => {
@@ -604,12 +576,11 @@ export default function AuditLogsPage() {
                       </div>
                     </TableHead>
                     <TableHead>Details</TableHead>
-                    <TableHead className="w-[120px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {sorted.map((l) => (
-                    <TableRow key={l.id} className="hover:bg-muted/50">
+                    <TableRow key={l.id}>
                       <TableCell className="whitespace-nowrap">{formatDate(l.timestamp)}</TableCell>
                       <TableCell className="whitespace-nowrap">
                         <Badge
@@ -630,26 +601,9 @@ export default function AuditLogsPage() {
                       <TableCell className="font-medium">{l.type}</TableCell>
                       <TableCell className="text-muted-foreground">{l.agentId}</TableCell>
                       <TableCell>
-                        <div
-                          className="text-xs bg-muted/50 p-2 rounded-md cursor-pointer hover:bg-muted transition-colors max-w-md"
-                          onClick={() => showLogDetails(l)}
-                        >
-                          <div className="truncate">
-                            {typeof l.payload === "object"
-                              ? JSON.stringify(l.payload).substring(0, 100) + "..."
-                              : String(l.payload)}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => showLogDetails(l)}
-                          className="h-8 px-2 text-muted-foreground hover:text-foreground hover:bg-muted"
-                        >
-                          <Search className="h-4 w-4" />
-                        </Button>
+                        <pre className="text-xs bg-muted p-2 rounded-md overflow-x-auto max-h-40">
+                          {JSON.stringify(l.payload, null, 2)}
+                        </pre>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -659,166 +613,6 @@ export default function AuditLogsPage() {
           )}
         </CardContent>
       </Card>
-
-      <Dialog open={showDetailsModal} onOpenChange={setShowDetailsModal}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-          <DialogHeader className="flex-shrink-0">
-            <DialogTitle className="flex items-center gap-2 text-xl">
-              <FileText className="h-5 w-5" />
-              Event Investigation
-            </DialogTitle>
-            <DialogDescription>Detailed forensic analysis of audit log event</DialogDescription>
-          </DialogHeader>
-
-          {selectedLog && (
-            <div className="flex-1 overflow-hidden">
-              <Tabs defaultValue="overview" className="h-full flex flex-col">
-                <TabsList className="flex-shrink-0 grid w-full grid-cols-3">
-                  <TabsTrigger value="overview">Overview</TabsTrigger>
-                  <TabsTrigger value="payload">Payload</TabsTrigger>
-                  <TabsTrigger value="cryptographic">Verification</TabsTrigger>
-                </TabsList>
-
-                <div className="flex-1 overflow-y-auto mt-4">
-                  <TabsContent value="overview" className="mt-0 space-y-4">
-                    <div className="grid grid-cols-2 gap-6">
-                      <div className="space-y-4">
-                        <div>
-                          <label className="text-sm font-medium text-muted-foreground">Event ID</label>
-                          <div className="mt-1 p-2 bg-muted rounded font-mono text-sm break-all">{selectedLog.id}</div>
-                        </div>
-                        <div>
-                          <label className="text-sm font-medium text-muted-foreground">Agent ID</label>
-                          <div className="mt-1 p-2 bg-muted rounded font-mono text-sm">{selectedLog.agentId}</div>
-                        </div>
-                        <div>
-                          <label className="text-sm font-medium text-muted-foreground">Event Type</label>
-                          <div className="mt-1 p-2 bg-muted rounded text-sm font-medium">{selectedLog.type}</div>
-                        </div>
-                      </div>
-                      <div className="space-y-4">
-                        <div>
-                          <label className="text-sm font-medium text-muted-foreground">Timestamp</label>
-                          <div className="mt-1 p-2 bg-muted rounded text-sm">{formatDate(selectedLog.timestamp)}</div>
-                        </div>
-                        <div>
-                          <label className="text-sm font-medium text-muted-foreground">Severity Level</label>
-                          <div className="mt-1">
-                            <Badge
-                              variant={
-                                selectedLog.level === "error"
-                                  ? "destructive"
-                                  : selectedLog.level === "warning"
-                                    ? "secondary"
-                                    : selectedLog.level === "success"
-                                      ? "default"
-                                      : "outline"
-                              }
-                              className="text-sm px-3 py-1"
-                            >
-                              {selectedLog.level.toUpperCase()}
-                            </Badge>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </TabsContent>
-
-                  <TabsContent value="payload" className="mt-0">
-                    <div className="space-y-3">
-                      <label className="text-sm font-medium text-muted-foreground">Raw Payload Data</label>
-                      <div className="bg-muted p-4 rounded-lg">
-                        <pre className="text-sm overflow-x-auto whitespace-pre-wrap font-mono">
-                          {JSON.stringify(selectedLog.payload, null, 2)}
-                        </pre>
-                      </div>
-                      <Separator className="my-4" />
-                      <label className="text-sm font-medium text-muted-foreground">Complete Log Record</label>
-                      <div className="bg-muted p-4 rounded-lg">
-                        <pre className="text-sm overflow-x-auto whitespace-pre-wrap font-mono">
-                          {JSON.stringify(
-                            {
-                              id: selectedLog.id,
-                              timestamp: selectedLog.timestamp,
-                              timestampFormatted: formatDate(selectedLog.timestamp),
-                              agentId: selectedLog.agentId,
-                              type: selectedLog.type,
-                              level: selectedLog.level,
-                              payload: selectedLog.payload,
-                            },
-                            null,
-                            2,
-                          )}
-                        </pre>
-                      </div>
-                    </div>
-                  </TabsContent>
-
-                  <TabsContent value="cryptographic" className="mt-0">
-                    {cryptographicProof ? (
-                      <div className="space-y-4">
-                        <div className="flex items-center gap-2 mb-4">
-                          <Shield className="h-5 w-5 text-green-600" />
-                          <span className="font-medium">Cryptographic Verification Available</span>
-                        </div>
-
-                        <div className="grid grid-cols-1 gap-4">
-                          <div>
-                            <label className="text-sm font-medium text-muted-foreground">Block Hash</label>
-                            <div className="mt-1 p-3 bg-muted rounded font-mono text-xs break-all">
-                              {cryptographicProof.blockHash}
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <label className="text-sm font-medium text-muted-foreground">Block ID</label>
-                              <div className="mt-1 p-3 bg-muted rounded font-mono text-sm">
-                                {cryptographicProof.blockId}
-                              </div>
-                            </div>
-                            <div>
-                              <label className="text-sm font-medium text-muted-foreground">Chain Status</label>
-                              <div className="mt-1 p-3 bg-muted rounded">
-                                {cryptographicProof.chainValid ? (
-                                  <Badge variant="default" className="bg-green-600">
-                                    <CheckCircle2 className="h-3 w-3 mr-1" />
-                                    VERIFIED
-                                  </Badge>
-                                ) : (
-                                  <Badge variant="destructive">
-                                    <XCircle className="h-3 w-3 mr-1" />
-                                    COMPROMISED
-                                  </Badge>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-
-                          {cryptographicProof.signature && (
-                            <div>
-                              <label className="text-sm font-medium text-muted-foreground">Digital Signature</label>
-                              <div className="mt-1 p-3 bg-muted rounded font-mono text-xs break-all">
-                                {cryptographicProof.signature}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="text-center py-12 text-muted-foreground">
-                        <Shield className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                        <div className="text-lg font-medium">No Cryptographic Proof Available</div>
-                        <div className="text-sm mt-2">This event may be from a legacy system or unverified source</div>
-                      </div>
-                    )}
-                  </TabsContent>
-                </div>
-              </Tabs>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

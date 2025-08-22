@@ -52,12 +52,9 @@ export function CoachMark({ step, stepNumber, totalSteps, onNext, onPrev, onSkip
 
   const updatePosition = (element: HTMLElement) => {
     const rect = element.getBoundingClientRect()
-    const scrollTop = window.pageYOffset || document.documentElement.scrollTop
-    const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft
-
     setPosition({
-      top: rect.top + scrollTop,
-      left: rect.left + scrollLeft,
+      top: rect.top,
+      left: rect.left,
     })
 
     const viewportHeight = window.innerHeight
@@ -96,13 +93,20 @@ export function CoachMark({ step, stepNumber, totalSteps, onNext, onPrev, onSkip
     }
   }
 
-  // Handle window resize
+  // Handle window resize and scroll
   useEffect(() => {
     if (!targetElement) return
 
+    const handleScroll = () => updatePosition(targetElement)
     const handleResize = () => updatePosition(targetElement)
+
+    window.addEventListener("scroll", handleScroll, { passive: true })
     window.addEventListener("resize", handleResize)
-    return () => window.removeEventListener("resize", handleResize)
+
+    return () => {
+      window.removeEventListener("scroll", handleScroll)
+      window.removeEventListener("resize", handleResize)
+    }
   }, [targetElement])
 
   // Handle interactive elements
@@ -145,8 +149,6 @@ export function CoachMark({ step, stepNumber, totalSteps, onNext, onPrev, onSkip
   if (!isVisible || !targetElement) return null
 
   const targetRect = targetElement.getBoundingClientRect()
-  const scrollTop = window.pageYOffset || document.documentElement.scrollTop
-  const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft
 
   const getTooltipStyle = () => {
     const tooltipWidth = 400
@@ -171,6 +173,7 @@ export function CoachMark({ step, stepNumber, totalSteps, onNext, onPrev, onSkip
             viewportWidth - tooltipWidth - 20,
           ),
           transform: "none",
+          position: "fixed" as const,
         }
       case "bottom":
         return {
@@ -180,6 +183,7 @@ export function CoachMark({ step, stepNumber, totalSteps, onNext, onPrev, onSkip
             viewportWidth - tooltipWidth - 20,
           ),
           transform: "none",
+          position: "fixed" as const,
         }
       case "left":
         return {
@@ -189,6 +193,7 @@ export function CoachMark({ step, stepNumber, totalSteps, onNext, onPrev, onSkip
           ),
           left: Math.max(20, position.left - tooltipWidth - gap),
           transform: "none",
+          position: "fixed" as const,
         }
       case "right":
         return {
@@ -198,6 +203,7 @@ export function CoachMark({ step, stepNumber, totalSteps, onNext, onPrev, onSkip
           ),
           left: Math.min(position.left + targetRect.width + gap, viewportWidth - tooltipWidth - 20),
           transform: "none",
+          position: "fixed" as const,
         }
       default:
         return {
@@ -207,6 +213,7 @@ export function CoachMark({ step, stepNumber, totalSteps, onNext, onPrev, onSkip
             viewportWidth - tooltipWidth - 20,
           ),
           transform: "none",
+          position: "fixed" as const,
         }
     }
   }
@@ -222,7 +229,7 @@ export function CoachMark({ step, stepNumber, totalSteps, onNext, onPrev, onSkip
       />
 
       <div
-        className="absolute pointer-events-none transition-all duration-500 ease-out border-4 border-blue-500 rounded-lg"
+        className="fixed pointer-events-none transition-all duration-300 ease-out border-4 border-blue-500 rounded-lg"
         style={{
           top: position.top - 4,
           left: position.left - 4,
@@ -238,7 +245,7 @@ export function CoachMark({ step, stepNumber, totalSteps, onNext, onPrev, onSkip
       {/* Pulsing dot for interactive elements */}
       {step.interactive && step.action === "click" && (
         <div
-          className="absolute pointer-events-none"
+          className="fixed pointer-events-none"
           style={{
             top: position.top + targetRect.height / 2 - 6,
             left: position.left + targetRect.width / 2 - 6,
@@ -252,7 +259,7 @@ export function CoachMark({ step, stepNumber, totalSteps, onNext, onPrev, onSkip
       <Card
         ref={tooltipRef}
         className={cn(
-          "absolute w-[400px] max-w-[90vw] shadow-2xl border-2 border-blue-500/20 bg-background/95 backdrop-blur-sm transition-all duration-500 ease-out",
+          "w-[400px] max-w-[90vw] shadow-2xl border-2 border-blue-500/20 bg-background/95 backdrop-blur-sm transition-all duration-300 ease-out",
           "animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2",
           tooltipPosition === "center" && "max-w-md",
         )}

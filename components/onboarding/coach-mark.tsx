@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { X, ArrowRight, ArrowLeft, SkipForward, Sparkles } from "lucide-react"
+import { X, ArrowRight, ArrowLeft, SkipForward, Sparkles, CheckCircle, Rocket } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { OnboardingStep } from "@/contexts/onboarding-context"
 
@@ -137,16 +137,92 @@ export function CoachMark({ step, stepNumber, totalSteps, onNext, onPrev, onSkip
 
   // Scroll target into view
   useEffect(() => {
-    if (targetElement && isVisible) {
+    if (targetElement && isVisible && !step.isWelcome && !step.isCompletion) {
       targetElement.scrollIntoView({
         behavior: "smooth",
         block: "center",
         inline: "center",
       })
     }
-  }, [targetElement, isVisible])
+  }, [targetElement, isVisible, step.isWelcome, step.isCompletion])
 
-  if (!isVisible || !targetElement) return null
+  if (!isVisible) return null
+
+  if (step.isWelcome || step.isCompletion) {
+    return createPortal(
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-background/80 to-accent/20 backdrop-blur-sm" />
+
+        <Card className="w-[500px] max-w-[90vw] shadow-2xl border-0 bg-gradient-to-br from-card via-card to-card/95 backdrop-blur-md animate-in fade-in-0 zoom-in-95 duration-500">
+          <CardHeader className="text-center pb-4">
+            <div className="flex justify-center mb-4">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-primary to-accent shadow-lg">
+                {step.isWelcome ? (
+                  <Sparkles className="h-8 w-8 text-primary-foreground" />
+                ) : (
+                  <CheckCircle className="h-8 w-8 text-primary-foreground" />
+                )}
+              </div>
+            </div>
+            <CardTitle className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+              {step.title}
+            </CardTitle>
+            {step.isWelcome && (
+              <div className="flex items-center justify-center gap-2 mt-2">
+                <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/20">
+                  Quick Tour
+                </Badge>
+                <Badge variant="secondary" className="bg-accent/10 text-accent border-accent/20">
+                  2 minutes
+                </Badge>
+              </div>
+            )}
+          </CardHeader>
+          <CardContent className="text-center">
+            <p className="text-muted-foreground leading-relaxed mb-6 text-base">{step.description}</p>
+
+            {step.isCompletion && (
+              <div className="mb-6 p-4 bg-gradient-to-r from-primary/10 to-accent/10 rounded-lg border border-primary/20">
+                <div className="flex items-center justify-center gap-2 text-primary font-medium">
+                  <Rocket className="h-4 w-4" />
+                  Ready to explore your AI governance platform!
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-center gap-3">
+              {step.isWelcome ? (
+                <>
+                  <Button variant="outline" onClick={onSkip} className="gap-2 bg-transparent">
+                    <SkipForward className="h-4 w-4" />
+                    Skip Tour
+                  </Button>
+                  <Button
+                    onClick={onNext}
+                    className="gap-2 bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90"
+                  >
+                    Start Tour
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  onClick={onNext}
+                  className="gap-2 bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90"
+                >
+                  Get Started
+                  <Rocket className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>,
+      document.body,
+    )
+  }
+
+  if (!targetElement) return null
 
   const targetRect = targetElement.getBoundingClientRect()
 
@@ -224,20 +300,20 @@ export function CoachMark({ step, stepNumber, totalSteps, onNext, onPrev, onSkip
     <div className="fixed inset-0 z-[9999]">
       <div
         ref={overlayRef}
-        className="absolute inset-0 bg-black/40 transition-all duration-500"
+        className="absolute inset-0 bg-background/60 backdrop-blur-[2px] transition-all duration-500"
         onClick={tooltipPosition === "center" ? undefined : onNext}
       />
 
       <div
-        className="fixed pointer-events-none transition-all duration-300 ease-out border-4 border-blue-500 rounded-lg"
+        className="fixed pointer-events-none transition-all duration-300 ease-out border-3 border-primary rounded-lg shadow-lg"
         style={{
-          top: position.top - 4,
-          left: position.left - 4,
-          width: targetRect.width + 8,
-          height: targetRect.height + 8,
+          top: position.top - 3,
+          left: position.left - 3,
+          width: targetRect.width + 6,
+          height: targetRect.height + 6,
           boxShadow: `
-            0 0 0 2px rgba(59, 130, 246, 0.3),
-            0 0 20px rgba(59, 130, 246, 0.2)
+            0 0 0 1px hsl(var(--primary) / 0.3),
+            0 4px 12px hsl(var(--primary) / 0.15)
           `,
         }}
       />
@@ -251,15 +327,15 @@ export function CoachMark({ step, stepNumber, totalSteps, onNext, onPrev, onSkip
             left: position.left + targetRect.width / 2 - 6,
           }}
         >
-          <div className="w-3 h-3 bg-blue-500 rounded-full animate-ping" />
-          <div className="absolute inset-0 w-3 h-3 bg-blue-400 rounded-full animate-pulse" />
+          <div className="w-3 h-3 bg-primary rounded-full animate-ping" />
+          <div className="absolute inset-0 w-3 h-3 bg-primary/60 rounded-full animate-pulse" />
         </div>
       )}
 
       <Card
         ref={tooltipRef}
         className={cn(
-          "w-[400px] max-w-[90vw] shadow-2xl border-2 border-blue-500/20 bg-background/95 backdrop-blur-sm transition-all duration-300 ease-out",
+          "w-[400px] max-w-[90vw] shadow-2xl border border-border bg-card/95 backdrop-blur-sm transition-all duration-300 ease-out",
           "animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2",
           tooltipPosition === "center" && "max-w-md",
         )}
@@ -268,13 +344,13 @@ export function CoachMark({ step, stepNumber, totalSteps, onNext, onPrev, onSkip
         <CardHeader className="pb-3">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-600">
-                <Sparkles className="h-4 w-4 text-white" />
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-primary to-accent">
+                <Sparkles className="h-4 w-4 text-primary-foreground" />
               </div>
               <div>
-                <CardTitle className="text-lg font-semibold">{step.title}</CardTitle>
+                <CardTitle className="text-lg font-semibold text-card-foreground">{step.title}</CardTitle>
                 <div className="flex items-center gap-2 mt-1">
-                  <Badge variant="secondary" className="text-xs">
+                  <Badge variant="secondary" className="text-xs bg-primary/10 text-primary border-primary/20">
                     Step {stepNumber + 1} of {totalSteps}
                   </Badge>
                   <Progress value={progress} className="w-16 h-1" />
@@ -290,8 +366,8 @@ export function CoachMark({ step, stepNumber, totalSteps, onNext, onPrev, onSkip
           <p className="text-sm text-muted-foreground leading-relaxed mb-4">{step.description}</p>
 
           {step.interactive && (
-            <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
-              <p className="text-xs font-medium text-blue-700 dark:text-blue-300">
+            <div className="mb-4 p-3 bg-primary/5 rounded-lg border border-primary/20">
+              <p className="text-xs font-medium text-primary">
                 {step.action === "click"
                   ? "👆 Click the highlighted element to continue"
                   : "Interact with the highlighted element"}
@@ -316,7 +392,7 @@ export function CoachMark({ step, stepNumber, totalSteps, onNext, onPrev, onSkip
               <Button
                 onClick={onNext}
                 size="sm"
-                className="gap-1 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
+                className="gap-1 bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90"
               >
                 {stepNumber === totalSteps - 1 ? "Complete" : "Next"}
                 <ArrowRight className="h-3 w-3" />

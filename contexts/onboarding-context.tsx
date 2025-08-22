@@ -15,6 +15,8 @@ export type OnboardingStep = {
   delay?: number // Delay before showing this step
   spotlight?: boolean // Whether to use spotlight effect
   interactive?: boolean // Whether user must interact to continue
+  isWelcome?: boolean // Special welcome step
+  isCompletion?: boolean // Special completion step
 }
 
 type OnboardingContextType = {
@@ -35,12 +37,14 @@ const OnboardingContext = createContext<OnboardingContextType | undefined>(undef
 export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: "welcome",
-    title: "Welcome to Granular! 🎉",
-    description: "Let's take a quick tour of your AI governance platform. This will only take 2 minutes.",
+    title: "Welcome to Granular",
+    description:
+      "Let's take a quick tour of your AI governance platform. This will only take 2 minutes and help you get the most out of your experience.",
     target: "[data-onboarding='welcome-card']",
     placement: "center",
     action: "none",
-    spotlight: true,
+    spotlight: false,
+    isWelcome: true,
   },
   {
     id: "dashboard-overview",
@@ -160,13 +164,14 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   },
   {
     id: "completion",
-    title: "You're All Set! 🚀",
+    title: "You're All Set!",
     description:
-      "Congratulations! You've completed the tour. You're now ready to start managing your AI governance with confidence.",
+      "Congratulations! You've completed the tour. You're now ready to start managing your AI governance with confidence. Explore the platform and don't hesitate to reach out if you need help.",
     target: "[data-onboarding='welcome-card']",
     placement: "center",
     action: "none",
-    spotlight: true,
+    spotlight: false,
+    isCompletion: true,
   },
 ]
 

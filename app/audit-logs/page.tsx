@@ -2,13 +2,31 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { AuditLogTrigger } from "@/components/audit-log-trigger"
-import { FileText } from "lucide-react"
+import { Calendar } from "@/components/ui/calendar"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+
+import {
+  CalendarRange,
+  ChevronDown,
+  ChevronUp,
+  Download,
+  Filter,
+  LineChart,
+  PlayCircle,
+  RefreshCcw,
+  Trash2,
+  Settings2,
+  AlertCircle,
+} from "lucide-react"
 
 // Demo SDK audit log record type (from existing SDK endpoint)
 type AuditRecord = {
@@ -253,11 +271,11 @@ export default function AuditLogsPage() {
 
   const EmptyState = () => (
     <div className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
-      <FileText className="h-12 w-12 mb-4 opacity-70" />
+      <LineChart className="h-12 w-12 mb-4 opacity-70" />
       <div className="text-lg font-medium">No logs found</div>
       <div className="text-sm mt-1 mb-4">Adjust filters or generate demo events to get started.</div>
       <Button onClick={() => runScenario("normal")} disabled={loading}>
-        <FileText className="mr-2 h-4 w-4" />
+        <PlayCircle className="mr-2 h-4 w-4" />
         Generate demo events
       </Button>
     </div>
@@ -291,16 +309,11 @@ export default function AuditLogsPage() {
           <p className="text-sm text-muted-foreground">Inspect, filter, and export events across agents.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <AuditLogTrigger variant="default">
-            <FileText className="mr-2 h-4 w-4" />
-            Open Sidebar
-          </AuditLogTrigger>
-
           {/* Date Range */}
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" className="justify-start bg-transparent">
-                <FileText className="mr-2 h-4 w-4" />
+                <CalendarRange className="mr-2 h-4 w-4" />
                 {dateRange.from
                   ? dateRange.to
                     ? `${formatDateShort(dateRange.from)} - ${formatDateShort(dateRange.to)}`
@@ -310,7 +323,7 @@ export default function AuditLogsPage() {
             </PopoverTrigger>
             <PopoverContent className="w-auto p-3" align="end">
               <div className="space-y-3">
-                <FileText
+                <Calendar
                   mode="range"
                   selected={{ from: dateRange.from, to: dateRange.to }}
                   onSelect={(r) => setDateRange({ from: r?.from, to: r?.to })}
@@ -353,15 +366,15 @@ export default function AuditLogsPage() {
 
       {/* Error Alert */}
       {error && (
-        <div variant="destructive">
-          <FileText className="h-4 w-4" />
-          <div>
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
             {error}
             <Button variant="outline" size="sm" className="ml-2 bg-transparent" onClick={() => setError(null)}>
               Dismiss
             </Button>
-          </div>
-        </div>
+          </AlertDescription>
+        </Alert>
       )}
 
       {/* Overall metrics */}
@@ -400,17 +413,27 @@ export default function AuditLogsPage() {
           <div className="flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between">
             <div className="flex-1 flex flex-col sm:flex-row gap-2 items-stretch">
               {/* Filter popover */}
-              <div>
-                <div className="text-sm font-medium">Levels</div>
-                {(["error", "warning", "info", "success"] as const).map((lvl) => (
-                  <label key={lvl} className="flex items-center gap-2">
-                    <div checked={levelFilter[lvl]} onCheckedChange={() => toggleLevel(lvl)} />
-                    <span className="capitalize">{lvl}</span>
-                  </label>
-                ))}
-                <Separator />
-                <div className="text-xs text-muted-foreground">Only events matching selected levels are shown.</div>
-              </div>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="sm:w-auto justify-start bg-transparent">
+                    <Filter className="mr-2 h-4 w-4" />
+                    Filters
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-64">
+                  <div className="space-y-3">
+                    <div className="text-sm font-medium">Levels</div>
+                    {(["error", "warning", "info", "success"] as const).map((lvl) => (
+                      <label key={lvl} className="flex items-center gap-2">
+                        <Checkbox checked={levelFilter[lvl]} onCheckedChange={() => toggleLevel(lvl)} />
+                        <span className="capitalize">{lvl}</span>
+                      </label>
+                    ))}
+                    <Separator />
+                    <div className="text-xs text-muted-foreground">Only events matching selected levels are shown.</div>
+                  </div>
+                </PopoverContent>
+              </Popover>
 
               {/* Search */}
               <div className="relative flex-1">
@@ -436,46 +459,56 @@ export default function AuditLogsPage() {
             {/* Right aligned actions: moved buttons here */}
             <div className="flex flex-wrap items-center gap-2">
               <Button variant={autoRefresh ? "default" : "outline"} onClick={() => setAutoRefresh((v) => !v)}>
-                <FileText className="mr-2 h-4 w-4" />
+                <RefreshCcw className="mr-2 h-4 w-4" />
                 {autoRefresh ? "Auto-refresh On" : "Auto-refresh Off"}
               </Button>
               <Button variant="outline" onClick={exportCSV} disabled={sorted.length === 0}>
-                <FileText className="mr-2 h-4 w-4" />
+                <Download className="mr-2 h-4 w-4" />
                 Export CSV
               </Button>
               <Button variant="destructive" onClick={clearAll} disabled={loading}>
-                <FileText className="mr-2 h-4 w-4" />
+                <Trash2 className="mr-2 h-4 w-4" />
                 Clear
               </Button>
-              <div>
-                <div className="text-sm font-medium">Generate demo events</div>
-                <Input
-                  placeholder="Agent ID, e.g. demo-agent-001"
-                  value={scenarioAgent}
-                  onChange={(e) => setScenarioAgent(e.target.value)}
-                />
-                <div className="flex gap-2">
-                  <Button className="flex-1" onClick={() => runScenario("normal")} disabled={loading}>
-                    Normal
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button disabled={loading}>
+                    <Settings2 className="mr-2 h-4 w-4" />
+                    Run Scenario
                   </Button>
-                  <Button
-                    variant="secondary"
-                    className="flex-1"
-                    onClick={() => runScenario("anomaly")}
-                    disabled={loading}
-                  >
-                    Anomaly
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    className="flex-1"
-                    onClick={() => runScenario("breach")}
-                    disabled={loading}
-                  >
-                    Breach
-                  </Button>
-                </div>
-              </div>
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-72">
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium">Generate demo events</div>
+                    <Input
+                      placeholder="Agent ID, e.g. demo-agent-001"
+                      value={scenarioAgent}
+                      onChange={(e) => setScenarioAgent(e.target.value)}
+                    />
+                    <div className="flex gap-2">
+                      <Button className="flex-1" onClick={() => runScenario("normal")} disabled={loading}>
+                        Normal
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        className="flex-1"
+                        onClick={() => runScenario("anomaly")}
+                        disabled={loading}
+                      >
+                        Anomaly
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        className="flex-1"
+                        onClick={() => runScenario("breach")}
+                        disabled={loading}
+                      >
+                        Breach
+                      </Button>
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
         </CardContent>
@@ -490,59 +523,67 @@ export default function AuditLogsPage() {
           {sorted.length === 0 ? (
             <EmptyState />
           ) : (
-            <div className="h-[600px]">
-              <div>
-                <div className="sticky top-0 bg-background z-10">
-                  <div>
-                    <div className="inline-flex items-center gap-1" onClick={() => toggleSort("timestamp")}>
-                      Timestamp{" "}
-                      {sortKey === "timestamp" ? (
-                        sortDir === "asc" ? (
-                          <FileText className="h-3 w-3" />
-                        ) : (
-                          <FileText className="h-3 w-3" />
-                        )
-                      ) : null}
-                    </div>
-                    <div className="inline-flex items-center gap-1" onClick={() => toggleSort("level")}>
-                      Level{" "}
-                      {sortKey === "level" ? (
-                        sortDir === "asc" ? (
-                          <FileText className="h-3 w-3" />
-                        ) : (
-                          <FileText className="h-3 w-3" />
-                        )
-                      ) : null}
-                    </div>
-                    <div className="inline-flex items-center gap-1" onClick={() => toggleSort("type")}>
-                      Type{" "}
-                      {sortKey === "type" ? (
-                        sortDir === "asc" ? (
-                          <FileText className="h-3 w-3" />
-                        ) : (
-                          <FileText className="h-3 w-3" />
-                        )
-                      ) : null}
-                    </div>
-                    <div className="inline-flex items-center gap-1" onClick={() => toggleSort("agentId")}>
-                      Agent{" "}
-                      {sortKey === "agentId" ? (
-                        sortDir === "asc" ? (
-                          <FileText className="h-3 w-3" />
-                        ) : (
-                          <FileText className="h-3 w-3" />
-                        )
-                      ) : null}
-                    </div>
-                    <div>Details</div>
-                  </div>
-                </div>
-                <div>
+            <ScrollArea className="h-[600px]">
+              <Table>
+                <TableHeader className="sticky top-0 bg-background z-10">
+                  <TableRow>
+                    <TableHead className="w-[220px] cursor-pointer select-none" onClick={() => toggleSort("timestamp")}>
+                      <div className="inline-flex items-center gap-1">
+                        Timestamp{" "}
+                        {sortKey === "timestamp" ? (
+                          sortDir === "asc" ? (
+                            <ChevronUp className="h-3 w-3" />
+                          ) : (
+                            <ChevronDown className="h-3 w-3" />
+                          )
+                        ) : null}
+                      </div>
+                    </TableHead>
+                    <TableHead className="w-[140px] cursor-pointer select-none" onClick={() => toggleSort("level")}>
+                      <div className="inline-flex items-center gap-1">
+                        Level{" "}
+                        {sortKey === "level" ? (
+                          sortDir === "asc" ? (
+                            <ChevronUp className="h-3 w-3" />
+                          ) : (
+                            <ChevronDown className="h-3 w-3" />
+                          )
+                        ) : null}
+                      </div>
+                    </TableHead>
+                    <TableHead className="w-[220px] cursor-pointer select-none" onClick={() => toggleSort("type")}>
+                      <div className="inline-flex items-center gap-1">
+                        Type{" "}
+                        {sortKey === "type" ? (
+                          sortDir === "asc" ? (
+                            <ChevronUp className="h-3 w-3" />
+                          ) : (
+                            <ChevronDown className="h-3 w-3" />
+                          )
+                        ) : null}
+                      </div>
+                    </TableHead>
+                    <TableHead className="w-[220px] cursor-pointer select-none" onClick={() => toggleSort("agentId")}>
+                      <div className="inline-flex items-center gap-1">
+                        Agent{" "}
+                        {sortKey === "agentId" ? (
+                          sortDir === "asc" ? (
+                            <ChevronUp className="h-3 w-3" />
+                          ) : (
+                            <ChevronDown className="h-3 w-3" />
+                          )
+                        ) : null}
+                      </div>
+                    </TableHead>
+                    <TableHead>Details</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {sorted.map((l) => (
-                    <div key={l.id}>
-                      <div className="whitespace-nowrap">{formatDate(l.timestamp)}</div>
-                      <div className="whitespace-nowrap">
-                        <div
+                    <TableRow key={l.id}>
+                      <TableCell className="whitespace-nowrap">{formatDate(l.timestamp)}</TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        <Badge
                           variant={
                             l.level === "error"
                               ? "destructive"
@@ -555,20 +596,20 @@ export default function AuditLogsPage() {
                           className="uppercase"
                         >
                           {l.level}
-                        </div>
-                      </div>
-                      <div className="font-medium">{l.type}</div>
-                      <div className="text-muted-foreground">{l.agentId}</div>
-                      <div>
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="font-medium">{l.type}</TableCell>
+                      <TableCell className="text-muted-foreground">{l.agentId}</TableCell>
+                      <TableCell>
                         <pre className="text-xs bg-muted p-2 rounded-md overflow-x-auto max-h-40">
                           {JSON.stringify(l.payload, null, 2)}
                         </pre>
-                      </div>
-                    </div>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </div>
-              </div>
-            </div>
+                </TableBody>
+              </Table>
+            </ScrollArea>
           )}
         </CardContent>
       </Card>

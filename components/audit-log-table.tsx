@@ -9,7 +9,6 @@ import { Badge } from "@/components/ui/badge"
 import { Search, RefreshCw, Brain } from "lucide-react"
 import { AuditLogDetailsModal } from "./audit-log-details-modal"
 import { useAuth } from "@/contexts/auth-context"
-import { AuditLogTrigger } from "./audit-log-trigger"
 
 interface AuditLog {
   id: string
@@ -93,9 +92,6 @@ export function AuditLogTable() {
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between space-y-0 pb-2">
           <CardTitle>Audit Logs</CardTitle>
           <div className="flex items-center gap-2 w-full sm:w-auto">
-            <AuditLogTrigger variant="outline" size="sm">
-              View All
-            </AuditLogTrigger>
             <div className="relative w-full max-w-sm">
               <Input
                 placeholder="Search logs..."

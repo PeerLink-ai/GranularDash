@@ -60,26 +60,38 @@ export function CoachMark({ step, stepNumber, totalSteps, onNext, onPrev, onSkip
       left: rect.left + scrollLeft,
     })
 
-    // Calculate tooltip position based on element location and preference
     const viewportHeight = window.innerHeight
     const viewportWidth = window.innerWidth
-    const elementCenter = rect.top + rect.height / 2
-    const elementMiddle = rect.left + rect.width / 2
+    const tooltipWidth = 400
+    const tooltipHeight = 250
+    const gap = 20
 
     if (step.placement === "center") {
       setTooltipPosition("center")
     } else if (step.placement) {
       setTooltipPosition(step.placement)
     } else {
-      // Auto-calculate best position
-      if (elementCenter < viewportHeight / 3) {
+      // Auto-calculate best position with overflow prevention
+      const elementCenter = rect.top + rect.height / 2
+      const elementMiddle = rect.left + rect.width / 2
+
+      // Check if tooltip would overflow on each side
+      const canPlaceTop = rect.top - tooltipHeight - gap > 0
+      const canPlaceBottom = rect.bottom + tooltipHeight + gap < viewportHeight
+      const canPlaceLeft = rect.left - tooltipWidth - gap > 0
+      const canPlaceRight = rect.right + tooltipWidth + gap < viewportWidth
+
+      if (canPlaceBottom && elementCenter < viewportHeight / 2) {
         setTooltipPosition("bottom")
-      } else if (elementCenter > (viewportHeight * 2) / 3) {
+      } else if (canPlaceTop && elementCenter >= viewportHeight / 2) {
         setTooltipPosition("top")
-      } else if (elementMiddle < viewportWidth / 2) {
+      } else if (canPlaceRight && elementMiddle < viewportWidth / 2) {
         setTooltipPosition("right")
-      } else {
+      } else if (canPlaceLeft && elementMiddle >= viewportWidth / 2) {
         setTooltipPosition("left")
+      } else {
+        // Fallback to center if no good position
+        setTooltipPosition("center")
       }
     }
   }
@@ -138,8 +150,10 @@ export function CoachMark({ step, stepNumber, totalSteps, onNext, onPrev, onSkip
 
   const getTooltipStyle = () => {
     const tooltipWidth = 400
-    const tooltipHeight = 200
+    const tooltipHeight = 250
     const gap = 20
+    const viewportWidth = window.innerWidth
+    const viewportHeight = window.innerHeight
 
     switch (tooltipPosition) {
       case "center":
@@ -151,32 +165,47 @@ export function CoachMark({ step, stepNumber, totalSteps, onNext, onPrev, onSkip
         }
       case "top":
         return {
-          top: position.top - tooltipHeight - gap,
-          left: Math.max(20, position.left + targetRect.width / 2 - tooltipWidth / 2),
+          top: Math.max(20, position.top - tooltipHeight - gap),
+          left: Math.min(
+            Math.max(20, position.left + targetRect.width / 2 - tooltipWidth / 2),
+            viewportWidth - tooltipWidth - 20,
+          ),
           transform: "none",
         }
       case "bottom":
         return {
-          top: position.top + targetRect.height + gap,
-          left: Math.max(20, position.left + targetRect.width / 2 - tooltipWidth / 2),
+          top: Math.min(position.top + targetRect.height + gap, viewportHeight - tooltipHeight - 20),
+          left: Math.min(
+            Math.max(20, position.left + targetRect.width / 2 - tooltipWidth / 2),
+            viewportWidth - tooltipWidth - 20,
+          ),
           transform: "none",
         }
       case "left":
         return {
-          top: position.top + targetRect.height / 2 - tooltipHeight / 2,
+          top: Math.min(
+            Math.max(20, position.top + targetRect.height / 2 - tooltipHeight / 2),
+            viewportHeight - tooltipHeight - 20,
+          ),
           left: Math.max(20, position.left - tooltipWidth - gap),
           transform: "none",
         }
       case "right":
         return {
-          top: position.top + targetRect.height / 2 - tooltipHeight / 2,
-          left: position.left + targetRect.width + gap,
+          top: Math.min(
+            Math.max(20, position.top + targetRect.height / 2 - tooltipHeight / 2),
+            viewportHeight - tooltipHeight - 20,
+          ),
+          left: Math.min(position.left + targetRect.width + gap, viewportWidth - tooltipWidth - 20),
           transform: "none",
         }
       default:
         return {
-          top: position.top + targetRect.height + gap,
-          left: Math.max(20, position.left + targetRect.width / 2 - tooltipWidth / 2),
+          top: Math.min(position.top + targetRect.height + gap, viewportHeight - tooltipHeight - 20),
+          left: Math.min(
+            Math.max(20, position.left + targetRect.width / 2 - tooltipWidth / 2),
+            viewportWidth - tooltipWidth - 20,
+          ),
           transform: "none",
         }
     }
@@ -186,42 +215,25 @@ export function CoachMark({ step, stepNumber, totalSteps, onNext, onPrev, onSkip
 
   return createPortal(
     <div className="fixed inset-0 z-[9999]">
-      {/* Backdrop with spotlight effect */}
       <div
         ref={overlayRef}
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-all duration-500"
-        style={{
-          background: step.spotlight
-            ? `radial-gradient(circle at ${position.left + targetRect.width / 2}px ${
-                position.top + targetRect.height / 2
-              }px, transparent 0px, transparent ${Math.max(targetRect.width, targetRect.height) / 2 + 20}px, rgba(0,0,0,0.7) ${
-                Math.max(targetRect.width, targetRect.height) / 2 + 60
-              }px)`
-            : "rgba(0,0,0,0.6)",
-        }}
+        className="absolute inset-0 bg-black/40 transition-all duration-500"
         onClick={tooltipPosition === "center" ? undefined : onNext}
       />
 
-      {/* Highlight ring around target */}
-      {step.spotlight && (
-        <div
-          className="absolute pointer-events-none transition-all duration-500 ease-out"
-          style={{
-            top: position.top - 8,
-            left: position.left - 8,
-            width: targetRect.width + 16,
-            height: targetRect.height + 16,
-            borderRadius: "12px",
-            boxShadow: `
-              0 0 0 4px rgba(59, 130, 246, 0.5),
-              0 0 0 8px rgba(59, 130, 246, 0.3),
-              0 0 20px rgba(59, 130, 246, 0.4),
-              inset 0 0 0 2px rgba(255, 255, 255, 0.1)
-            `,
-            background: "transparent",
-          }}
-        />
-      )}
+      <div
+        className="absolute pointer-events-none transition-all duration-500 ease-out border-4 border-blue-500 rounded-lg"
+        style={{
+          top: position.top - 4,
+          left: position.left - 4,
+          width: targetRect.width + 8,
+          height: targetRect.height + 8,
+          boxShadow: `
+            0 0 0 2px rgba(59, 130, 246, 0.3),
+            0 0 20px rgba(59, 130, 246, 0.2)
+          `,
+        }}
+      />
 
       {/* Pulsing dot for interactive elements */}
       {step.interactive && step.action === "click" && (
@@ -237,11 +249,10 @@ export function CoachMark({ step, stepNumber, totalSteps, onNext, onPrev, onSkip
         </div>
       )}
 
-      {/* Tooltip */}
       <Card
         ref={tooltipRef}
         className={cn(
-          "absolute w-[400px] max-w-[90vw] shadow-2xl border-2 border-blue-500/20 bg-background/95 backdrop-blur-md transition-all duration-500 ease-out",
+          "absolute w-[400px] max-w-[90vw] shadow-2xl border-2 border-blue-500/20 bg-background/95 backdrop-blur-sm transition-all duration-500 ease-out",
           "animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2",
           tooltipPosition === "center" && "max-w-md",
         )}

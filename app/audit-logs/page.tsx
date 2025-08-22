@@ -13,6 +13,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Calendar } from "@/components/ui/calendar"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 import {
   CalendarRange,
@@ -26,6 +28,13 @@ import {
   Trash2,
   Settings2,
   AlertCircle,
+  Shield,
+  Eye,
+  Hash,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  Network,
 } from "lucide-react"
 
 // Demo SDK audit log record type (from existing SDK endpoint)
@@ -45,6 +54,14 @@ type DateRange = {
   to: Date | undefined
 }
 
+type IntegrityStatus = {
+  isValid: boolean
+  totalBlocks: number
+  verifiedBlocks: number
+  lastVerified: Date | null
+  errors: string[]
+}
+
 function lastNDays(n: number): DateRange {
   const to = new Date()
   const from = new Date()
@@ -58,6 +75,19 @@ export default function AuditLogsPage() {
   const [loading, setLoading] = useState(false)
   const [autoRefresh, setAutoRefresh] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  const [integrityStatus, setIntegrityStatus] = useState<IntegrityStatus>({
+    isValid: true,
+    totalBlocks: 0,
+    verifiedBlocks: 0,
+    lastVerified: null,
+    errors: [],
+  })
+  const [verifyingIntegrity, setVerifyingIntegrity] = useState(false)
+
+  const [selectedLog, setSelectedLog] = useState<AuditRecord | null>(null)
+  const [showDetailsModal, setShowDetailsModal] = useState(false)
+  const [cryptographicProof, setCryptographicProof] = useState<any>(null)
 
   // Filters
   const [search, setSearch] = useState("")
@@ -107,6 +137,60 @@ export default function AuditLogsPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const verifyChainIntegrity = async () => {
+    setVerifyingIntegrity(true)
+    try {
+      // Call the governance test endpoint to get chain validation
+      const res = await fetch("/api/agents/demo-agent-001/governance-test", {
+        method: "GET",
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        setIntegrityStatus({
+          isValid: data.chainIntegrity,
+          totalBlocks: data.totalInteractions || 0,
+          verifiedBlocks: data.chainIntegrity ? data.totalInteractions || 0 : 0,
+          lastVerified: new Date(),
+          errors: data.chainIntegrity ? [] : ["Chain integrity compromised"],
+        })
+      } else {
+        setIntegrityStatus((prev) => ({
+          ...prev,
+          isValid: false,
+          lastVerified: new Date(),
+          errors: ["Failed to verify chain integrity"],
+        }))
+      }
+    } catch (e) {
+      setIntegrityStatus((prev) => ({
+        ...prev,
+        isValid: false,
+        lastVerified: new Date(),
+        errors: [e instanceof Error ? e.message : "Verification failed"],
+      }))
+    } finally {
+      setVerifyingIntegrity(false)
+    }
+  }
+
+  const showLogDetails = async (log: AuditRecord) => {
+    setSelectedLog(log)
+
+    // Fetch cryptographic proof for this log if available
+    try {
+      const res = await fetch(`/api/agents/${log.agentId}/governance-test`)
+      if (res.ok) {
+        const data = await res.json()
+        setCryptographicProof(data.cryptographicProof)
+      }
+    } catch (e) {
+      console.error("Failed to fetch cryptographic proof:", e)
+    }
+
+    setShowDetailsModal(true)
   }
 
   useEffect(() => {
@@ -377,6 +461,51 @@ export default function AuditLogsPage() {
         </Alert>
       )}
 
+      <Card className="border-l-4 border-l-blue-500">
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <Shield className="h-4 w-4" />
+              Chain Integrity Status
+            </CardTitle>
+            <Button variant="outline" size="sm" onClick={verifyChainIntegrity} disabled={verifyingIntegrity}>
+              {verifyingIntegrity ? (
+                <RefreshCcw className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Hash className="mr-2 h-4 w-4" />
+              )}
+              Verify Integrity
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              {integrityStatus.isValid ? (
+                <CheckCircle2 className="h-5 w-5 text-green-600" />
+              ) : (
+                <XCircle className="h-5 w-5 text-red-600" />
+              )}
+              <span className={`font-medium ${integrityStatus.isValid ? "text-green-600" : "text-red-600"}`}>
+                {integrityStatus.isValid ? "VERIFIED" : "COMPROMISED"}
+              </span>
+            </div>
+            <div className="text-sm text-muted-foreground">
+              {integrityStatus.verifiedBlocks}/{integrityStatus.totalBlocks} blocks verified
+            </div>
+            {integrityStatus.lastVerified && (
+              <div className="text-sm text-muted-foreground flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                Last verified: {integrityStatus.lastVerified.toLocaleTimeString()}
+              </div>
+            )}
+          </div>
+          {integrityStatus.errors.length > 0 && (
+            <div className="mt-2 text-sm text-red-600">Errors: {integrityStatus.errors.join(", ")}</div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Overall metrics */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <Card>
@@ -576,6 +705,7 @@ export default function AuditLogsPage() {
                       </div>
                     </TableHead>
                     <TableHead>Details</TableHead>
+                    <TableHead className="w-[120px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -605,6 +735,17 @@ export default function AuditLogsPage() {
                           {JSON.stringify(l.payload, null, 2)}
                         </pre>
                       </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => showLogDetails(l)}
+                          className="flex items-center gap-1"
+                        >
+                          <Eye className="h-3 w-3" />
+                          Investigate
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -613,6 +754,169 @@ export default function AuditLogsPage() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={showDetailsModal} onOpenChange={setShowDetailsModal}>
+        <DialogContent className="sm:max-w-[900px] max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Network className="h-5 w-5" />
+              Forensic Investigation: Event Details
+            </DialogTitle>
+            <DialogDescription>
+              Comprehensive analysis and cryptographic verification of audit log event
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedLog && (
+            <Tabs defaultValue="overview" className="w-full">
+              <TabsList className="grid w-full grid-cols-4">
+                <TabsTrigger value="overview">Overview</TabsTrigger>
+                <TabsTrigger value="payload">Payload Analysis</TabsTrigger>
+                <TabsTrigger value="cryptographic">Cryptographic Proof</TabsTrigger>
+                <TabsTrigger value="lineage">Event Lineage</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="overview" className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Event Metadata</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="font-medium">Event ID:</span>
+                        <div className="font-mono text-xs bg-muted p-1 rounded mt-1">{selectedLog.id}</div>
+                      </div>
+                      <div>
+                        <span className="font-medium">Timestamp:</span>
+                        <div className="mt-1">{formatDate(selectedLog.timestamp)}</div>
+                      </div>
+                      <div>
+                        <span className="font-medium">Agent ID:</span>
+                        <div className="mt-1">{selectedLog.agentId}</div>
+                      </div>
+                      <div>
+                        <span className="font-medium">Event Type:</span>
+                        <div className="mt-1">{selectedLog.type}</div>
+                      </div>
+                      <div>
+                        <span className="font-medium">Severity Level:</span>
+                        <div className="mt-1">
+                          <Badge
+                            variant={
+                              selectedLog.level === "error"
+                                ? "destructive"
+                                : selectedLog.level === "warning"
+                                  ? "secondary"
+                                  : selectedLog.level === "success"
+                                    ? "default"
+                                    : "outline"
+                            }
+                          >
+                            {selectedLog.level.toUpperCase()}
+                          </Badge>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="payload" className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Payload Analysis</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="bg-muted p-4 rounded-md">
+                      <pre className="text-xs overflow-x-auto whitespace-pre-wrap">
+                        {JSON.stringify(selectedLog.payload, null, 2)}
+                      </pre>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="cryptographic" className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Shield className="h-5 w-5" />
+                      Cryptographic Verification
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {cryptographicProof ? (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                          <div>
+                            <span className="font-medium">Block Hash:</span>
+                            <div className="font-mono text-xs bg-muted p-2 rounded mt-1 break-all">
+                              {cryptographicProof.blockHash}
+                            </div>
+                          </div>
+                          <div>
+                            <span className="font-medium">Block ID:</span>
+                            <div className="font-mono text-xs bg-muted p-2 rounded mt-1">
+                              {cryptographicProof.blockId}
+                            </div>
+                          </div>
+                          <div>
+                            <span className="font-medium">Digital Signature:</span>
+                            <div className="font-mono text-xs bg-muted p-2 rounded mt-1 break-all">
+                              {cryptographicProof.signature?.substring(0, 100)}...
+                            </div>
+                          </div>
+                          <div>
+                            <span className="font-medium">Chain Validity:</span>
+                            <div className="mt-1">
+                              {cryptographicProof.chainValid ? (
+                                <Badge variant="default" className="bg-green-600">
+                                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                                  VERIFIED
+                                </Badge>
+                              ) : (
+                                <Badge variant="destructive">
+                                  <XCircle className="h-3 w-3 mr-1" />
+                                  COMPROMISED
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <Shield className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                        <div>No cryptographic proof available for this event</div>
+                        <div className="text-sm mt-1">This may be a legacy event or from an unverified source</div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="lineage" className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Network className="h-5 w-5" />
+                      Event Lineage & Chain of Custody
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-center py-8 text-muted-foreground">
+                      <Network className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <div>Lineage visualization coming soon</div>
+                      <div className="text-sm mt-1">This will show the complete chain of events and relationships</div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -732,6 +732,25 @@ export default function AuditLogsPage() {
                           {JSON.stringify(selectedLog.payload, null, 2)}
                         </pre>
                       </div>
+                      <Separator className="my-4" />
+                      <label className="text-sm font-medium text-muted-foreground">Complete Log Record</label>
+                      <div className="bg-muted p-4 rounded-lg">
+                        <pre className="text-sm overflow-x-auto whitespace-pre-wrap font-mono">
+                          {JSON.stringify(
+                            {
+                              id: selectedLog.id,
+                              timestamp: selectedLog.timestamp,
+                              timestampFormatted: formatDate(selectedLog.timestamp),
+                              agentId: selectedLog.agentId,
+                              type: selectedLog.type,
+                              level: selectedLog.level,
+                              payload: selectedLog.payload,
+                            },
+                            null,
+                            2,
+                          )}
+                        </pre>
+                      </div>
                     </div>
                   </TabsContent>
 

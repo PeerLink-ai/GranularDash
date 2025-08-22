@@ -461,48 +461,88 @@ export default function AuditLogsPage() {
         </Alert>
       )}
 
-      <Card className="border-l-4 border-l-blue-500">
-        <CardHeader className="pb-2">
+      <Card className="border-l-4 border-l-blue-500 bg-blue-50/50 dark:bg-blue-950/20">
+        <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Shield className="h-4 w-4" />
-              Chain Integrity Status
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <Shield className="h-5 w-5 text-blue-600" />
+              Cryptographic Chain Integrity
             </CardTitle>
-            <Button variant="outline" size="sm" onClick={verifyChainIntegrity} disabled={verifyingIntegrity}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={verifyChainIntegrity}
+              disabled={verifyingIntegrity}
+              className="bg-white dark:bg-gray-900"
+            >
               {verifyingIntegrity ? (
                 <RefreshCcw className="mr-2 h-4 w-4 animate-spin" />
               ) : (
                 <Hash className="mr-2 h-4 w-4" />
               )}
-              Verify Integrity
+              {verifyingIntegrity ? "Verifying..." : "Verify Now"}
             </Button>
           </div>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              {integrityStatus.isValid ? (
-                <CheckCircle2 className="h-5 w-5 text-green-600" />
-              ) : (
-                <XCircle className="h-5 w-5 text-red-600" />
-              )}
-              <span className={`font-medium ${integrityStatus.isValid ? "text-green-600" : "text-red-600"}`}>
-                {integrityStatus.isValid ? "VERIFIED" : "COMPROMISED"}
-              </span>
-            </div>
-            <div className="text-sm text-muted-foreground">
-              {integrityStatus.verifiedBlocks}/{integrityStatus.totalBlocks} blocks verified
-            </div>
-            {integrityStatus.lastVerified && (
-              <div className="text-sm text-muted-foreground flex items-center gap-1">
-                <Clock className="h-3 w-3" />
-                Last verified: {integrityStatus.lastVerified.toLocaleTimeString()}
+          <div className="space-y-3">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                {integrityStatus.isValid ? (
+                  <CheckCircle2 className="h-6 w-6 text-green-600" />
+                ) : (
+                  <XCircle className="h-6 w-6 text-red-600" />
+                )}
+                <span
+                  className={`font-semibold text-lg ${integrityStatus.isValid ? "text-green-600" : "text-red-600"}`}
+                >
+                  {integrityStatus.isValid ? "CHAIN VERIFIED" : "INTEGRITY COMPROMISED"}
+                </span>
               </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+              <div className="bg-white dark:bg-gray-900 p-3 rounded-lg">
+                <div className="font-medium text-muted-foreground">Verified Blocks</div>
+                <div className="text-xl font-bold">
+                  {integrityStatus.verifiedBlocks}/{integrityStatus.totalBlocks}
+                </div>
+              </div>
+
+              {integrityStatus.lastVerified && (
+                <div className="bg-white dark:bg-gray-900 p-3 rounded-lg">
+                  <div className="font-medium text-muted-foreground">Last Verification</div>
+                  <div className="text-sm font-medium flex items-center gap-1">
+                    <Clock className="h-3 w-3" />
+                    {integrityStatus.lastVerified.toLocaleTimeString()}
+                  </div>
+                </div>
+              )}
+
+              <div className="bg-white dark:bg-gray-900 p-3 rounded-lg">
+                <div className="font-medium text-muted-foreground">Security Status</div>
+                <div className="text-sm font-medium">
+                  {integrityStatus.errors.length === 0
+                    ? "No Issues Detected"
+                    : `${integrityStatus.errors.length} Issues Found`}
+                </div>
+              </div>
+            </div>
+
+            {integrityStatus.errors.length > 0 && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  <div className="font-medium">Security Issues Detected:</div>
+                  <ul className="mt-1 list-disc list-inside text-sm">
+                    {integrityStatus.errors.map((error, i) => (
+                      <li key={i}>{error}</li>
+                    ))}
+                  </ul>
+                </AlertDescription>
+              </Alert>
             )}
           </div>
-          {integrityStatus.errors.length > 0 && (
-            <div className="mt-2 text-sm text-red-600">Errors: {integrityStatus.errors.join(", ")}</div>
-          )}
         </CardContent>
       </Card>
 
@@ -710,7 +750,7 @@ export default function AuditLogsPage() {
                 </TableHeader>
                 <TableBody>
                   {sorted.map((l) => (
-                    <TableRow key={l.id}>
+                    <TableRow key={l.id} className="hover:bg-muted/50">
                       <TableCell className="whitespace-nowrap">{formatDate(l.timestamp)}</TableCell>
                       <TableCell className="whitespace-nowrap">
                         <Badge
@@ -731,18 +771,26 @@ export default function AuditLogsPage() {
                       <TableCell className="font-medium">{l.type}</TableCell>
                       <TableCell className="text-muted-foreground">{l.agentId}</TableCell>
                       <TableCell>
-                        <pre className="text-xs bg-muted p-2 rounded-md overflow-x-auto max-h-40">
-                          {JSON.stringify(l.payload, null, 2)}
-                        </pre>
+                        <div
+                          className="text-xs bg-muted/50 p-2 rounded-md cursor-pointer hover:bg-muted transition-colors max-w-md"
+                          onClick={() => showLogDetails(l)}
+                        >
+                          <div className="truncate">
+                            {typeof l.payload === "object"
+                              ? JSON.stringify(l.payload).substring(0, 100) + "..."
+                              : String(l.payload)}
+                          </div>
+                          <div className="text-muted-foreground mt-1">Click to investigate →</div>
+                        </div>
                       </TableCell>
                       <TableCell>
                         <Button
-                          variant="outline"
+                          variant="default"
                           size="sm"
                           onClick={() => showLogDetails(l)}
-                          className="flex items-center gap-1"
+                          className="bg-blue-600 hover:bg-blue-700 text-white font-medium"
                         >
-                          <Eye className="h-3 w-3" />
+                          <Eye className="h-4 w-4 mr-2" />
                           Investigate
                         </Button>
                       </TableCell>

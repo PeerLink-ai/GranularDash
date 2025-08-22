@@ -6,7 +6,9 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/toaster"
 import { AuthProvider } from "@/contexts/auth-context"
 import { SettingsProvider } from "@/contexts/settings-context"
+import { OnboardingProvider } from "@/contexts/onboarding-context"
 import Layout from "@/components/layout"
+import { OnboardingTour } from "@/components/onboarding/onboarding-tour"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -40,8 +42,11 @@ export default function RootLayout({
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <AuthProvider>
             <SettingsProvider>
-              <Layout>{children}</Layout>
-              <Toaster />
+              <OnboardingProvider>
+                <Layout>{children}</Layout>
+                <OnboardingTour />
+                <Toaster />
+              </OnboardingProvider>
             </SettingsProvider>
           </AuthProvider>
         </ThemeProvider>

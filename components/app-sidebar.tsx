@@ -89,7 +89,7 @@ export function AppSidebar() {
   ]
 
   return (
-    <Sidebar collapsible="icon" variant="sidebar">
+    <Sidebar collapsible="icon" variant="sidebar" data-onboarding="sidebar">
       <SidebarHeader>
         <div className="flex items-center justify-between w-full">
           {state === "expanded" && (
@@ -133,7 +133,18 @@ export function AppSidebar() {
                             data-[active=true]:before:opacity-100
                           `}
                         >
-                          <Link href={item.href}>
+                          <Link
+                            href={item.href}
+                            data-onboarding={
+                              item.href === "/analytics"
+                                ? "analytics-link"
+                                : item.href === "/compliance-reports"
+                                  ? "compliance-link"
+                                  : item.href === "/users-roles"
+                                    ? "users-link"
+                                    : undefined
+                            }
+                          >
                             <item.icon className="h-4 w-4" />
                             <span>{item.title}</span>
                           </Link>

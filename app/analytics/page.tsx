@@ -12,7 +12,7 @@ export default function AnalyticsPage() {
       <div className="flex items-center justify-between space-y-2">
         <h2 className="text-3xl font-bold tracking-tight">Analytics Dashboard</h2>
       </div>
-      <Tabs defaultValue="advanced" className="space-y-4">
+      <Tabs defaultValue="advanced" className="space-y-4" data-onboarding="analytics-interface">
         <TabsList>
           <TabsTrigger value="advanced">Advanced Analytics</TabsTrigger>
           <TabsTrigger value="overview">Security Overview</TabsTrigger>

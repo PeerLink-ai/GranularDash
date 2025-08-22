@@ -206,7 +206,10 @@ export function DashboardOverview() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 space-y-2">
           <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary/10 to-primary/20 ring-1 ring-primary/20">
+            <div
+              className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary/10 to-primary/20 ring-1 ring-primary/20"
+              data-onboarding="welcome-card"
+            >
               <Sparkles className="h-6 w-6 text-primary" />
             </div>
             <div>
@@ -225,7 +228,7 @@ export function DashboardOverview() {
         </div>
       </div>
 
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4" data-onboarding="stats-cards">
         <StatCard
           title="Connected Agents"
           subtitle={hasConnectedAgents ? "Active and monitored" : "No agents connected"}
@@ -271,7 +274,10 @@ export function DashboardOverview() {
         />
       </div>
 
-      <Card className="border-0 shadow-lg bg-gradient-to-br from-background to-muted/20">
+      <Card
+        className="border-0 shadow-lg bg-gradient-to-br from-background to-muted/20"
+        data-onboarding="real-time-monitor"
+      >
         <CardHeader className="pb-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -363,7 +369,7 @@ export function DashboardOverview() {
         </CardContent>
       </Card>
 
-      <Card className="border-0 shadow-lg">
+      <Card className="border-0 shadow-lg" data-onboarding="analytics-tabs">
         <CardHeader>
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500/10 to-blue-500/20">
@@ -461,7 +467,9 @@ export function DashboardOverview() {
 
       <div className="grid gap-8 lg:grid-cols-2">
         <ConnectedAgentsOverview />
-        <QuickActions />
+        <div data-onboarding="quick-actions">
+          <QuickActions />
+        </div>
       </div>
 
       <div className="grid gap-8 lg:grid-cols-2">

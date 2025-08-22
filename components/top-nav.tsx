@@ -4,6 +4,7 @@ import * as React from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Search, Bell, User, CreditCard, FolderKanban, Home, BarChart2, UserCog, Settings, LogOut } from "lucide-react"
+import { OnboardingTrigger } from "@/components/onboarding/onboarding-trigger"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -327,6 +328,7 @@ export function TopNav() {
                     aria-autocomplete="list"
                     placeholder="Search pages, projects, agents... (⌘/)"
                     className="w-full pl-10 pr-4 h-9"
+                    data-onboarding="search-input"
                   />
                   {isLoading && (
                     <div className="absolute right-3 top-2.5">
@@ -431,6 +433,8 @@ export function TopNav() {
               </DropdownMenuContent>
             </DropdownMenu>
 
+            <OnboardingTrigger />
+
             {/* Notifications */}
             <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="Notifications">
               <Bell className="h-4 w-4" />
@@ -439,7 +443,12 @@ export function TopNav() {
             {/* User menu */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-9 w-9 rounded-full" aria-label="Account menu">
+                <Button
+                  variant="ghost"
+                  className="relative h-9 w-9 rounded-full"
+                  aria-label="Account menu"
+                  data-onboarding="profile-menu"
+                >
                   <Avatar className="h-9 w-9">
                     <AvatarImage src={user.avatar || "/placeholder.svg"} alt={user.name} />
                     <AvatarFallback className="text-xs">

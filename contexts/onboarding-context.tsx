@@ -10,13 +10,16 @@ export type OnboardingStep = {
   description: string
   target: string // CSS selector
   placement?: "top" | "bottom" | "left" | "right" | "center"
-  action?: "click" | "hover" | "none"
+  action?: "click" | "hover" | "focus" | "scroll" | "none"
   page?: string // Optional page to navigate to
   delay?: number // Delay before showing this step
   spotlight?: boolean // Whether to use spotlight effect
   interactive?: boolean // Whether user must interact to continue
   isWelcome?: boolean // Special welcome step
   isCompletion?: boolean // Special completion step
+  requiresCompletion?: boolean // Must complete interaction to proceed
+  completionText?: string // Text to show when interaction is completed
+  hintText?: string // Additional hint for complex interactions
 }
 
 type OnboardingContextType = {
@@ -63,7 +66,11 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
       "Monitor your system's health with live CPU, memory, and network metrics. This updates every 30 seconds.",
     target: "[data-onboarding='real-time-monitor']",
     placement: "top",
-    action: "none",
+    action: "hover",
+    interactive: true,
+    requiresCompletion: true,
+    completionText: "Great! You can see the metrics update in real-time.",
+    hintText: "Hover over the monitor to see detailed metrics",
     spotlight: true,
   },
   {
@@ -74,6 +81,9 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
     placement: "top",
     action: "click",
     interactive: true,
+    requiresCompletion: true,
+    completionText: "Perfect! You've explored the analytics tabs.",
+    hintText: "Click on any tab to see different analytics views",
     spotlight: true,
   },
   {
@@ -92,8 +102,11 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
       "Search across pages, projects, and agents instantly. Try typing something or use ⌘K for the command palette.",
     target: "[data-onboarding='search-input']",
     placement: "bottom",
-    action: "click",
+    action: "focus",
     interactive: true,
+    requiresCompletion: true,
+    completionText: "Excellent! The search is now active and ready to use.",
+    hintText: "Click in the search box or press ⌘K to activate search",
     spotlight: true,
   },
   {
@@ -105,6 +118,8 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
     action: "click",
     page: "/analytics",
     interactive: true,
+    requiresCompletion: true,
+    completionText: "Great! You're now on the analytics page.",
     spotlight: true,
   },
   {
@@ -114,9 +129,13 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
       "This is your analytics command center. You can create custom reports, set up alerts, and analyze trends.",
     target: "[data-onboarding='analytics-interface']",
     placement: "center",
-    action: "none",
+    action: "scroll",
     page: "/analytics",
     delay: 1000,
+    interactive: true,
+    requiresCompletion: true,
+    completionText: "Perfect! You've explored the analytics interface.",
+    hintText: "Scroll down to see more analytics features",
     spotlight: true,
   },
   {
@@ -128,6 +147,8 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
     action: "click",
     page: "/compliance-reports",
     interactive: true,
+    requiresCompletion: true,
+    completionText: "Excellent! You're now viewing compliance reports.",
     spotlight: true,
   },
   {
@@ -139,6 +160,8 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
     action: "click",
     page: "/users-roles",
     interactive: true,
+    requiresCompletion: true,
+    completionText: "Great! You can now manage users and roles from here.",
     spotlight: true,
   },
   {
@@ -148,8 +171,12 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
       "Access frequently used actions like connecting agents and creating projects right from your dashboard.",
     target: "[data-onboarding='quick-actions']",
     placement: "left",
-    action: "none",
+    action: "hover",
     page: "/",
+    interactive: true,
+    requiresCompletion: true,
+    completionText: "Perfect! You can see all available quick actions.",
+    hintText: "Hover over the quick actions panel to see options",
     spotlight: true,
   },
   {
@@ -160,6 +187,9 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
     placement: "bottom",
     action: "click",
     interactive: true,
+    requiresCompletion: true,
+    completionText: "Excellent! Your profile menu is now open.",
+    hintText: "Click on your profile avatar to open the menu",
     spotlight: true,
   },
   {

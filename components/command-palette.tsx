@@ -355,12 +355,12 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
             <CommandInput
               placeholder="Type a command or search..."
               value={query}
-              onValueChange={setQuery}
+              onChange={(e) => setQuery(e.target.value)}
               className="flex h-12 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50 border-0 focus:ring-0"
             />
           </div>
           <CommandList className="max-h-[400px] overflow-y-auto">
-            <CommandEmpty>No commands found.</CommandEmpty>
+            {filteredCommands.length === 0 && <CommandEmpty>No commands found.</CommandEmpty>}
 
             {!query && favoriteItems.length > 0 && (
               <CommandGroup heading="Favorites">

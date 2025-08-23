@@ -9,6 +9,7 @@ import { SettingsProvider } from "@/contexts/settings-context"
 import { OnboardingProvider } from "@/contexts/onboarding-context"
 import Layout from "@/components/layout"
 import { OnboardingTour } from "@/components/onboarding/onboarding-tour"
+import { OnboardingTestButton } from "@/components/onboarding/onboarding-test-button"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -45,6 +46,7 @@ export default function RootLayout({
               <OnboardingProvider>
                 <Layout>{children}</Layout>
                 <OnboardingTour />
+                <OnboardingTestButton />
                 <Toaster />
               </OnboardingProvider>
             </SettingsProvider>

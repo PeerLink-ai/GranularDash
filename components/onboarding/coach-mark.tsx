@@ -352,12 +352,11 @@ export function CoachMark({ step, stepNumber, totalSteps, onNext, onPrev, onSkip
     <div className="fixed inset-0 z-[9999]">
       <div
         ref={overlayRef}
-        className="absolute inset-0 bg-background/70 transition-all duration-500"
-        onClick={tooltipPosition === "center" ? undefined : onNext}
+        className="absolute inset-0 bg-background/70 transition-all duration-500 pointer-events-none"
       />
 
       <div
-        className="fixed pointer-events-none transition-all duration-300 ease-out rounded-lg"
+        className="fixed transition-all duration-300 ease-out rounded-lg"
         style={{
           top: position.top - 4,
           left: position.left - 4,
@@ -400,7 +399,7 @@ export function CoachMark({ step, stepNumber, totalSteps, onNext, onPrev, onSkip
       <Card
         ref={tooltipRef}
         className={cn(
-          "w-[400px] max-w-[90vw] shadow-2xl border bg-card transition-all duration-300 ease-out",
+          "w-[400px] max-w-[90vw] shadow-2xl border bg-card transition-all duration-300 ease-out pointer-events-auto",
           "animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2",
           tooltipPosition === "center" && "max-w-md",
         )}

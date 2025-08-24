@@ -34,38 +34,20 @@ type CoachMarkProps = {
 
 export function CoachMark({ step, stepNumber, totalSteps, onNext, onPrev, onSkip, isVisible }: CoachMarkProps) {
   const [targetElement, setTargetElement] = useState<HTMLElement | null>(null)
-  const [position, setPosition] = useState({ top: 0, left: 0 })
+  const [position, setPosition] = useState({ top: 0, left: 0, width: 0, height: 0 })
   const [tooltipPosition, setTooltipPosition] = useState<"top" | "bottom" | "left" | "right" | "center">("bottom")
   const [interactionCompleted, setInteractionCompleted] = useState(false)
   const [showCompletionFeedback, setShowCompletionFeedback] = useState(false)
   const overlayRef = useRef<HTMLDivElement>(null)
   const tooltipRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    if (!isVisible) return
-
-    const findTarget = () => {
-      const element = document.querySelector(step.target) as HTMLElement
-      if (element) {
-        setTargetElement(element)
-        updatePosition(element)
-      } else {
-        setTimeout(findTarget, 100)
-      }
-    }
-
-    if (step.delay) {
-      setTimeout(findTarget, step.delay)
-    } else {
-      findTarget()
-    }
-  }, [step.target, step.delay, isVisible])
-
   const updatePosition = (element: HTMLElement) => {
     const rect = element.getBoundingClientRect()
     setPosition({
       top: rect.top,
       left: rect.left,
+      width: rect.width,
+      height: rect.height,
     })
 
     const viewportHeight = window.innerHeight
@@ -100,6 +82,42 @@ export function CoachMark({ step, stepNumber, totalSteps, onNext, onPrev, onSkip
       }
     }
   }
+
+  useEffect(() => {
+    if (!isVisible) return
+
+    const findTarget = () => {
+      const element = document.querySelector(step.target) as HTMLElement
+      if (element) {
+        setTargetElement(element)
+        updatePosition(element)
+      } else {
+        setTimeout(findTarget, 100)
+      }
+    }
+
+    if (step.delay) {
+      setTimeout(findTarget, step.delay)
+    } else {
+      findTarget()
+    }
+  }, [step.target, step.delay, isVisible])
+
+  useEffect(() => {
+    if (!targetElement || !isVisible) return
+
+    const handlePositionUpdate = () => {
+      updatePosition(targetElement)
+    }
+
+    window.addEventListener("scroll", handlePositionUpdate, { passive: true })
+    window.addEventListener("resize", handlePositionUpdate)
+
+    return () => {
+      window.removeEventListener("scroll", handlePositionUpdate)
+      window.removeEventListener("resize", handlePositionUpdate)
+    }
+  }, [targetElement, isVisible])
 
   useEffect(() => {
     if (!targetElement) return
@@ -178,11 +196,11 @@ export function CoachMark({ step, stepNumber, totalSteps, onNext, onPrev, onSkip
         <Card className="w-[500px] max-w-[90vw] shadow-2xl border bg-card backdrop-blur-md animate-in fade-in-0 zoom-in-95 duration-500">
           <CardHeader className="text-center pb-4">
             <div className="flex justify-center mb-4">
-              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted shadow-lg">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 shadow-lg border-2 border-primary/20">
                 {step.isWelcome ? (
-                  <Sparkles className="h-8 w-8 text-foreground" />
+                  <Sparkles className="h-8 w-8 text-primary" />
                 ) : (
-                  <CheckCircle className="h-8 w-8 text-foreground" />
+                  <CheckCircle className="h-8 w-8 text-primary" />
                 )}
               </div>
             </div>
@@ -198,8 +216,8 @@ export function CoachMark({ step, stepNumber, totalSteps, onNext, onPrev, onSkip
             <p className="text-muted-foreground leading-relaxed mb-6 text-base">{step.description}</p>
 
             {step.isCompletion && (
-              <div className="mb-6 p-4 bg-muted rounded-lg border">
-                <div className="flex items-center justify-center gap-2 text-foreground font-medium">
+              <div className="mb-6 p-4 bg-primary/5 rounded-lg border border-primary/20">
+                <div className="flex items-center justify-center gap-2 text-primary font-medium">
                   <Rocket className="h-4 w-4" />
                   Ready to explore your AI governance platform!
                 </div>
@@ -234,8 +252,6 @@ export function CoachMark({ step, stepNumber, totalSteps, onNext, onPrev, onSkip
 
   if (!targetElement) return null
 
-  const targetRect = targetElement.getBoundingClientRect()
-
   const getTooltipStyle = () => {
     const tooltipWidth = 400
     const tooltipHeight = 250
@@ -255,7 +271,7 @@ export function CoachMark({ step, stepNumber, totalSteps, onNext, onPrev, onSkip
         return {
           top: Math.max(20, position.top - tooltipHeight - gap),
           left: Math.min(
-            Math.max(20, position.left + targetRect.width / 2 - tooltipWidth / 2),
+            Math.max(20, position.left + position.width / 2 - tooltipWidth / 2),
             viewportWidth - tooltipWidth - 20,
           ),
           transform: "none",
@@ -263,9 +279,9 @@ export function CoachMark({ step, stepNumber, totalSteps, onNext, onPrev, onSkip
         }
       case "bottom":
         return {
-          top: Math.min(position.top + targetRect.height + gap, viewportHeight - tooltipHeight - 20),
+          top: Math.min(position.top + position.height + gap, viewportHeight - tooltipHeight - 20),
           left: Math.min(
-            Math.max(20, position.left + targetRect.width / 2 - tooltipWidth / 2),
+            Math.max(20, position.left + position.width / 2 - tooltipWidth / 2),
             viewportWidth - tooltipWidth - 20,
           ),
           transform: "none",
@@ -274,7 +290,7 @@ export function CoachMark({ step, stepNumber, totalSteps, onNext, onPrev, onSkip
       case "left":
         return {
           top: Math.min(
-            Math.max(20, position.top + targetRect.height / 2 - tooltipHeight / 2),
+            Math.max(20, position.top + position.height / 2 - tooltipHeight / 2),
             viewportHeight - tooltipHeight - 20,
           ),
           left: Math.max(20, position.left - tooltipWidth - gap),
@@ -284,18 +300,18 @@ export function CoachMark({ step, stepNumber, totalSteps, onNext, onPrev, onSkip
       case "right":
         return {
           top: Math.min(
-            Math.max(20, position.top + targetRect.height / 2 - tooltipHeight / 2),
+            Math.max(20, position.top + position.height / 2 - tooltipHeight / 2),
             viewportHeight - tooltipHeight - 20,
           ),
-          left: Math.min(position.left + targetRect.width + gap, viewportWidth - tooltipWidth - 20),
+          left: Math.min(position.left + position.width + gap, viewportWidth - tooltipWidth - 20),
           transform: "none",
           position: "fixed" as const,
         }
       default:
         return {
-          top: Math.min(position.top + targetRect.height + gap, viewportHeight - tooltipHeight - 20),
+          top: Math.min(position.top + position.height + gap, viewportHeight - tooltipHeight - 20),
           left: Math.min(
-            Math.max(20, position.left + targetRect.width / 2 - tooltipWidth / 2),
+            Math.max(20, position.left + position.width / 2 - tooltipWidth / 2),
             viewportWidth - tooltipWidth - 20,
           ),
           transform: "none",
@@ -322,47 +338,51 @@ export function CoachMark({ step, stepNumber, totalSteps, onNext, onPrev, onSkip
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999]">
-      <div
-        ref={overlayRef}
-        className="absolute inset-0 bg-background/60 backdrop-blur-[1px] transition-all duration-500"
-        onClick={tooltipPosition === "center" ? undefined : onNext}
-      />
+    <div className="fixed inset-0 z-[9999] pointer-events-none">
+      <div ref={overlayRef} className="absolute inset-0 bg-background/40 transition-all duration-500" />
 
       <div
-        className="fixed pointer-events-none transition-all duration-300 ease-out border-2 border-border rounded-lg shadow-lg"
+        className="fixed pointer-events-none transition-all duration-300 ease-out rounded-lg"
         style={{
-          top: position.top - 2,
-          left: position.left - 2,
-          width: targetRect.width + 4,
-          height: targetRect.height + 4,
-          boxShadow: `0 4px 12px hsl(var(--border) / 0.15)`,
+          top: position.top - 4,
+          left: position.left - 4,
+          width: position.width + 8,
+          height: position.height + 8,
+          border: "3px solid hsl(var(--primary))",
+          boxShadow: `
+            0 0 0 1px hsl(var(--primary) / 0.2),
+            0 0 20px hsl(var(--primary) / 0.3),
+            0 4px 12px hsl(var(--primary) / 0.15)
+          `,
+          animation: "pulse 2s infinite",
         }}
       />
 
       {step.interactive && !interactionCompleted && (
         <div
-          className="fixed pointer-events-none"
+          className="fixed pointer-events-none z-10"
           style={{
-            top: position.top + targetRect.height / 2 - 8,
-            left: position.left + targetRect.width / 2 - 8,
+            top: position.top + position.height / 2 - 10,
+            left: position.left + position.width / 2 - 10,
           }}
         >
-          <div className="w-4 h-4 bg-foreground rounded-full animate-ping opacity-75" />
-          <div className="absolute inset-0 w-4 h-4 bg-foreground/60 rounded-full animate-pulse" />
-          <div className="absolute inset-1 w-2 h-2 bg-background rounded-full" />
+          <div className="relative">
+            <div className="w-5 h-5 bg-primary rounded-full animate-ping opacity-75" />
+            <div className="absolute inset-0 w-5 h-5 bg-primary/80 rounded-full animate-pulse" />
+            <div className="absolute inset-1 w-3 h-3 bg-background rounded-full" />
+          </div>
         </div>
       )}
 
       {interactionCompleted && showCompletionFeedback && (
         <div
-          className="fixed pointer-events-none animate-in zoom-in-50 duration-300"
+          className="fixed pointer-events-none animate-in zoom-in-50 duration-300 z-10"
           style={{
-            top: position.top + targetRect.height / 2 - 12,
-            left: position.left + targetRect.width / 2 - 12,
+            top: position.top + position.height / 2 - 12,
+            left: position.left + position.width / 2 - 12,
           }}
         >
-          <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
+          <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center shadow-lg">
             <CheckCircle className="h-4 w-4 text-white" />
           </div>
         </div>
@@ -371,7 +391,7 @@ export function CoachMark({ step, stepNumber, totalSteps, onNext, onPrev, onSkip
       <Card
         ref={tooltipRef}
         className={cn(
-          "w-[400px] max-w-[90vw] shadow-2xl border bg-card backdrop-blur-sm transition-all duration-300 ease-out",
+          "w-[400px] max-w-[90vw] shadow-2xl border bg-card/95 backdrop-blur-sm transition-all duration-300 ease-out pointer-events-auto",
           "animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2",
           tooltipPosition === "center" && "max-w-md",
         )}
@@ -380,7 +400,7 @@ export function CoachMark({ step, stepNumber, totalSteps, onNext, onPrev, onSkip
         <CardHeader className="pb-3">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 border border-primary/20">
                 {getInteractionIcon()}
               </div>
               <div>
@@ -407,7 +427,7 @@ export function CoachMark({ step, stepNumber, totalSteps, onNext, onPrev, onSkip
                 "mb-4 p-3 rounded-lg border transition-all duration-300",
                 interactionCompleted
                   ? "bg-green-50 border-green-200 dark:bg-green-950 dark:border-green-800"
-                  : "bg-muted",
+                  : "bg-muted border-primary/20",
               )}
             >
               {showCompletionFeedback ? (

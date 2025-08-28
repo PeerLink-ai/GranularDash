@@ -20,6 +20,7 @@ import {
   Menu,
   ChevronDown,
   CreditCard,
+  Activity,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -69,6 +70,7 @@ export function AppSidebar() {
       items: [
         { title: "Policies & Rules", href: "/policies-rules", icon: Shield },
         { title: "Audit Logs", href: "/audit-logs", icon: FileText },
+        { title: "Audit & Lineage", href: "/audit-lineage", icon: Activity },
         { title: "Compliance Reports", href: "/compliance-reports", icon: Receipt },
         { title: "Risk & Incidents", href: "/incident-response", icon: MessageSquare },
       ],

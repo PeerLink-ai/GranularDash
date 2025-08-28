@@ -23,6 +23,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Badge } from "@/components/ui/badge"
 import {
   Download,
   FileJson,
@@ -37,6 +38,7 @@ import {
   ZoomOut,
   BadgeCheck,
   RefreshCw,
+  Activity,
 } from "lucide-react"
 
 import "reactflow/dist/style.css"
@@ -54,9 +56,10 @@ import ReactFlow, {
 } from "reactflow"
 
 export interface DataModelLineageProps {
-  onOpenDatasetVersioning: () => void
-  onOpenTransformationSteps: () => void
-  onOpenModelVersionTracking: () => void
+  onOpenDatasetVersioning?: () => void
+  onOpenTransformationSteps?: () => void
+  onOpenModelVersionTracking?: () => void
+  highlightedNode?: string | null
 }
 
 export interface LineageNode {
@@ -457,14 +460,13 @@ function GraphCanvas({
       const data = n.data as { label: string; node: LineageNode }
       const theme = TYPE_THEME[data.node.type]
       const isSelected = selectedId === n.id
-      const shouldDim = dimNonMatches && highlightSet && !highlightSet.has(n.id)
       return {
         ...n,
         style: {
           ...n.style,
           borderColor: isSelected ? "hsl(var(--foreground))" : undefined,
           boxShadow: isSelected ? "0 0 0 2px hsl(var(--foreground)/.15)" : "none",
-          opacity: shouldDim ? 0.25 : 1,
+          opacity: dimNonMatches && highlightSet && !highlightSet.has(n.id) ? 0.25 : 1,
         },
         data: {
           ...n.data,
@@ -555,6 +557,7 @@ export function DataModelLineage({
   onOpenDatasetVersioning,
   onOpenTransformationSteps,
   onOpenModelVersionTracking,
+  highlightedNode,
 }: DataModelLineageProps) {
   const [serverData, setServerData] = React.useState<{
     nodes: LineageNode[]
@@ -704,16 +707,37 @@ export function DataModelLineage({
     }
   }
 
+  React.useEffect(() => {
+    if (highlightedNode && raw.length > 0) {
+      const nodeToHighlight = raw.find((n) => n.id === highlightedNode || n.id.includes(highlightedNode))
+      if (nodeToHighlight) {
+        setSelected(nodeToHighlight)
+        setTimeout(() => {
+          apiRef.current?.fit()
+        }, 100)
+      }
+    }
+  }, [highlightedNode, raw])
+
   return (
     <ReactFlowProvider>
       <Card className="shadow-sm border-gray-200 dark:border-gray-800">
         <CardHeader className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <CardTitle className="text-2xl font-bold text-foreground">Real-Time Data & Model Lineage</CardTitle>
+              <CardTitle className="text-2xl font-bold text-foreground flex items-center gap-2">
+                Real-Time Data & Model Lineage
+                {highlightedNode && (
+                  <Badge variant="outline" className="text-xs">
+                    <Activity className="h-3 w-3 mr-1" />
+                    Audit Context
+                  </Badge>
+                )}
+              </CardTitle>
               <CardDescription className="text-muted-foreground">
                 Visualize your complete AI pipeline: agents, models, deployments, evaluations, and data flows from your
                 live system.
+                {highlightedNode && " Highlighted node shows audit trail context."}
               </CardDescription>
             </div>
             <Button variant="outline" className="gap-2 bg-transparent" onClick={loadLineage} disabled={loading}>
@@ -841,7 +865,17 @@ export function DataModelLineage({
             <div className="lg:col-span-1">
               <Card className="h-full">
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-lg">Node Details</CardTitle>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    Node Details
+                    {selected &&
+                      highlightedNode &&
+                      (selected.id === highlightedNode || selected.id.includes(highlightedNode)) && (
+                        <Badge variant="secondary" className="text-xs">
+                          <Activity className="h-3 w-3 mr-1" />
+                          From Audit
+                        </Badge>
+                      )}
+                  </CardTitle>
                   <CardDescription>Inspect metadata and take actions on the selected node.</CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -908,9 +942,9 @@ export function DataModelLineage({
                             variant="default"
                             size="sm"
                             onClick={() => {
-                              if (selected.type === "dataset") onOpenDatasetVersioning()
-                              else if (selected.type === "transformation") onOpenTransformationSteps()
-                              else if (selected.type === "model") onOpenModelVersionTracking()
+                              if (selected.type === "dataset") onOpenDatasetVersioning?.()
+                              else if (selected.type === "transformation") onOpenTransformationSteps?.()
+                              else if (selected.type === "model") onOpenModelVersionTracking?.()
                             }}
                             className="gap-2"
                           >

@@ -102,7 +102,7 @@ export interface LineageNode {
     actionType?: string
     prompt?: string
     response?: string
-    tokenUsage?: number
+    tokenUsage?: number | { total?: number; prompt?: number; completion?: number }
     evaluationScore?: number
     parentActionId?: string
     timestamp?: string
@@ -590,12 +590,14 @@ function GraphCanvas({
                 <div className="flex items-center gap-2 text-xs">
                   {data.node.metadata.tokenUsage && (
                     <Badge variant="outline" className="text-[10px]">
-                      {data.node.metadata.tokenUsage} tokens
+                      {typeof data.node.metadata.tokenUsage === "object"
+                        ? `${data.node.metadata.tokenUsage.total || data.node.metadata.tokenUsage.prompt + data.node.metadata.tokenUsage.completion || "N/A"} tokens`
+                        : `${data.node.metadata.tokenUsage} tokens`}
                     </Badge>
                   )}
                   {data.node.metadata.evaluationScore && (
                     <Badge variant="outline" className="text-[10px]">
-                      Score: {data.node.metadata.evaluationScore}
+                      Score: {String(data.node.metadata.evaluationScore)}
                     </Badge>
                   )}
                 </div>
@@ -1337,13 +1339,17 @@ export function DataModelLineage({
 
                               <div className="flex flex-wrap gap-2">
                                 {selected.metadata.tokenUsage && (
-                                  <Badge variant="outline">{selected.metadata.tokenUsage} tokens</Badge>
+                                  <Badge variant="outline">
+                                    {typeof selected.metadata.tokenUsage === "object"
+                                      ? `${selected.metadata.tokenUsage.total || selected.metadata.tokenUsage.prompt + selected.metadata.tokenUsage.completion || "N/A"} tokens`
+                                      : `${selected.metadata.tokenUsage} tokens`}
+                                  </Badge>
                                 )}
                                 {selected.metadata.evaluationScore && (
-                                  <Badge variant="outline">Score: {selected.metadata.evaluationScore}</Badge>
+                                  <Badge variant="outline">Score: {String(selected.metadata.evaluationScore)}</Badge>
                                 )}
                                 {selected.metadata.duration && (
-                                  <Badge variant="outline">{selected.metadata.duration}ms</Badge>
+                                  <Badge variant="outline">{String(selected.metadata.duration)}ms</Badge>
                                 )}
                               </div>
                             </div>

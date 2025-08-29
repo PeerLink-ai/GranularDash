@@ -76,6 +76,176 @@ export async function buildDataLineage(): Promise<{ nodes: DataLineageNode[]; ed
       })
     }
 
+    const playgroundInteractions = await sql`
+      SELECT 
+        lm.id, lm.agent_id, lm.prompt, lm.response, lm.token_usage,
+        lm.response_time, lm.evaluation_scores, lm.tool_calls, 
+        lm.db_queries, lm.decisions, lm.created_at,
+        ca.name as agent_name, ca.provider
+      FROM lineage_mapping lm
+      LEFT JOIN connected_agents ca ON lm.agent_id = ca.agent_id
+      ORDER BY lm.created_at DESC
+      LIMIT 100
+    `
+
+    for (const interaction of playgroundInteractions) {
+      // Create playground interaction node
+      nodes.push({
+        id: `playground-${interaction.id}`,
+        name: `Playground Test: ${interaction.prompt.substring(0, 50)}...`,
+        type: "evaluation",
+        path: ["Playground", "Tests", interaction.agent_name || interaction.agent_id],
+        metadata: {
+          status: "completed",
+          creationDate: interaction.created_at?.toISOString().split("T")[0],
+          description: `Playground test interaction`,
+          performance: interaction.response_time ? `${interaction.response_time}ms` : undefined,
+          accuracy: interaction.evaluation_scores?.overall ? `${interaction.evaluation_scores.overall}%` : undefined,
+          version: interaction.token_usage?.total ? `${interaction.token_usage.total} tokens` : undefined,
+        },
+      })
+
+      // Create edge from agent to playground interaction
+      edges.push({
+        source: `agent-${interaction.agent_id}`,
+        target: `playground-${interaction.id}`,
+        relationship: "tested_by",
+        metadata: {
+          type: "playground_test",
+          tokenUsage: interaction.token_usage,
+          responseTime: interaction.response_time,
+          evaluationScores: interaction.evaluation_scores,
+        },
+      })
+
+      if (interaction.tool_calls && Array.isArray(interaction.tool_calls) && interaction.tool_calls.length > 0) {
+        for (let i = 0; i < interaction.tool_calls.length; i++) {
+          const toolCall = interaction.tool_calls[i]
+          const toolNodeId = `tool-${interaction.id}-${i}`
+
+          nodes.push({
+            id: toolNodeId,
+            name: `Tool: ${toolCall.name || "Unknown Tool"}`,
+            type: "transformation",
+            path: ["Tools", "Agent Tools", toolCall.name || "Unknown"],
+            metadata: {
+              status: "executed",
+              creationDate: interaction.created_at?.toISOString().split("T")[0],
+              description: `Tool call: ${toolCall.description || toolCall.name}`,
+              schema: JSON.stringify(toolCall.parameters),
+            },
+          })
+
+          // Create edge from playground interaction to tool call
+          edges.push({
+            source: `playground-${interaction.id}`,
+            target: toolNodeId,
+            relationship: "uses_tool",
+            metadata: { toolCall: toolCall },
+          })
+        }
+      }
+
+      if (interaction.db_queries && Array.isArray(interaction.db_queries) && interaction.db_queries.length > 0) {
+        for (let i = 0; i < interaction.db_queries.length; i++) {
+          const dbQuery = interaction.db_queries[i]
+          const queryNodeId = `query-${interaction.id}-${i}`
+
+          nodes.push({
+            id: queryNodeId,
+            name: `DB Query: ${dbQuery.table || "Database"}`,
+            type: "dataset",
+            path: ["Database", "Queries", dbQuery.table || "Unknown"],
+            metadata: {
+              status: "executed",
+              creationDate: interaction.created_at?.toISOString().split("T")[0],
+              description: `Database query: ${dbQuery.operation || "SELECT"}`,
+              schema: dbQuery.query?.substring(0, 100),
+            },
+          })
+
+          // Create edge from playground interaction to database query
+          edges.push({
+            source: `playground-${interaction.id}`,
+            target: queryNodeId,
+            relationship: "queries_data",
+            metadata: { dbQuery: dbQuery },
+          })
+        }
+      }
+
+      if (interaction.decisions && Array.isArray(interaction.decisions) && interaction.decisions.length > 0) {
+        for (let i = 0; i < interaction.decisions.length; i++) {
+          const decision = interaction.decisions[i]
+          const decisionNodeId = `decision-${interaction.id}-${i}`
+
+          nodes.push({
+            id: decisionNodeId,
+            name: `Decision: ${decision.type || "AI Decision"}`,
+            type: "evaluation",
+            path: ["Decisions", "AI Reasoning", decision.type || "Unknown"],
+            metadata: {
+              status: "completed",
+              creationDate: interaction.created_at?.toISOString().split("T")[0],
+              description: `AI decision point: ${decision.reasoning?.substring(0, 100)}`,
+              accuracy: decision.confidence ? `${Math.round(decision.confidence * 100)}%` : undefined,
+            },
+          })
+
+          // Create edge from playground interaction to decision
+          edges.push({
+            source: `playground-${interaction.id}`,
+            target: decisionNodeId,
+            relationship: "makes_decision",
+            metadata: { decision: decision },
+          })
+        }
+      }
+    }
+
+    const agentAuditLogs = await sql`
+      SELECT 
+        al.id, al.user_id, al.action, al.resource_type, al.resource_id,
+        al.details, al.timestamp, al.organization
+      FROM audit_logs al
+      WHERE al.resource_type = 'AI_AGENT' 
+        AND al.action IN ('AGENT_PLAYGROUND_TEST', 'AGENT_API_CALL', 'AGENT_DEPLOYMENT', 'AGENT_EVALUATION')
+      ORDER BY al.timestamp DESC
+      LIMIT 50
+    `
+
+    for (const auditLog of agentAuditLogs) {
+      const auditNodeId = `audit-${auditLog.id}`
+
+      nodes.push({
+        id: auditNodeId,
+        name: `${auditLog.action.replace("_", " ")}: ${auditLog.resource_id || "Agent"}`,
+        type: "evaluation",
+        path: ["Audit", "Agent Actions", auditLog.action],
+        metadata: {
+          status: "logged",
+          creationDate: auditLog.timestamp?.toISOString().split("T")[0],
+          description: `Audit log: ${auditLog.action}`,
+          owner: auditLog.user_id,
+          schema: auditLog.organization,
+        },
+      })
+
+      // Create edge from agent to audit log if resource_id exists
+      if (auditLog.resource_id) {
+        edges.push({
+          source: `agent-${auditLog.resource_id}`,
+          target: auditNodeId,
+          relationship: "generates_audit",
+          metadata: {
+            action: auditLog.action,
+            details: auditLog.details,
+            timestamp: auditLog.timestamp,
+          },
+        })
+      }
+    }
+
     // 2. Get AI Models from Registry
     const models = await sql`
       SELECT 

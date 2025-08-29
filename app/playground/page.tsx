@@ -70,6 +70,7 @@ export default function PlaygroundPage() {
     loadAgents()
   }, [])
 
+  // Test agent with full lineage tracking
   const testAgent = async () => {
     if (!selectedAgent || !prompt.trim()) return
 
@@ -78,20 +79,13 @@ export default function PlaygroundPage() {
     setLineage([])
 
     try {
-      // Add initial prompt to lineage with automation metadata
+      // Add initial prompt to lineage
       const promptEntry: LineageEntry = {
         id: `prompt-${Date.now()}`,
         timestamp: new Date().toISOString(),
         type: "prompt",
         content: prompt,
-        metadata: {
-          agentId: selectedAgent,
-          automationContext: {
-            source: "playground",
-            sessionId: `session-${Date.now()}`,
-            userInitiated: true,
-          },
-        },
+        metadata: { agentId: selectedAgent },
       }
       setLineage([promptEntry])
 
@@ -101,13 +95,6 @@ export default function PlaygroundPage() {
         body: JSON.stringify({
           agentId: selectedAgent,
           prompt: prompt.trim(),
-          automationMetadata: {
-            source: "playground",
-            requestType: "agent_test",
-            timestamp: new Date().toISOString(),
-            sessionId: `session-${Date.now()}`,
-            formatting: "structured_response",
-          },
         }),
       })
 
@@ -118,7 +105,7 @@ export default function PlaygroundPage() {
       const data: PlaygroundResponse = await res.json()
       setResponse(data)
 
-      // Add response to lineage with enhanced automation data
+      // Add response to lineage
       const responseEntry: LineageEntry = {
         id: `response-${Date.now()}`,
         timestamp: new Date().toISOString(),
@@ -129,12 +116,6 @@ export default function PlaygroundPage() {
           lineageId: data.lineageId,
           tokenUsage: data.tokenUsage,
           cryptographicProof: data.cryptographicProof,
-          automationData: {
-            responseFormat: "structured",
-            apiCompatible: true,
-            repoRequestReady: true,
-            executionContext: "playground_test",
-          },
         },
         duration: data.responseTime,
         tokens: data.tokenUsage.total,

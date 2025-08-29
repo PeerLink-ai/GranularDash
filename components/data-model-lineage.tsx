@@ -110,6 +110,30 @@ export interface LineageNode {
     model?: string
     temperature?: number
     maxTokens?: number
+    interactionType?: string
+    responseTime?: number
+    qualityScores?: any
+    evaluationFlags?: any
+    auditHash?: string
+    activityType?: string
+    lineageId?: string
+    activityData?: any
+    thoughtType?: string
+    thoughtContent?: string
+    toolCalls?: any
+    decisions?: any
+    dbQueries?: any
+    sessionId?: string
+    parentInteractionId?: string
+    processingTime?: number
+    tokensUsed?: number
+    confidenceScore?: number
+    modelUsed?: string
+    reasoningSteps?: any
+    decisionFactors?: any
+    alternativesConsidered?: any
+    outcomePrediction?: string
+    actualOutcome?: string
   }
   nextNodes?: string[]
 }
@@ -652,6 +676,7 @@ export function DataModelLineage({
   const [serverData, setServerData] = React.useState<{
     nodes: LineageNode[]
     edges: { source: string; target: string }[]
+    lineageMapping?: any[]
   } | null>(null)
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
@@ -737,6 +762,42 @@ export function DataModelLineage({
         n.metadata?.endpoint,
         n.metadata?.cost,
         n.metadata?.performance,
+        n.metadata?.agentId,
+        n.metadata?.actionType,
+        n.metadata?.prompt,
+        n.metadata?.response,
+        n.metadata?.tokenUsage,
+        n.metadata?.evaluationScore,
+        n.metadata?.parentActionId,
+        n.metadata?.timestamp,
+        n.metadata?.duration,
+        n.metadata?.model,
+        n.metadata?.temperature,
+        n.metadata?.maxTokens,
+        n.metadata?.interactionType,
+        n.metadata?.responseTime,
+        n.metadata?.qualityScores,
+        n.metadata?.evaluationFlags,
+        n.metadata?.auditHash,
+        n.metadata?.activityType,
+        n.metadata?.lineageId,
+        n.metadata?.activityData,
+        n.metadata?.thoughtType,
+        n.metadata?.thoughtContent,
+        n.metadata?.toolCalls,
+        n.metadata?.decisions,
+        n.metadata?.dbQueries,
+        n.metadata?.sessionId,
+        n.metadata?.parentInteractionId,
+        n.metadata?.processingTime,
+        n.metadata?.tokensUsed,
+        n.metadata?.confidenceScore,
+        n.metadata?.modelUsed,
+        n.metadata?.reasoningSteps,
+        n.metadata?.decisionFactors,
+        n.metadata?.alternativesConsidered,
+        n.metadata?.outcomePrediction,
+        n.metadata?.actualOutcome,
       ]
         .filter(Boolean)
         .join(" ")
@@ -791,115 +852,190 @@ export function DataModelLineage({
     setLoading(true)
     setError(null)
     try {
-      // Fetch both lineage data and audit logs
-      const [lineageRes, auditRes] = await Promise.all([
+      const [lineageRes, governanceRes, activityRes, thoughtRes] = await Promise.all([
         fetch("/api/lineage", { cache: "no-store" }),
-        fetch("/api/audit-logs", { cache: "no-store" }),
+        fetch("/api/agent-governance", { cache: "no-store" }),
+        fetch("/api/agent-activity", { cache: "no-store" }),
+        fetch("/api/thought-process", { cache: "no-store" }),
       ])
 
-      console.log("[v0] API response statuses:", { lineage: lineageRes.status, audit: auditRes.status })
+      console.log("[v0] API response statuses:", {
+        lineage: lineageRes.status,
+        governance: governanceRes.status,
+        activity: activityRes.status,
+        thought: thoughtRes.status,
+      })
 
-      const [lineageData, auditData] = await Promise.all([lineageRes.json(), auditRes.json()])
+      const [lineageData, governanceData, activityData, thoughtData] = await Promise.all([
+        lineageRes.json().catch(() => ({ nodes: [], edges: [] })),
+        governanceRes.json().catch(() => []),
+        activityRes.json().catch(() => []),
+        thoughtRes.json().catch(() => []),
+      ])
 
-      console.log("[v0] Raw API responses:", { lineageData, auditData })
+      console.log("[v0] Raw API responses:", { lineageData, governanceData, activityData, thoughtData })
 
-      // Combine lineage nodes with agent action nodes from audit logs
+      // Combine lineage nodes with agent action nodes
       const lineageNodes = Array.isArray(lineageData?.nodes) ? lineageData.nodes : []
       const lineageEdges = Array.isArray(lineageData?.edges) ? lineageData.edges : []
 
-      // Transform audit logs into agent action nodes
-      const auditNodes: LineageNode[] = []
-      const auditEdges: { source: string; target: string }[] = []
+      // Transform agent data into lineage nodes
+      const agentNodes: LineageNode[] = []
+      const agentEdges: { source: string; target: string }[] = []
 
-      if (Array.isArray(auditData)) {
-        auditData.forEach((log: any, index: number) => {
-          // Create agent action node
-          const actionId = `action_${log.id || index}`
-          auditNodes.push({
+      // Process governance logs
+      if (Array.isArray(governanceData)) {
+        governanceData.forEach((log: any, index: number) => {
+          const actionId = `gov_${log.id}`
+          agentNodes.push({
             id: actionId,
-            name: log.action_type || `Action ${index + 1}`,
+            name: `${log.interaction_type || "Interaction"} ${index + 1}`,
             type: "agent_action",
-            path: ["audit", "actions", log.action_type || "unknown"],
+            path: ["governance", "interactions", log.agent_id || "unknown"],
             metadata: {
               agentId: log.agent_id,
-              actionType: log.action_type,
-              prompt: log.details?.prompt,
-              timestamp: log.timestamp,
-              duration: log.details?.duration,
-              model: log.details?.model,
-              status: log.details?.status || "completed",
-              tokenUsage: log.details?.token_usage,
-              description: log.details?.description,
+              interactionType: log.interaction_type,
+              prompt: log.prompt,
+              response: log.response,
+              timestamp: log.created_at,
+              responseTime: log.response_time_ms,
+              tokenUsage: log.token_usage,
+              qualityScores: log.quality_scores,
+              evaluationFlags: log.evaluation_flags,
+              auditHash: log.audit_block_hash,
             },
             nextNodes: [],
           })
 
           // Create response node if response exists
-          if (log.details?.response) {
-            const responseId = `response_${log.id || index}`
-            auditNodes.push({
+          if (log.response) {
+            const responseId = `gov_resp_${log.id}`
+            agentNodes.push({
               id: responseId,
               name: `Response ${index + 1}`,
               type: "agent_response",
-              path: ["audit", "responses", log.action_type || "unknown"],
+              path: ["governance", "responses", log.agent_id || "unknown"],
               metadata: {
                 agentId: log.agent_id,
-                response: log.details.response,
-                timestamp: log.timestamp,
-                tokenUsage: log.details?.token_usage,
-                evaluationScore: log.details?.evaluation_score,
+                response: log.response,
+                timestamp: log.created_at,
+                tokenUsage: log.token_usage,
+                qualityScores: log.quality_scores,
                 parentActionId: actionId,
               },
               nextNodes: [],
             })
-
-            // Connect action to response
-            auditEdges.push({ source: actionId, target: responseId })
+            agentEdges.push({ source: actionId, target: responseId })
           }
+        })
+      }
 
-          // Create evaluation node if evaluation exists
-          if (log.details?.evaluation_score) {
-            const evalId = `eval_${log.id || index}`
-            auditNodes.push({
-              id: evalId,
-              name: `Evaluation ${index + 1}`,
-              type: "agent_evaluation",
-              path: ["audit", "evaluations", log.action_type || "unknown"],
-              metadata: {
-                agentId: log.agent_id,
-                evaluationScore: log.details.evaluation_score,
-                timestamp: log.timestamp,
-                parentActionId: actionId,
-              },
-              nextNodes: [],
-            })
+      // Process activity stream
+      if (Array.isArray(activityData)) {
+        activityData.forEach((activity: any, index: number) => {
+          const activityId = `activity_${activity.id}`
+          agentNodes.push({
+            id: activityId,
+            name: `${activity.activity_type || "Activity"} ${index + 1}`,
+            type: "agent_action",
+            path: ["activity", activity.activity_type || "unknown", activity.agent_id || "unknown"],
+            metadata: {
+              agentId: activity.agent_id,
+              activityType: activity.activity_type,
+              status: activity.status,
+              duration: activity.duration_ms,
+              timestamp: activity.timestamp,
+              lineageId: activity.lineage_id,
+              activityData: activity.activity_data,
+            },
+            nextNodes: [],
+          })
+        })
+      }
 
-            // Connect response to evaluation (or action if no response)
-            const sourceId = log.details?.response ? `response_${log.id || index}` : actionId
-            auditEdges.push({ source: sourceId, target: evalId })
+      // Process thought process logs
+      if (Array.isArray(thoughtData)) {
+        thoughtData.forEach((thought: any, index: number) => {
+          const thoughtId = `thought_${thought.id}`
+          agentNodes.push({
+            id: thoughtId,
+            name: `${thought.thought_type || "Thought"} ${index + 1}`,
+            type: "agent_evaluation",
+            path: ["thoughts", thought.thought_type || "unknown", thought.agent_id || "unknown"],
+            metadata: {
+              agentId: thought.agent_id,
+              thoughtType: thought.thought_type,
+              thoughtContent: thought.thought_content,
+              prompt: thought.prompt,
+              timestamp: thought.created_at,
+              processingTime: thought.processing_time_ms,
+              tokensUsed: thought.tokens_used,
+              confidenceScore: thought.confidence_score,
+              modelUsed: thought.model_used,
+              temperature: thought.temperature,
+              reasoningSteps: thought.reasoning_steps,
+              decisionFactors: thought.decision_factors,
+              alternativesConsidered: thought.alternatives_considered,
+              outcomePrediction: thought.outcome_prediction,
+              actualOutcome: thought.actual_outcome,
+              sessionId: thought.session_id,
+              auditHash: thought.audit_block_hash,
+            },
+            nextNodes: [],
+          })
+        })
+      }
+
+      // Process lineage mapping for connections
+      if (Array.isArray(lineageData?.lineageMapping)) {
+        lineageData.lineageMapping.forEach((mapping: any, index: number) => {
+          const mappingId = `lineage_${mapping.id}`
+          agentNodes.push({
+            id: mappingId,
+            name: `${mapping.interaction_type || "Interaction"} ${index + 1}`,
+            type: "agent_action",
+            path: ["lineage", mapping.interaction_type || "unknown", mapping.agent_id || "unknown"],
+            metadata: {
+              agentId: mapping.agent_id,
+              interactionType: mapping.interaction_type,
+              prompt: mapping.prompt,
+              response: mapping.response,
+              timestamp: mapping.created_at,
+              responseTime: mapping.response_time,
+              tokenUsage: mapping.token_usage,
+              toolCalls: mapping.tool_calls,
+              decisions: mapping.decisions,
+              evaluationScores: mapping.evaluation_scores,
+              dbQueries: mapping.db_queries,
+              sessionId: mapping.session_id,
+              parentInteractionId: mapping.parent_interaction_id,
+            },
+            nextNodes: [],
+          })
+
+          // Create connections based on parent_interaction_id
+          if (mapping.parent_interaction_id) {
+            const parentId = `lineage_${mapping.parent_interaction_id}`
+            agentEdges.push({ source: parentId, target: mappingId })
           }
         })
       }
 
       // Combine all nodes and edges
-      const combinedNodes = [...lineageNodes, ...auditNodes]
-      const combinedEdges = [...lineageEdges, ...auditEdges]
+      const allNodes = [...lineageNodes, ...agentNodes]
+      const allEdges = [...lineageEdges, ...agentEdges]
 
-      console.log("[v0] Combined data:", {
-        totalNodes: combinedNodes.length,
-        totalEdges: combinedEdges.length,
-        auditNodes: auditNodes.length,
-        auditEdges: auditEdges.length,
-      })
+      console.log("[v0] Combined nodes:", allNodes.length, "edges:", allEdges.length)
+      console.log("[v0] Sample agent nodes:", agentNodes.slice(0, 3))
 
       setServerData({
-        nodes: combinedNodes,
-        edges: combinedEdges,
+        nodes: allNodes,
+        edges: allEdges,
+        lineageMapping: lineageData?.lineageMapping || [],
       })
-    } catch (e: any) {
-      console.error("[v0] Failed to load lineage and audit data:", e)
-      setError(e?.message || "Failed to load lineage and audit data")
-      setServerData({ nodes: [], edges: [] })
+    } catch (error) {
+      console.error("[v0] Error loading lineage data:", error)
+      setError(error instanceof Error ? error.message : "Failed to load lineage data")
     } finally {
       setLoading(false)
     }

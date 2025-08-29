@@ -544,7 +544,10 @@ function GraphCanvas({
   }, [onApiReady, rf])
 
   const styledNodes = React.useMemo(() => {
-    return nodes.map((n) => {
+    console.log("[v0] GraphCanvas received nodes:", nodes.length)
+    console.log("[v0] Sample nodes:", nodes.slice(0, 3))
+
+    const styled = nodes.map((n) => {
       const data = n.data as { label: string; node: LineageNode }
       const theme = TYPE_THEME[data.node.type]
       const isSelected = selectedId === n.id
@@ -602,7 +605,20 @@ function GraphCanvas({
         },
       } satisfies Node
     })
+
+    console.log("[v0] Styled nodes created:", styled.length)
+    return styled
   }, [nodes, selectedId, highlightSet, dimNonMatches])
+
+  React.useEffect(() => {
+    console.log("[v0] ReactFlow nodes updated:", styledNodes.length)
+    if (styledNodes.length > 0) {
+      // Force ReactFlow to re-render with new nodes
+      setTimeout(() => {
+        rf.fitView({ duration: 350, padding: 0.2 })
+      }, 100)
+    }
+  }, [styledNodes, rf])
 
   return (
     <div ref={graphRef} className="relative h-[520px] rounded-lg border">
@@ -614,6 +630,7 @@ function GraphCanvas({
         nodesDraggable
         elementsSelectable
         fitView
+        fitViewOptions={{ duration: 350, padding: 0.2 }}
         proOptions={{ hideAttribution: true }}
       >
         <MiniMap

@@ -2,13 +2,11 @@
 
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { Search, GitBranch, Activity, Eye, ExternalLink } from "lucide-react"
+import { Search, GitBranch, Activity, ExternalLink } from "lucide-react"
 import { DataModelLineage } from "./data-model-lineage"
-import { AuditLogTable } from "./audit-log-table"
 
 interface AuditLog {
   id: string
@@ -153,101 +151,58 @@ export function IntegratedAuditLineage() {
   }
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Activity className="h-5 w-5" />
-            Integrated Audit & Lineage Dashboard
+    <div className="space-y-6 relative">
+      <DataModelLineage highlightedNode={selectedResourceId} showAuditOverlay={true} auditEvents={filteredEvents} />
+
+      <Card className="absolute top-4 right-4 w-80 max-h-96 z-10">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Activity className="h-4 w-4" />
+            Recent Actions
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <Tabs defaultValue="timeline" className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="timeline">Unified Timeline</TabsTrigger>
-              <TabsTrigger value="lineage">Lineage View</TabsTrigger>
-              <TabsTrigger value="audit">Audit Logs</TabsTrigger>
-            </TabsList>
+        <CardContent className="space-y-3">
+          <div className="relative">
+            <Input
+              placeholder="Search events..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-8 h-8"
+            />
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+          </div>
 
-            <TabsContent value="timeline" className="space-y-4">
-              <div className="flex items-center gap-2">
-                <div className="relative flex-1 max-w-sm">
-                  <Input
-                    placeholder="Search events..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-8"
-                  />
-                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <div className="space-y-2 max-h-64 overflow-y-auto">
+            {filteredEvents.slice(0, 10).map((event) => (
+              <div key={event.id} className="p-2 rounded border bg-card/50 hover:bg-card">
+                <div className="flex items-center gap-2 mb-1">
+                  <Badge variant={event.type === "audit" ? "default" : "secondary"} className="h-4 text-xs">
+                    {event.type === "audit" ? (
+                      <Activity className="h-2 w-2 mr-1" />
+                    ) : (
+                      <GitBranch className="h-2 w-2 mr-1" />
+                    )}
+                    {event.type}
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">
+                    {new Date(event.timestamp).toLocaleTimeString()}
+                  </span>
                 </div>
-                <Button variant="outline" onClick={fetchIntegratedData}>
-                  Refresh
-                </Button>
-              </div>
-
-              <div className="space-y-3 max-h-96 overflow-y-auto">
-                {filteredEvents.map((event) => (
-                  <Card key={event.id} className="p-4">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Badge variant={event.type === "audit" ? "default" : "secondary"}>
-                            {event.type === "audit" ? (
-                              <Activity className="h-3 w-3 mr-1" />
-                            ) : (
-                              <GitBranch className="h-3 w-3 mr-1" />
-                            )}
-                            {event.type}
-                          </Badge>
-                          <span className="text-sm text-muted-foreground">
-                            {new Date(event.timestamp).toLocaleString()}
-                          </span>
-                        </div>
-                        <h4 className="font-medium">{event.title}</h4>
-                        <p className="text-sm text-muted-foreground mt-1">{event.description}</p>
-
-                        {event.relatedNodes.length > 0 && (
-                          <div className="flex items-center gap-2 mt-2">
-                            <span className="text-xs text-muted-foreground">Related:</span>
-                            {event.relatedNodes.map((nodeId) => (
-                              <Button
-                                key={nodeId}
-                                variant="outline"
-                                size="sm"
-                                className="h-6 px-2 text-xs bg-transparent"
-                                onClick={() => handleResourceClick(nodeId)}
-                              >
-                                <ExternalLink className="h-3 w-3 mr-1" />
-                                {nodeId.split("-")[1]?.slice(0, 8)}
-                              </Button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      <Button variant="ghost" size="sm">
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </Card>
-                ))}
-
-                {filteredEvents.length === 0 && (
-                  <div className="text-center py-8 text-muted-foreground">
-                    No events found matching your search criteria.
-                  </div>
+                <p className="text-xs font-medium">{event.title}</p>
+                {event.relatedNodes.length > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-5 px-1 text-xs mt-1"
+                    onClick={() => handleResourceClick(event.relatedNodes[0])}
+                  >
+                    <ExternalLink className="h-2 w-2 mr-1" />
+                    View in lineage
+                  </Button>
                 )}
               </div>
-            </TabsContent>
-
-            <TabsContent value="lineage">
-              <DataModelLineage highlightedNode={selectedResourceId} />
-            </TabsContent>
-
-            <TabsContent value="audit">
-              <AuditLogTable />
-            </TabsContent>
-          </Tabs>
+            ))}
+          </div>
         </CardContent>
       </Card>
     </div>

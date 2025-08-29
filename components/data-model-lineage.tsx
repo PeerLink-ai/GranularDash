@@ -60,37 +60,17 @@ export interface DataModelLineageProps {
   onOpenTransformationSteps?: () => void
   onOpenModelVersionTracking?: () => void
   highlightedNode?: string | null
-}
-
-export interface LineageNode {
-  id: string
-  name: string
-  type:
-    | "agent"
-    | "model"
-    | "deployment"
-    | "evaluation"
-    | "dataset"
-    | "transformation"
-    | "integration"
-    | "user"
-    | "organization"
-  path: string[]
-  metadata: {
-    sourceFile?: string
-    schema?: string
-    creationDate?: string
-    owner?: string
-    status?: string
-    accuracy?: string
-    version?: string
-    description?: string
-    provider?: string
-    endpoint?: string
-    cost?: string
-    performance?: string
-  }
-  nextNodes?: string[]
+  showAuditOverlay?: boolean
+  auditEvents?: Array<{
+    id: string
+    type: "audit" | "lineage"
+    timestamp: string
+    title: string
+    description: string
+    resourceType: string
+    resourceId?: string
+    relatedNodes: string[]
+  }>
 }
 
 const TYPE_THEME: Record<LineageNode["type"], { bg: string; border: string; text: string; accent: string }> = {
@@ -558,6 +538,8 @@ export function DataModelLineage({
   onOpenTransformationSteps,
   onOpenModelVersionTracking,
   highlightedNode,
+  showAuditOverlay = false,
+  auditEvents = [],
 }: DataModelLineageProps) {
   const [serverData, setServerData] = React.useState<{
     nodes: LineageNode[]
@@ -967,4 +949,35 @@ export function DataModelLineage({
       </Card>
     </ReactFlowProvider>
   )
+}
+
+interface LineageNode {
+  id: string
+  name: string
+  type:
+    | "agent"
+    | "model"
+    | "deployment"
+    | "evaluation"
+    | "dataset"
+    | "transformation"
+    | "integration"
+    | "user"
+    | "organization"
+  path: string[]
+  metadata: {
+    sourceFile?: string
+    schema?: string
+    creationDate?: string
+    owner?: string
+    status?: string
+    accuracy?: string
+    version?: string
+    description?: string
+    provider?: string
+    endpoint?: string
+    cost?: string
+    performance?: string
+  }
+  nextNodes?: string[]
 }

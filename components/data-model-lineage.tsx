@@ -23,6 +23,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Badge } from "@/components/ui/badge"
 import {
   Download,
   FileJson,
@@ -37,6 +38,14 @@ import {
   ZoomOut,
   BadgeCheck,
   RefreshCw,
+  Bot,
+  Brain,
+  Database,
+  Zap,
+  Activity,
+  Clock,
+  User,
+  Building,
 } from "lucide-react"
 
 import "reactflow/dist/style.css"
@@ -72,6 +81,9 @@ export interface LineageNode {
     | "integration"
     | "user"
     | "organization"
+    | "agent_action"
+    | "agent_response"
+    | "agent_evaluation"
   path: string[]
   metadata: {
     sourceFile?: string
@@ -86,64 +98,109 @@ export interface LineageNode {
     endpoint?: string
     cost?: string
     performance?: string
+    agentId?: string
+    actionType?: string
+    prompt?: string
+    response?: string
+    tokenUsage?: number
+    evaluationScore?: number
+    parentActionId?: string
+    timestamp?: string
+    duration?: number
+    model?: string
+    temperature?: number
+    maxTokens?: number
   }
   nextNodes?: string[]
 }
 
-const TYPE_THEME: Record<LineageNode["type"], { bg: string; border: string; text: string; accent: string }> = {
+const TYPE_THEME: Record<
+  LineageNode["type"],
+  { bg: string; border: string; text: string; accent: string; icon: React.ComponentType<any> }
+> = {
   agent: {
     bg: "bg-blue-50 dark:bg-blue-950/40",
     border: "border-blue-200 dark:border-blue-900",
     text: "text-blue-800 dark:text-blue-200",
     accent: "text-blue-500",
+    icon: Bot,
+  },
+  agent_action: {
+    bg: "bg-cyan-50 dark:bg-cyan-950/40",
+    border: "border-cyan-200 dark:border-cyan-900",
+    text: "text-cyan-800 dark:text-cyan-200",
+    accent: "text-cyan-500",
+    icon: Zap,
+  },
+  agent_response: {
+    bg: "bg-teal-50 dark:bg-teal-950/40",
+    border: "border-teal-200 dark:border-teal-900",
+    text: "text-teal-800 dark:text-teal-200",
+    accent: "text-teal-500",
+    icon: Activity,
+  },
+  agent_evaluation: {
+    bg: "bg-indigo-50 dark:bg-indigo-950/40",
+    border: "border-indigo-200 dark:border-indigo-900",
+    text: "text-indigo-800 dark:text-indigo-200",
+    accent: "text-indigo-500",
+    icon: BadgeCheck,
   },
   model: {
     bg: "bg-fuchsia-50 dark:bg-fuchsia-950/40",
     border: "border-fuchsia-200 dark:border-fuchsia-900",
     text: "text-fuchsia-800 dark:text-fuchsia-200",
     accent: "text-fuchsia-500",
+    icon: Brain,
   },
   deployment: {
     bg: "bg-green-50 dark:bg-green-950/40",
     border: "border-green-200 dark:border-green-900",
     text: "text-green-800 dark:text-green-200",
     accent: "text-green-500",
+    icon: GitBranch,
   },
   evaluation: {
     bg: "bg-orange-50 dark:bg-orange-950/40",
     border: "border-orange-200 dark:border-orange-900",
     text: "text-orange-800 dark:text-orange-200",
     accent: "text-orange-500",
+    icon: BadgeCheck,
   },
   dataset: {
     bg: "bg-emerald-50 dark:bg-emerald-950/40",
     border: "border-emerald-200 dark:border-emerald-900",
     text: "text-emerald-800 dark:text-emerald-200",
     accent: "text-emerald-500",
+    icon: Database,
   },
   transformation: {
     bg: "bg-amber-50 dark:bg-amber-950/40",
     border: "border-amber-200 dark:border-amber-900",
     text: "text-amber-800 dark:text-amber-200",
     accent: "text-amber-500",
+    icon: Zap,
   },
   integration: {
     bg: "bg-purple-50 dark:bg-purple-950/40",
     border: "border-purple-200 dark:border-purple-900",
     text: "text-purple-800 dark:text-purple-200",
     accent: "text-purple-500",
+    icon: GitBranch,
   },
   user: {
     bg: "bg-slate-50 dark:bg-slate-900/60",
     border: "border-slate-200 dark:border-slate-800",
     text: "text-slate-800 dark:text-slate-200",
     accent: "text-slate-500",
+    icon: User,
   },
   organization: {
     bg: "bg-gray-50 dark:bg-gray-900/60",
     border: "border-gray-200 dark:border-gray-800",
     text: "text-gray-800 dark:text-gray-200",
     accent: "text-gray-500",
+    icon: Building,
   },
 }
 
@@ -279,6 +336,9 @@ function MetricsBar({ data }: { data: LineageNode[] }) {
     const safeData = Array.isArray(data) ? data : []
     const c: Record<LineageNode["type"], number> = {
       agent: 0,
+      agent_action: 0,
+      agent_response: 0,
+      agent_evaluation: 0,
       model: 0,
       deployment: 0,
       evaluation: 0,
@@ -294,12 +354,12 @@ function MetricsBar({ data }: { data: LineageNode[] }) {
 
   const items: { label: string; key: LineageNode["type"]; value: number }[] = [
     { label: "Agents", key: "agent", value: counts.agent },
+    { label: "Actions", key: "agent_action", value: counts.agent_action },
+    { label: "Responses", key: "agent_response", value: counts.agent_response },
+    { label: "Evaluations", key: "agent_evaluation", value: counts.agent_evaluation },
     { label: "Models", key: "model", value: counts.model },
     { label: "Deployments", key: "deployment", value: counts.deployment },
-    { label: "Evaluations", key: "evaluation", value: counts.evaluation },
     { label: "Datasets", key: "dataset", value: counts.dataset },
-    { label: "Transformations", key: "transformation", value: counts.transformation },
-    { label: "Integrations", key: "integration", value: counts.integration },
   ]
 
   return (
@@ -307,7 +367,10 @@ function MetricsBar({ data }: { data: LineageNode[] }) {
       {items.map((it) => (
         <Card key={it.key} className={`${TYPE_THEME[it.key].bg} ${TYPE_THEME[it.key].border}`}>
           <CardHeader className="py-3">
-            <CardTitle className={`text-sm ${TYPE_THEME[it.key].text}`}>{it.label}</CardTitle>
+            <CardTitle className={`text-sm ${TYPE_THEME[it.key].text} flex items-center gap-2`}>
+              {React.createElement(TYPE_THEME[it.key].icon, { className: "h-4 w-4" })}
+              {it.label}
+            </CardTitle>
             <CardDescription className="text-xl font-semibold text-foreground">{it.value}</CardDescription>
           </CardHeader>
         </Card>
@@ -341,7 +404,7 @@ function Toolbar({
         <div className="relative flex-1">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search by name, type, provider, status, or description..."
+            placeholder="Search agents, actions, models, datasets, or any metadata..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-8"
@@ -360,6 +423,9 @@ function Toolbar({
             {(
               [
                 "agent",
+                "agent_action",
+                "agent_response",
+                "agent_evaluation",
                 "model",
                 "deployment",
                 "evaluation",
@@ -375,8 +441,9 @@ function Toolbar({
                     onCheckedChange={(v) => setTypeFilter({ ...typeFilter, [t]: Boolean(v) })}
                     id={`type-${t}`}
                   />
+                  {React.createElement(TYPE_THEME[t].icon, { className: "h-4 w-4" })}
                   <label htmlFor={`type-${t}`} className="text-sm capitalize cursor-pointer">
-                    {t}
+                    {t.replace("_", " ")}
                   </label>
                 </div>
               </DropdownMenuItem>
@@ -458,6 +525,8 @@ function GraphCanvas({
       const theme = TYPE_THEME[data.node.type]
       const isSelected = selectedId === n.id
       const shouldDim = dimNonMatches && highlightSet && !highlightSet.has(n.id)
+      const IconComponent = theme.icon
+
       return {
         ...n,
         style: {
@@ -469,17 +538,41 @@ function GraphCanvas({
         data: {
           ...n.data,
           label: (
-            <div className={`flex flex-col gap-1 rounded-md border ${theme.border} ${theme.bg}`}>
-              <div className="px-3 pt-2 font-medium leading-none text-sm">{data.node.name}</div>
-              <div className="px-3 pb-2 text-xs text-muted-foreground flex items-center gap-2">
-                <GitBranch className={`h-3.5 w-3.5 ${theme.accent}`} />
-                <span className="capitalize">{data.node.type}</span>
+            <div className={`flex flex-col gap-2 rounded-md border ${theme.border} ${theme.bg} p-3`}>
+              <div className="flex items-center gap-2">
+                <IconComponent className={`h-4 w-4 ${theme.accent}`} />
+                <div className="font-medium leading-none text-sm truncate">{data.node.name}</div>
                 {data.node.metadata.version && (
-                  <span className="ml-auto text-[10px] bg-muted px-1.5 py-0.5 rounded">
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0.5">
                     v{data.node.metadata.version}
-                  </span>
+                  </Badge>
                 )}
               </div>
+
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span className="capitalize">{data.node.type.replace("_", " ")}</span>
+                {data.node.metadata.timestamp && (
+                  <div className="flex items-center gap-1">
+                    <Clock className="h-3 w-3" />
+                    <span>{new Date(data.node.metadata.timestamp).toLocaleTimeString()}</span>
+                  </div>
+                )}
+              </div>
+
+              {(data.node.type === "agent_action" || data.node.type === "agent_response") && (
+                <div className="flex items-center gap-2 text-xs">
+                  {data.node.metadata.tokenUsage && (
+                    <Badge variant="outline" className="text-[10px]">
+                      {data.node.metadata.tokenUsage} tokens
+                    </Badge>
+                  )}
+                  {data.node.metadata.evaluationScore && (
+                    <Badge variant="outline" className="text-[10px]">
+                      Score: {data.node.metadata.evaluationScore}
+                    </Badge>
+                  )}
+                </div>
+              )}
             </div>
           ),
         },
@@ -569,6 +662,9 @@ export function DataModelLineage({
   const debouncedSearch = useDebounced(search)
   const [typeFilter, setTypeFilter] = React.useState<Record<LineageNode["type"], boolean>>({
     agent: true,
+    agent_action: true,
+    agent_response: true,
+    agent_evaluation: true,
     model: true,
     deployment: true,
     evaluation: true,
@@ -691,29 +787,118 @@ export function DataModelLineage({
   const breadcrumbSegments = Array.isArray(selected?.path) ? selected.path : []
 
   const loadLineage = async () => {
-    console.log("[v0] Starting to load lineage from API...")
+    console.log("[v0] Starting to load lineage and agent actions from APIs...")
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch("/api/lineage", { cache: "no-store" })
-      console.log("[v0] API response status:", res.status)
-      const data = await res.json()
-      console.log("[v0] Raw API response:", data)
+      // Fetch both lineage data and audit logs
+      const [lineageRes, auditRes] = await Promise.all([
+        fetch("/api/lineage", { cache: "no-store" }),
+        fetch("/api/audit-logs", { cache: "no-store" }),
+      ])
 
-      if (data && Array.isArray(data.nodes) && Array.isArray(data.edges)) {
-        console.log("[v0] Valid lineage data received:", {
-          nodeCount: data.nodes.length,
-          edgeCount: data.edges.length,
-          sampleNodes: data.nodes.slice(0, 2),
+      console.log("[v0] API response statuses:", { lineage: lineageRes.status, audit: auditRes.status })
+
+      const [lineageData, auditData] = await Promise.all([lineageRes.json(), auditRes.json()])
+
+      console.log("[v0] Raw API responses:", { lineageData, auditData })
+
+      // Combine lineage nodes with agent action nodes from audit logs
+      const lineageNodes = Array.isArray(lineageData?.nodes) ? lineageData.nodes : []
+      const lineageEdges = Array.isArray(lineageData?.edges) ? lineageData.edges : []
+
+      // Transform audit logs into agent action nodes
+      const auditNodes: LineageNode[] = []
+      const auditEdges: { source: string; target: string }[] = []
+
+      if (Array.isArray(auditData)) {
+        auditData.forEach((log: any, index: number) => {
+          // Create agent action node
+          const actionId = `action_${log.id || index}`
+          auditNodes.push({
+            id: actionId,
+            name: log.action_type || `Action ${index + 1}`,
+            type: "agent_action",
+            path: ["audit", "actions", log.action_type || "unknown"],
+            metadata: {
+              agentId: log.agent_id,
+              actionType: log.action_type,
+              prompt: log.details?.prompt,
+              timestamp: log.timestamp,
+              duration: log.details?.duration,
+              model: log.details?.model,
+              status: log.details?.status || "completed",
+              tokenUsage: log.details?.token_usage,
+              description: log.details?.description,
+            },
+            nextNodes: [],
+          })
+
+          // Create response node if response exists
+          if (log.details?.response) {
+            const responseId = `response_${log.id || index}`
+            auditNodes.push({
+              id: responseId,
+              name: `Response ${index + 1}`,
+              type: "agent_response",
+              path: ["audit", "responses", log.action_type || "unknown"],
+              metadata: {
+                agentId: log.agent_id,
+                response: log.details.response,
+                timestamp: log.timestamp,
+                tokenUsage: log.details?.token_usage,
+                evaluationScore: log.details?.evaluation_score,
+                parentActionId: actionId,
+              },
+              nextNodes: [],
+            })
+
+            // Connect action to response
+            auditEdges.push({ source: actionId, target: responseId })
+          }
+
+          // Create evaluation node if evaluation exists
+          if (log.details?.evaluation_score) {
+            const evalId = `eval_${log.id || index}`
+            auditNodes.push({
+              id: evalId,
+              name: `Evaluation ${index + 1}`,
+              type: "agent_evaluation",
+              path: ["audit", "evaluations", log.action_type || "unknown"],
+              metadata: {
+                agentId: log.agent_id,
+                evaluationScore: log.details.evaluation_score,
+                timestamp: log.timestamp,
+                parentActionId: actionId,
+              },
+              nextNodes: [],
+            })
+
+            // Connect response to evaluation (or action if no response)
+            const sourceId = log.details?.response ? `response_${log.id || index}` : actionId
+            auditEdges.push({ source: sourceId, target: evalId })
+          }
         })
-        setServerData(data)
-      } else {
-        console.log("[v0] Invalid lineage data structure, using empty state")
-        setServerData({ nodes: [], edges: [] })
       }
+
+      // Combine all nodes and edges
+      const combinedNodes = [...lineageNodes, ...auditNodes]
+      const combinedEdges = [...lineageEdges, ...auditEdges]
+
+      console.log("[v0] Combined data:", {
+        totalNodes: combinedNodes.length,
+        totalEdges: combinedEdges.length,
+        auditNodes: auditNodes.length,
+        auditEdges: auditEdges.length,
+      })
+
+      setServerData({
+        nodes: combinedNodes,
+        edges: combinedEdges,
+      })
     } catch (e: any) {
-      console.error("[v0] Failed to load lineage:", e)
-      setError(e?.message || "Failed to load lineage")
+      console.error("[v0] Failed to load lineage and audit data:", e)
+      setError(e?.message || "Failed to load lineage and audit data")
       setServerData({ nodes: [], edges: [] })
     } finally {
       setLoading(false)
@@ -737,10 +922,10 @@ export function DataModelLineage({
         <CardHeader className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <CardTitle className="text-2xl font-bold text-foreground">Real-Time Data & Model Lineage</CardTitle>
+              <CardTitle className="text-2xl font-bold text-foreground">Agent Actions & Data Lineage</CardTitle>
               <CardDescription className="text-muted-foreground">
-                Visualize your complete AI pipeline: agents, models, deployments, evaluations, and data flows from your
-                live system.
+                Visualize your complete AI pipeline: live agent actions, models, deployments, evaluations, and data
+                flows with real-time audit tracking.
               </CardDescription>
               <div className="mt-2 text-xs text-muted-foreground bg-muted/50 p-2 rounded">
                 Debug: Server({debugInfo.serverDataNodes}n, {debugInfo.serverDataEdges}e) → Raw({debugInfo.rawNodes}) →
@@ -801,6 +986,9 @@ export function DataModelLineage({
               setSearch("")
               setTypeFilter({
                 agent: true,
+                agent_action: true,
+                agent_response: true,
+                agent_evaluation: true,
                 model: true,
                 deployment: true,
                 evaluation: true,
@@ -878,7 +1066,8 @@ export function DataModelLineage({
               />
 
               <p className="text-xs text-muted-foreground">
-                Tip: Drag to pan, scroll to zoom, and drag nodes to adjust layout.
+                Tip: Drag to pan, scroll to zoom, and drag nodes to adjust layout. Agent actions show real-time audit
+                data.
               </p>
             </div>
 
@@ -886,7 +1075,7 @@ export function DataModelLineage({
               <Card className="h-full">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-lg">Node Details</CardTitle>
-                  <CardDescription>Inspect metadata and take actions on the selected node.</CardDescription>
+                  <CardDescription>Inspect metadata and agent action details.</CardDescription>
                 </CardHeader>
                 <CardContent>
                   {selected ? (
@@ -901,7 +1090,7 @@ export function DataModelLineage({
                       </div>
 
                       <Tabs defaultValue="details" className="w-full">
-                        <TabsList className="grid grid-cols-2">
+                        <TabsList className="grid grid-cols-3">
                           <TabsTrigger value="details" className="gap-2">
                             <Info className="h-4 w-4" />
                             Details
@@ -910,6 +1099,12 @@ export function DataModelLineage({
                             <GitBranch className="h-4 w-4" />
                             Path
                           </TabsTrigger>
+                          {selected.type.startsWith("agent") && selected.metadata.agentId && (
+                            <TabsTrigger value="agent" className="gap-2">
+                              <Bot className="h-4 w-4" />
+                              Agent
+                            </TabsTrigger>
+                          )}
                         </TabsList>
                         <TabsContent value="details" className="mt-3">
                           <div className="space-y-2 text-sm">
@@ -919,7 +1114,13 @@ export function DataModelLineage({
                                   <div className="text-muted-foreground">
                                     {key.replace(/([A-Z])/g, " $1").replace(/^./, (s) => s.toUpperCase())}
                                   </div>
-                                  <div className="font-medium break-words">{value}</div>
+                                  <div className="font-medium break-words">
+                                    {key === "prompt" || key === "response"
+                                      ? String(value).length > 100
+                                        ? `${String(value).substring(0, 100)}...`
+                                        : String(value)
+                                      : String(value)}
+                                  </div>
                                 </div>
                               ) : null,
                             )}
@@ -934,6 +1135,47 @@ export function DataModelLineage({
                             ))}
                           </ol>
                         </TabsContent>
+                        {selected.type.startsWith("agent") && selected.metadata.agentId && (
+                          <TabsContent value="agent" className="mt-3">
+                            <div className="space-y-3 text-sm">
+                              <div className="flex items-center gap-2">
+                                <Bot className="h-4 w-4 text-blue-500" />
+                                <span className="font-medium">Agent ID:</span>
+                                <code className="text-xs bg-muted px-1 rounded">{selected.metadata.agentId}</code>
+                              </div>
+
+                              {selected.metadata.prompt && (
+                                <div>
+                                  <div className="text-muted-foreground mb-1">Prompt:</div>
+                                  <div className="bg-muted/50 p-2 rounded text-xs max-h-32 overflow-y-auto">
+                                    {selected.metadata.prompt}
+                                  </div>
+                                </div>
+                              )}
+
+                              {selected.metadata.response && (
+                                <div>
+                                  <div className="text-muted-foreground mb-1">Response:</div>
+                                  <div className="bg-muted/50 p-2 rounded text-xs max-h-32 overflow-y-auto">
+                                    {selected.metadata.response}
+                                  </div>
+                                </div>
+                              )}
+
+                              <div className="flex flex-wrap gap-2">
+                                {selected.metadata.tokenUsage && (
+                                  <Badge variant="outline">{selected.metadata.tokenUsage} tokens</Badge>
+                                )}
+                                {selected.metadata.evaluationScore && (
+                                  <Badge variant="outline">Score: {selected.metadata.evaluationScore}</Badge>
+                                )}
+                                {selected.metadata.duration && (
+                                  <Badge variant="outline">{selected.metadata.duration}ms</Badge>
+                                )}
+                              </div>
+                            </div>
+                          </TabsContent>
+                        )}
                       </Tabs>
 
                       <Separator />
@@ -966,7 +1208,7 @@ export function DataModelLineage({
                     </div>
                   ) : (
                     <div className="text-muted-foreground text-sm">
-                      Select a node from the graph to view its details.
+                      Select a node from the graph to view its details and agent actions.
                     </div>
                   )}
                 </CardContent>

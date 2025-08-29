@@ -20,7 +20,6 @@ import {
   Menu,
   ChevronDown,
   CreditCard,
-  Network,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -63,7 +62,6 @@ export function AppSidebar() {
         { title: "Agent Management", href: "/agent-management", icon: Building2 },
         { title: "Training & Simulation", href: "/training-simulation", icon: Video },
         { title: "Data & Model Lineage", href: "/data-model-lineage", icon: GitFork },
-        { title: "Agent Lineage", href: "/agent-lineage", icon: Network },
       ],
     },
     {

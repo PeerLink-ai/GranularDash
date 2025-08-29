@@ -839,17 +839,15 @@ export function DataModelLineage({
     return layoutResult
   }, [filteredData])
 
-  const [nodes, , onNodesChange] = useNodesState(rfNodesBase)
+  const [nodes, setNodes, onNodesChange] = useNodesState(rfNodesBase)
   const [edges, , onEdgesChange] = useEdgesState(
     edgesRaw.filter((e) => rfNodesBase.find((n) => n.id === e.source) && rfNodesBase.find((n) => n.id === e.target)),
   )
 
   React.useEffect(() => {
-    console.log("[v0] ReactFlow nodes updated:", nodes.length)
-    if (nodes.length > 0) {
-      console.log("[v0] Sample ReactFlow nodes:", nodes.slice(0, 3))
-    }
-  }, [nodes])
+    console.log("[v0] Updating ReactFlow nodes:", rfNodesBase.length)
+    setNodes(rfNodesBase)
+  }, [rfNodesBase, setNodes])
 
   const { out, incoming } = React.useMemo(() => buildAdjacency(edges), [edges])
 

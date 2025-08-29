@@ -304,6 +304,48 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       keywords: ["hotkeys", "commands", "keys"],
       shortcut: "⌘+/",
     },
+
+    // Playground Automation Commands
+    {
+      id: "playground-run-script",
+      label: "Run Automation Script",
+      description: "Execute a predefined automation script",
+      icon: Play,
+      action: async () => {
+        try {
+          await fetch("/api/playground/run-script", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ script: "automation-script" }),
+          })
+          toast({ title: "Success", description: "Automation script executed successfully" })
+        } catch (error) {
+          toast({ title: "Error", description: "Failed to execute automation script", variant: "destructive" })
+        }
+      },
+      category: "Playground Automation",
+      keywords: ["script", "run", "execute"],
+    },
+    {
+      id: "playground-stop-script",
+      label: "Stop Automation Script",
+      description: "Terminate a running automation script",
+      icon: Pause,
+      action: async () => {
+        try {
+          await fetch("/api/playground/stop-script", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ script: "automation-script" }),
+          })
+          toast({ title: "Success", description: "Automation script stopped successfully" })
+        } catch (error) {
+          toast({ title: "Error", description: "Failed to stop automation script", variant: "destructive" })
+        }
+      },
+      category: "Playground Automation",
+      keywords: ["script", "stop", "terminate"],
+    },
   ]
 
   const filteredCommands = commands.filter((command) => {
@@ -348,7 +390,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl p-0 gap-0">
+      <DialogContent className="max-w-2xl p-0 gap-0 z-[100]" onPointerDownOutside={(e) => e.preventDefault()}>
         <Command className="rounded-lg border-0 shadow-lg">
           <div className="flex items-center border-b px-3">
             <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />

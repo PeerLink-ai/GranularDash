@@ -649,11 +649,24 @@ export function DataModelLineage({
     })
   }, [raw, activeTypes, debouncedSearch])
 
-  const rfNodesBase = React.useMemo(() => layoutNodes(filteredData), [filteredData])
-  const [nodes, , onNodesChange] = useNodesState(rfNodesBase)
-  const [edges, , onEdgesChange] = useEdgesState(
-    edgesRaw.filter((e) => rfNodesBase.find((n) => n.id === e.source) && rfNodesBase.find((n) => n.id === e.target)),
-  )
+  const [nodes, , onNodesChange] = useNodesState([])
+  const [edges, , onEdgesChange] = useEdgesState([])
+
+  React.useEffect(() => {
+    console.log("[v0] Updating ReactFlow nodes from filtered data:", filteredData.length)
+    const newNodes = layoutNodes(filteredData)
+    console.log("[v0] Generated ReactFlow nodes:", newNodes.length)
+    onNodesChange([{ type: "reset", items: newNodes }])
+  }, [filteredData, onNodesChange])
+
+  React.useEffect(() => {
+    console.log("[v0] Updating ReactFlow edges from raw data")
+    const newEdges = buildEdges(raw).filter(
+      (e) => filteredData.find((n) => n.id === e.source) && filteredData.find((n) => n.id === e.target),
+    )
+    console.log("[v0] Generated ReactFlow edges:", newEdges.length)
+    onEdgesChange([{ type: "reset", items: newEdges }])
+  }, [raw, filteredData, onEdgesChange])
 
   const { out, incoming } = React.useMemo(() => buildAdjacency(edges), [edges])
 

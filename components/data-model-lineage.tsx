@@ -155,8 +155,9 @@ function buildEdges(data: LineageNode[]): Edge[] {
   const ids = new Set(data.map((n) => n.id))
   const edges: Edge[] = []
   for (const n of data) {
-    for (const nxt of n.nextNodes ?? []) {
-      if (!ids.has(nxt)) continue
+    const nextNodes = Array.isArray(n.nextNodes) ? n.nextNodes : []
+    for (const nxt of nextNodes) {
+      if (!nxt || typeof nxt !== "string" || !ids.has(nxt)) continue
       edges.push({
         id: `${n.id}->${nxt}`,
         source: n.id,
@@ -590,7 +591,7 @@ export function DataModelLineage({
       const ids = new Set(serverData.nodes.map((n) => n.id))
       const nextMap = new Map<string, string[]>()
 
-      const safeEdges = Array.isArray(serverData.edges) ? serverData.edges : []
+      const safeEdges = Array.isArray(serverData.edges) ? serverData.edges.filter((e) => e && e.source && e.target) : []
       for (const e of safeEdges) {
         if (!ids.has(e.source) || !ids.has(e.target)) continue
         const arr = nextMap.get(e.source) || []
@@ -662,7 +663,12 @@ export function DataModelLineage({
   React.useEffect(() => {
     console.log("[v0] Updating ReactFlow edges from raw data")
     const newEdges = buildEdges(raw).filter(
-      (e) => filteredData.find((n) => n.id === e.source) && filteredData.find((n) => n.id === e.target),
+      (e) =>
+        e &&
+        e.source &&
+        e.target &&
+        filteredData.find((n) => n.id === e.source) &&
+        filteredData.find((n) => n.id === e.target),
     )
     console.log("[v0] Generated ReactFlow edges:", newEdges.length)
     onEdgesChange([{ type: "reset", items: newEdges }])

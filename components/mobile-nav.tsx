@@ -20,6 +20,7 @@ import {
   Bug,
   BookOpen,
   Activity,
+  Network,
 } from "lucide-react"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Separator } from "@/components/ui/separator"
@@ -40,6 +41,7 @@ const MORE_GROUPS: { title: string; items: Item[] }[] = [
     items: [
       { href: "/projects", label: "Projects", icon: FolderKanban },
       { href: "/data-model-lineage", label: "Lineage", icon: Layers },
+      { href: "/agent-lineage", label: "Agent Lineage", icon: Network },
       { href: "/audit-logs", label: "Audit Logs", icon: FileText },
     ],
   },

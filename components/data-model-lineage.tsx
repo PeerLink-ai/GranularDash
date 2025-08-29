@@ -155,9 +155,10 @@ function buildEdges(data: LineageNode[]): Edge[] {
   const ids = new Set(data.map((n) => n.id))
   const edges: Edge[] = []
   for (const n of data) {
-    const nextNodes = Array.isArray(n.nextNodes) ? n.nextNodes : []
+    if (!n || !n.nextNodes || !Array.isArray(n.nextNodes)) continue
+    const nextNodes = n.nextNodes.filter((nxt) => nxt && typeof nxt === "string")
     for (const nxt of nextNodes) {
-      if (!nxt || typeof nxt !== "string" || !ids.has(nxt)) continue
+      if (!ids.has(nxt)) continue
       edges.push({
         id: `${n.id}->${nxt}`,
         source: n.id,
@@ -591,7 +592,21 @@ export function DataModelLineage({
       const ids = new Set(serverData.nodes.map((n) => n.id))
       const nextMap = new Map<string, string[]>()
 
-      const safeEdges = Array.isArray(serverData.edges) ? serverData.edges.filter((e) => e && e.source && e.target) : []
+      const safeEdges = Array.isArray(serverData.edges)
+        ? serverData.edges.filter((e) => {
+            return (
+              e &&
+              typeof e === "object" &&
+              typeof e.source === "string" &&
+              typeof e.target === "string" &&
+              e.source.length > 0 &&
+              e.target.length > 0
+            )
+          })
+        : []
+
+      console.log("[v0] Safe edges after filtering:", safeEdges.length)
+
       for (const e of safeEdges) {
         if (!ids.has(e.source) || !ids.has(e.target)) continue
         const arr = nextMap.get(e.source) || []
@@ -599,12 +614,14 @@ export function DataModelLineage({
         nextMap.set(e.source, arr)
       }
 
-      const normalized = serverData.nodes.map((n) => ({
-        ...n,
-        nextNodes: nextMap.get(n.id) || [],
-        path: Array.isArray(n.path) ? n.path : [],
-        metadata: n.metadata || {},
-      }))
+      const normalized = serverData.nodes
+        .filter((n) => n && typeof n === "object" && typeof n.id === "string")
+        .map((n) => ({
+          ...n,
+          nextNodes: nextMap.get(n.id) || [],
+          path: Array.isArray(n.path) ? n.path : [],
+          metadata: n.metadata || {},
+        }))
       console.log("[v0] Normalized nodes:", normalized.length)
       console.log("[v0] Sample normalized nodes:", normalized.slice(0, 3))
       setRaw(normalized as LineageNode[])
@@ -662,14 +679,13 @@ export function DataModelLineage({
 
   React.useEffect(() => {
     console.log("[v0] Updating ReactFlow edges from raw data")
-    const newEdges = buildEdges(raw).filter(
-      (e) =>
-        e &&
-        e.source &&
-        e.target &&
-        filteredData.find((n) => n.id === e.source) &&
-        filteredData.find((n) => n.id === e.target),
-    )
+    const newEdges = buildEdges(raw).filter((e) => {
+      if (!e || typeof e !== "object") return false
+      if (!e.source || !e.target || typeof e.source !== "string" || typeof e.target !== "string") return false
+      const sourceExists = filteredData.find((n) => n && n.id === e.source)
+      const targetExists = filteredData.find((n) => n && n.id === e.target)
+      return sourceExists && targetExists
+    })
     console.log("[v0] Generated ReactFlow edges:", newEdges.length)
     onEdgesChange([{ type: "reset", items: newEdges }])
   }, [raw, filteredData, onEdgesChange])

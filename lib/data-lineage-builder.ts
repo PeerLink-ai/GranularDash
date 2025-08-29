@@ -46,78 +46,74 @@ export async function buildDataLineage(): Promise<{ nodes: DataLineageNode[]; ed
     const nodes: DataLineageNode[] = []
     const edges: DataLineageEdge[] = []
 
-    // 1. Get Connected Agents
-    const agents = await sql`
-      SELECT 
-        id, name, type, endpoint, status, 
-        created_at, last_activity, user_id
-      FROM connected_agents 
-      WHERE status = 'active'
-      ORDER BY created_at DESC
-      LIMIT 50
-    `
-
-    console.log("[v0] Found agents:", agents.length)
-
-    for (const agent of agents) {
-      nodes.push({
-        id: `agent-${agent.id}`,
-        name: agent.name || `Agent ${agent.id.toString().slice(0, 8)}`,
-        type: "agent",
-        path: ["Agents", agent.type || "Unknown", agent.name || agent.id],
-        metadata: {
-          provider: agent.type,
-          status: agent.status,
-          creationDate: agent.created_at?.toISOString().split("T")[0],
-          endpoint: agent.endpoint,
-          description: `${agent.type} agent`,
-        },
-      })
-    }
-
     const playgroundInteractions = await sql`
       SELECT 
         lm.id, lm.agent_id, lm.prompt, lm.response, lm.token_usage,
         lm.response_time, lm.evaluation_scores, lm.tool_calls, 
-        lm.db_queries, lm.decisions, lm.created_at,
-        ca.name as agent_name, ca.type as agent_type
+        lm.db_queries, lm.decisions, lm.created_at
       FROM lineage_mapping lm
-      LEFT JOIN connected_agents ca ON lm.agent_id = ca.id::text
       ORDER BY lm.created_at DESC
       LIMIT 100
     `
 
     console.log("[v0] Found playground interactions:", playgroundInteractions.length)
 
+    const playgroundAgents = new Set<string>()
     for (const interaction of playgroundInteractions) {
-      // Create playground interaction node
+      if (interaction.agent_id && !playgroundAgents.has(interaction.agent_id)) {
+        playgroundAgents.add(interaction.agent_id)
+
+        nodes.push({
+          id: `agent-${interaction.agent_id}`,
+          name: `Playground Agent ${interaction.agent_id.slice(-8)}`,
+          type: "agent",
+          path: ["Playground", "Agents", interaction.agent_id],
+          metadata: {
+            provider: "playground",
+            status: "active",
+            creationDate: interaction.created_at?.toISOString().split("T")[0],
+            description: `Playground test agent`,
+            version: "playground",
+          },
+        })
+      }
+    }
+
+    for (const interaction of playgroundInteractions) {
+      const truncatedPrompt = interaction.prompt?.substring(0, 60) || "Test Interaction"
+
       nodes.push({
         id: `playground-${interaction.id}`,
-        name: `Playground Test: ${interaction.prompt.substring(0, 50)}...`,
+        name: `🧪 ${truncatedPrompt}${interaction.prompt?.length > 60 ? "..." : ""}`,
         type: "evaluation",
-        path: ["Playground", "Tests", interaction.agent_name || interaction.agent_id],
+        path: ["Playground", "Tests", interaction.agent_id || "Unknown"],
         metadata: {
           status: "completed",
           creationDate: interaction.created_at?.toISOString().split("T")[0],
-          description: `Playground test interaction`,
+          description: `Playground test: ${interaction.prompt}`,
           performance: interaction.response_time ? `${interaction.response_time}ms` : undefined,
-          accuracy: interaction.evaluation_scores?.overall ? `${interaction.evaluation_scores.overall}%` : undefined,
+          accuracy: interaction.evaluation_scores?.overall
+            ? `${Math.round(interaction.evaluation_scores.overall)}%`
+            : undefined,
           version: interaction.token_usage?.total ? `${interaction.token_usage.total} tokens` : undefined,
+          schema: interaction.response?.substring(0, 200),
         },
       })
 
       // Create edge from agent to playground interaction
-      edges.push({
-        source: `agent-${interaction.agent_id}`,
-        target: `playground-${interaction.id}`,
-        relationship: "tested_by",
-        metadata: {
-          type: "playground_test",
-          tokenUsage: interaction.token_usage,
-          responseTime: interaction.response_time,
-          evaluationScores: interaction.evaluation_scores,
-        },
-      })
+      if (interaction.agent_id) {
+        edges.push({
+          source: `agent-${interaction.agent_id}`,
+          target: `playground-${interaction.id}`,
+          relationship: "tested_by",
+          metadata: {
+            type: "playground_test",
+            tokenUsage: interaction.token_usage,
+            responseTime: interaction.response_time,
+            evaluationScores: interaction.evaluation_scores,
+          },
+        })
+      }
 
       if (interaction.tool_calls && Array.isArray(interaction.tool_calls) && interaction.tool_calls.length > 0) {
         for (let i = 0; i < interaction.tool_calls.length; i++) {
@@ -126,14 +122,15 @@ export async function buildDataLineage(): Promise<{ nodes: DataLineageNode[]; ed
 
           nodes.push({
             id: toolNodeId,
-            name: `Tool: ${toolCall.name || "Unknown Tool"}`,
+            name: `🔧 ${toolCall.name || "Tool Call"}`,
             type: "transformation",
             path: ["Tools", "Agent Tools", toolCall.name || "Unknown"],
             metadata: {
               status: "executed",
               creationDate: interaction.created_at?.toISOString().split("T")[0],
-              description: `Tool call: ${toolCall.description || toolCall.name}`,
-              schema: JSON.stringify(toolCall.parameters || {}),
+              description: `Tool: ${toolCall.description || toolCall.name}`,
+              schema: JSON.stringify(toolCall.parameters || {}, null, 2),
+              performance: toolCall.execution_time ? `${toolCall.execution_time}ms` : undefined,
             },
           })
 
@@ -153,14 +150,15 @@ export async function buildDataLineage(): Promise<{ nodes: DataLineageNode[]; ed
 
           nodes.push({
             id: queryNodeId,
-            name: `DB Query: ${dbQuery.table || "Database"}`,
+            name: `🗄️ ${dbQuery.table || "Database Query"}`,
             type: "dataset",
             path: ["Database", "Queries", dbQuery.table || "Unknown"],
             metadata: {
               status: "executed",
               creationDate: interaction.created_at?.toISOString().split("T")[0],
-              description: `Database query: ${dbQuery.operation || "SELECT"}`,
-              schema: dbQuery.query?.substring(0, 100),
+              description: `Query: ${dbQuery.operation || "SELECT"} on ${dbQuery.table}`,
+              schema: dbQuery.query?.substring(0, 200),
+              performance: dbQuery.execution_time ? `${dbQuery.execution_time}ms` : undefined,
             },
           })
 
@@ -180,14 +178,15 @@ export async function buildDataLineage(): Promise<{ nodes: DataLineageNode[]; ed
 
           nodes.push({
             id: decisionNodeId,
-            name: `Decision: ${decision.type || "AI Decision"}`,
+            name: `🧠 ${decision.type || "AI Decision"}`,
             type: "evaluation",
             path: ["Decisions", "AI Reasoning", decision.type || "Unknown"],
             metadata: {
               status: "completed",
               creationDate: interaction.created_at?.toISOString().split("T")[0],
-              description: `AI decision point: ${decision.reasoning?.substring(0, 100)}`,
+              description: `Decision: ${decision.reasoning?.substring(0, 150)}`,
               accuracy: decision.confidence ? `${Math.round(decision.confidence * 100)}%` : undefined,
+              schema: decision.context ? JSON.stringify(decision.context, null, 2) : undefined,
             },
           })
 
@@ -204,55 +203,130 @@ export async function buildDataLineage(): Promise<{ nodes: DataLineageNode[]; ed
     const agentAuditLogs = await sql`
       SELECT 
         al.id, al.user_id, al.action, al.resource_type, al.resource_id,
-        al.details, al.timestamp, al.organization
+        al.details, al.timestamp, al.organization, al.ip_address
       FROM audit_logs al
-      WHERE al.resource_type IN ('AI_AGENT', 'PLAYGROUND', 'AGENT_TEST') 
+      WHERE al.resource_type IN ('AI_AGENT', 'PLAYGROUND', 'AGENT_TEST', 'MODEL', 'DEPLOYMENT') 
         OR al.action LIKE '%AGENT%'
         OR al.action LIKE '%PLAYGROUND%'
+        OR al.action LIKE '%MODEL%'
       ORDER BY al.timestamp DESC
       LIMIT 50
     `
 
     console.log("[v0] Found audit logs:", agentAuditLogs.length)
 
+    const auditGroups = new Map<string, any[]>()
     for (const auditLog of agentAuditLogs) {
-      const auditNodeId = `audit-${auditLog.id}`
+      const actionGroup = auditLog.action.split("_")[0] // GROUP by first part of action
+      if (!auditGroups.has(actionGroup)) {
+        auditGroups.set(actionGroup, [])
+      }
+      auditGroups.get(actionGroup)!.push(auditLog)
+    }
+
+    for (const [actionGroup, logs] of auditGroups) {
+      const groupNodeId = `audit-group-${actionGroup}`
 
       nodes.push({
-        id: auditNodeId,
-        name: `${auditLog.action.replace(/_/g, " ")}: ${auditLog.resource_id || "System"}`,
+        id: groupNodeId,
+        name: `📋 ${actionGroup.replace(/_/g, " ")} Activities (${logs.length})`,
         type: "evaluation",
-        path: ["Audit", "Agent Actions", auditLog.action],
+        path: ["Audit", "Activity Groups", actionGroup],
         metadata: {
           status: "logged",
-          creationDate: auditLog.timestamp?.toISOString().split("T")[0],
-          description: `Audit log: ${auditLog.action}`,
-          owner: auditLog.user_id,
-          schema: auditLog.organization,
+          creationDate: logs[0]?.timestamp?.toISOString().split("T")[0],
+          description: `${logs.length} ${actionGroup.toLowerCase()} activities logged`,
+          owner: logs
+            .map((l) => l.user_id)
+            .filter((v, i, a) => a.indexOf(v) === i)
+            .join(", "),
+          schema: `Recent activities: ${logs
+            .slice(0, 3)
+            .map((l) => l.action)
+            .join(", ")}`,
+          version: `${logs.length} events`,
         },
       })
 
-      if (auditLog.resource_id) {
-        // Check if resource_id matches any agent
-        const matchingAgent = agents.find(
-          (a) => a.id.toString() === auditLog.resource_id || a.name === auditLog.resource_id,
-        )
-        if (matchingAgent) {
-          edges.push({
-            source: `agent-${matchingAgent.id}`,
-            target: auditNodeId,
-            relationship: "generates_audit",
-            metadata: {
-              action: auditLog.action,
-              details: auditLog.details,
-              timestamp: auditLog.timestamp,
-            },
-          })
+      for (const auditLog of logs.slice(0, 5)) {
+        // Show top 5 recent activities
+        const auditNodeId = `audit-${auditLog.id}`
+
+        nodes.push({
+          id: auditNodeId,
+          name: `📝 ${auditLog.action.replace(/_/g, " ")}`,
+          type: "evaluation",
+          path: ["Audit", "Individual Actions", auditLog.action],
+          metadata: {
+            status: "logged",
+            creationDate: auditLog.timestamp?.toISOString().split("T")[0],
+            description: `${auditLog.action}: ${auditLog.resource_type} ${auditLog.resource_id || ""}`,
+            owner: auditLog.user_id,
+            schema: auditLog.organization,
+            endpoint: auditLog.ip_address,
+            version: auditLog.details ? JSON.stringify(auditLog.details).substring(0, 100) : undefined,
+          },
+        })
+
+        edges.push({
+          source: groupNodeId,
+          target: auditNodeId,
+          relationship: "contains_activity",
+          metadata: {
+            action: auditLog.action,
+            details: auditLog.details,
+            timestamp: auditLog.timestamp,
+          },
+        })
+
+        if (auditLog.resource_type === "PLAYGROUND" && auditLog.resource_id) {
+          const relatedPlayground = playgroundInteractions.find((p) => p.id.toString() === auditLog.resource_id)
+          if (relatedPlayground) {
+            edges.push({
+              source: `playground-${relatedPlayground.id}`,
+              target: auditNodeId,
+              relationship: "generates_audit",
+              metadata: {
+                action: auditLog.action,
+                timestamp: auditLog.timestamp,
+              },
+            })
+          }
         }
       }
     }
 
-    // 2. Get AI Models from Registry
+    // Get Connected Agents (real ones from database)
+    const agents = await sql`
+      SELECT 
+        id, name, type, endpoint, status, 
+        created_at, last_activity, user_id
+      FROM connected_agents 
+      WHERE status = 'active'
+      ORDER BY created_at DESC
+      LIMIT 50
+    `
+
+    console.log("[v0] Found connected agents:", agents.length)
+
+    for (const agent of agents) {
+      nodes.push({
+        id: `connected-agent-${agent.id}`,
+        name: `🤖 ${agent.name || `Agent ${agent.id.toString().slice(0, 8)}`}`,
+        type: "agent",
+        path: ["Connected Agents", agent.type || "Unknown", agent.name || agent.id],
+        metadata: {
+          provider: agent.type,
+          status: agent.status,
+          creationDate: agent.created_at?.toISOString().split("T")[0],
+          endpoint: agent.endpoint,
+          description: `Connected ${agent.type} agent`,
+          owner: agent.user_id,
+        },
+      })
+    }
+
+    // Get AI Models from Registry
     const models = await sql`
       SELECT 
         id, model_name, model_version, model_type, framework,
@@ -281,7 +355,7 @@ export async function buildDataLineage(): Promise<{ nodes: DataLineageNode[]; ed
       })
     }
 
-    // 3. Get Model Deployments
+    // Get Model Deployments
     const deployments = await sql`
       SELECT 
         d.id, d.deployment_name, d.status, d.environment,
@@ -319,7 +393,7 @@ export async function buildDataLineage(): Promise<{ nodes: DataLineageNode[]; ed
       }
     }
 
-    // 4. Get Model Evaluations
+    // Get Model Evaluations
     const evaluations = await sql`
       SELECT 
         e.id, e.evaluation_name, e.evaluation_type, e.status,
@@ -356,7 +430,7 @@ export async function buildDataLineage(): Promise<{ nodes: DataLineageNode[]; ed
       }
     }
 
-    // 5. Get Integration Instances (Data Sources)
+    // Get Integration Instances (Data Sources)
     const integrations = await sql`
       SELECT 
         i.id, i.instance_name, i.status, i.created_at,
@@ -388,7 +462,7 @@ export async function buildDataLineage(): Promise<{ nodes: DataLineageNode[]; ed
       })
     }
 
-    // 6. Get Feature Groups (Datasets)
+    // Get Feature Groups (Datasets)
     const featureGroups = await sql`
       SELECT 
         id, group_name, status, created_at, last_updated,
@@ -415,7 +489,7 @@ export async function buildDataLineage(): Promise<{ nodes: DataLineageNode[]; ed
       })
     }
 
-    // 7. Get Data Transformations
+    // Get Data Transformations
     const transformations = await sql`
       SELECT 
         id, transformation_name, transformation_type, is_active,
@@ -451,7 +525,7 @@ export async function buildDataLineage(): Promise<{ nodes: DataLineageNode[]; ed
       }
     }
 
-    // 8. Create relationships between agents and models
+    // Create relationships between agents and models
     const agentModelConfigs = await sql`
       SELECT agent_id, model_id, is_primary, is_active
       FROM agent_model_configs
@@ -460,14 +534,14 @@ export async function buildDataLineage(): Promise<{ nodes: DataLineageNode[]; ed
 
     for (const config of agentModelConfigs) {
       edges.push({
-        source: `agent-${config.agent_id}`,
+        source: `connected-agent-${config.agent_id}`,
         target: `model-${config.model_id}`,
         relationship: "uses_model",
         metadata: { is_primary: config.is_primary },
       })
     }
 
-    // 9. Create model lineage relationships
+    // Create model lineage relationships
     const modelLineage = await sql`
       SELECT model_id, parent_model_id, relationship_type
       FROM model_lineage
@@ -482,7 +556,7 @@ export async function buildDataLineage(): Promise<{ nodes: DataLineageNode[]; ed
       })
     }
 
-    // 10. Add nextNodes to each node based on edges
+    // Add nextNodes to each node based on edges
     const nodeMap = new Map(nodes.map((n) => [n.id, n]))
     for (const edge of edges) {
       const sourceNode = nodeMap.get(edge.source)

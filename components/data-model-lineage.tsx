@@ -584,7 +584,9 @@ export function DataModelLineage({
   }, [])
 
   React.useEffect(() => {
+    console.log("[v0] Frontend received server data:", serverData)
     if (serverData?.nodes && Array.isArray(serverData.nodes) && serverData.nodes.length > 0) {
+      console.log("[v0] Processing", serverData.nodes.length, "nodes and", serverData.edges?.length || 0, "edges")
       const ids = new Set(serverData.nodes.map((n) => n.id))
       const nextMap = new Map<string, string[]>()
 
@@ -602,9 +604,12 @@ export function DataModelLineage({
         path: Array.isArray(n.path) ? n.path : [],
         metadata: n.metadata || {},
       }))
+      console.log("[v0] Normalized nodes:", normalized.length)
+      console.log("[v0] Sample normalized nodes:", normalized.slice(0, 3))
       setRaw(normalized as LineageNode[])
       setSelected(normalized[0] || null)
     } else {
+      console.log("[v0] No valid nodes received, setting empty state")
       setRaw([])
       setSelected(null)
     }
@@ -686,23 +691,45 @@ export function DataModelLineage({
   const breadcrumbSegments = Array.isArray(selected?.path) ? selected.path : []
 
   const loadLineage = async () => {
+    console.log("[v0] Starting to load lineage from API...")
     setLoading(true)
     setError(null)
     try {
       const res = await fetch("/api/lineage", { cache: "no-store" })
+      console.log("[v0] API response status:", res.status)
       const data = await res.json()
+      console.log("[v0] Raw API response:", data)
+
       if (data && Array.isArray(data.nodes) && Array.isArray(data.edges)) {
+        console.log("[v0] Valid lineage data received:", {
+          nodeCount: data.nodes.length,
+          edgeCount: data.edges.length,
+          sampleNodes: data.nodes.slice(0, 2),
+        })
         setServerData(data)
       } else {
+        console.log("[v0] Invalid lineage data structure, using empty state")
         setServerData({ nodes: [], edges: [] })
       }
     } catch (e: any) {
+      console.error("[v0] Failed to load lineage:", e)
       setError(e?.message || "Failed to load lineage")
       setServerData({ nodes: [], edges: [] })
     } finally {
       setLoading(false)
     }
   }
+
+  const debugInfo = React.useMemo(() => {
+    return {
+      serverDataNodes: serverData?.nodes?.length || 0,
+      serverDataEdges: serverData?.edges?.length || 0,
+      rawNodes: raw.length,
+      filteredNodes: filteredData.length,
+      rfNodes: nodes.length,
+      rfEdges: edges.length,
+    }
+  }, [serverData, raw, filteredData, nodes, edges])
 
   return (
     <ReactFlowProvider>
@@ -715,6 +742,12 @@ export function DataModelLineage({
                 Visualize your complete AI pipeline: agents, models, deployments, evaluations, and data flows from your
                 live system.
               </CardDescription>
+              <div className="mt-2 text-xs text-muted-foreground bg-muted/50 p-2 rounded">
+                Debug: Server({debugInfo.serverDataNodes}n, {debugInfo.serverDataEdges}e) → Raw({debugInfo.rawNodes}) →
+                Filtered({debugInfo.filteredNodes}) → Display({debugInfo.rfNodes}n, {debugInfo.rfEdges}e)
+                {loading && " | Loading..."}
+                {error && ` | Error: ${error}`}
+              </div>
             </div>
             <Button variant="outline" className="gap-2 bg-transparent" onClick={loadLineage} disabled={loading}>
               <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
@@ -787,6 +820,17 @@ export function DataModelLineage({
             <div className="text-sm text-destructive">
               {"Failed to load live lineage: "}
               {error}
+            </div>
+          )}
+
+          {!loading && raw.length === 0 && (
+            <div className="text-center py-8 text-muted-foreground">
+              <div className="text-lg font-medium">No lineage data found</div>
+              <div className="text-sm mt-2">
+                Try running some playground tests or check if your database contains lineage data.
+                <br />
+                Check the browser console for detailed debugging information.
+              </div>
             </div>
           )}
 

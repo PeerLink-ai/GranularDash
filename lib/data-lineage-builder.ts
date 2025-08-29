@@ -46,6 +46,7 @@ export async function buildDataLineage(): Promise<{ nodes: DataLineageNode[]; ed
     const nodes: DataLineageNode[] = []
     const edges: DataLineageEdge[] = []
 
+    console.log("[v0] Fetching playground interactions...")
     const playgroundInteractions = await sql`
       SELECT 
         lm.id, lm.agent_id, lm.prompt, lm.response, lm.token_usage,
@@ -57,6 +58,7 @@ export async function buildDataLineage(): Promise<{ nodes: DataLineageNode[]; ed
     `
 
     console.log("[v0] Found playground interactions:", playgroundInteractions.length)
+    console.log("[v0] Sample playground data:", playgroundInteractions.slice(0, 2))
 
     const playgroundAgents = new Set<string>()
     for (const interaction of playgroundInteractions) {
@@ -200,6 +202,7 @@ export async function buildDataLineage(): Promise<{ nodes: DataLineageNode[]; ed
       }
     }
 
+    console.log("[v0] Fetching agent audit logs...")
     const agentAuditLogs = await sql`
       SELECT 
         al.id, al.user_id, al.action, al.resource_type, al.resource_id,
@@ -214,6 +217,7 @@ export async function buildDataLineage(): Promise<{ nodes: DataLineageNode[]; ed
     `
 
     console.log("[v0] Found audit logs:", agentAuditLogs.length)
+    console.log("[v0] Sample audit data:", agentAuditLogs.slice(0, 2))
 
     const auditGroups = new Map<string, any[]>()
     for (const auditLog of agentAuditLogs) {
@@ -296,7 +300,7 @@ export async function buildDataLineage(): Promise<{ nodes: DataLineageNode[]; ed
       }
     }
 
-    // Get Connected Agents (real ones from database)
+    console.log("[v0] Fetching connected agents...")
     const agents = await sql`
       SELECT 
         id, name, type, endpoint, status, 
@@ -308,6 +312,7 @@ export async function buildDataLineage(): Promise<{ nodes: DataLineageNode[]; ed
     `
 
     console.log("[v0] Found connected agents:", agents.length)
+    console.log("[v0] Sample agent data:", agents.slice(0, 2))
 
     for (const agent of agents) {
       nodes.push({
@@ -326,7 +331,6 @@ export async function buildDataLineage(): Promise<{ nodes: DataLineageNode[]; ed
       })
     }
 
-    // Get AI Models from Registry
     const models = await sql`
       SELECT 
         id, model_name, model_version, model_type, framework,
@@ -355,7 +359,6 @@ export async function buildDataLineage(): Promise<{ nodes: DataLineageNode[]; ed
       })
     }
 
-    // Get Model Deployments
     const deployments = await sql`
       SELECT 
         d.id, d.deployment_name, d.status, d.environment,
@@ -393,7 +396,6 @@ export async function buildDataLineage(): Promise<{ nodes: DataLineageNode[]; ed
       }
     }
 
-    // Get Model Evaluations
     const evaluations = await sql`
       SELECT 
         e.id, e.evaluation_name, e.evaluation_type, e.status,
@@ -430,7 +432,6 @@ export async function buildDataLineage(): Promise<{ nodes: DataLineageNode[]; ed
       }
     }
 
-    // Get Integration Instances (Data Sources)
     const integrations = await sql`
       SELECT 
         i.id, i.instance_name, i.status, i.created_at,
@@ -462,7 +463,6 @@ export async function buildDataLineage(): Promise<{ nodes: DataLineageNode[]; ed
       })
     }
 
-    // Get Feature Groups (Datasets)
     const featureGroups = await sql`
       SELECT 
         id, group_name, status, created_at, last_updated,
@@ -489,7 +489,6 @@ export async function buildDataLineage(): Promise<{ nodes: DataLineageNode[]; ed
       })
     }
 
-    // Get Data Transformations
     const transformations = await sql`
       SELECT 
         id, transformation_name, transformation_type, is_active,
@@ -525,7 +524,6 @@ export async function buildDataLineage(): Promise<{ nodes: DataLineageNode[]; ed
       }
     }
 
-    // Create relationships between agents and models
     const agentModelConfigs = await sql`
       SELECT agent_id, model_id, is_primary, is_active
       FROM agent_model_configs
@@ -541,7 +539,6 @@ export async function buildDataLineage(): Promise<{ nodes: DataLineageNode[]; ed
       })
     }
 
-    // Create model lineage relationships
     const modelLineage = await sql`
       SELECT model_id, parent_model_id, relationship_type
       FROM model_lineage
@@ -556,7 +553,6 @@ export async function buildDataLineage(): Promise<{ nodes: DataLineageNode[]; ed
       })
     }
 
-    // Add nextNodes to each node based on edges
     const nodeMap = new Map(nodes.map((n) => [n.id, n]))
     for (const edge of edges) {
       const sourceNode = nodeMap.get(edge.source)
@@ -566,10 +562,19 @@ export async function buildDataLineage(): Promise<{ nodes: DataLineageNode[]; ed
       }
     }
 
-    console.log("[v0] Built lineage with", nodes.length, "nodes and", edges.length, "edges")
+    console.log("[v0] Final lineage summary:")
+    console.log("[v0] - Total nodes:", nodes.length)
+    console.log("[v0] - Total edges:", edges.length)
+    console.log("[v0] - Node types:", [...new Set(nodes.map((n) => n.type))])
+    console.log(
+      "[v0] - Sample nodes:",
+      nodes.slice(0, 3).map((n) => ({ id: n.id, name: n.name, type: n.type })),
+    )
+
     return { nodes, edges }
   } catch (error) {
     console.error("[v0] Failed to build data lineage:", error)
+    console.error("[v0] Error details:", error.message, error.stack)
     return { nodes: [], edges: [] }
   }
 }

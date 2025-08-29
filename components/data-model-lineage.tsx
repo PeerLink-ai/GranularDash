@@ -611,14 +611,14 @@ function GraphCanvas({
   }, [nodes, selectedId, highlightSet, dimNonMatches])
 
   React.useEffect(() => {
-    console.log("[v0] ReactFlow nodes updated:", styledNodes.length)
-    if (styledNodes.length > 0) {
+    console.log("[v0] ReactFlow nodes updated:", nodes.length)
+    if (nodes.length > 0) {
       // Force ReactFlow to re-render with new nodes
       setTimeout(() => {
         rf.fitView({ duration: 350, padding: 0.2 })
       }, 100)
     }
-  }, [styledNodes, rf])
+  }, [nodes, rf])
 
   return (
     <div ref={graphRef} className="relative h-[520px] rounded-lg border">
@@ -753,7 +753,16 @@ export function DataModelLineage({
     }
   }, [serverData])
 
-  const edgesRaw = React.useMemo(() => buildEdges(raw), [raw])
+  const edgesRaw = React.useMemo(() => {
+    if (!serverData?.edges) return []
+    return serverData.edges.map((e, i) => ({
+      id: `edge-${i}`,
+      source: e.source,
+      target: e.target,
+      type: "smoothstep",
+      style: { stroke: "#64748b", strokeWidth: 2 },
+    }))
+  }, [serverData?.edges])
 
   const activeTypes = React.useMemo(
     () => new Set((Object.keys(typeFilter) as LineageNode["type"][]).filter((k) => typeFilter[k])),
@@ -823,11 +832,24 @@ export function DataModelLineage({
     })
   }, [raw, activeTypes, debouncedSearch])
 
-  const rfNodesBase = React.useMemo(() => layoutNodes(filteredData), [filteredData])
+  const rfNodesBase = React.useMemo(() => {
+    console.log("[v0] Creating ReactFlow nodes from filtered data:", filteredData.length)
+    const layoutResult = layoutNodes(filteredData)
+    console.log("[v0] Layout result:", layoutResult.length)
+    return layoutResult
+  }, [filteredData])
+
   const [nodes, , onNodesChange] = useNodesState(rfNodesBase)
   const [edges, , onEdgesChange] = useEdgesState(
     edgesRaw.filter((e) => rfNodesBase.find((n) => n.id === e.source) && rfNodesBase.find((n) => n.id === e.target)),
   )
+
+  React.useEffect(() => {
+    console.log("[v0] ReactFlow nodes updated:", nodes.length)
+    if (nodes.length > 0) {
+      console.log("[v0] Sample ReactFlow nodes:", nodes.slice(0, 3))
+    }
+  }, [nodes])
 
   const { out, incoming } = React.useMemo(() => buildAdjacency(edges), [edges])
 

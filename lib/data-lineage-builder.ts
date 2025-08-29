@@ -42,36 +42,35 @@ export interface DataLineageEdge {
 
 export async function buildDataLineage(): Promise<{ nodes: DataLineageNode[]; edges: DataLineageEdge[] }> {
   try {
+    console.log("[v0] Starting to build data lineage...")
     const nodes: DataLineageNode[] = []
     const edges: DataLineageEdge[] = []
 
     // 1. Get Connected Agents
     const agents = await sql`
       SELECT 
-        id, name, provider, model, endpoint, status, 
-        created_at, last_active, usage_requests, usage_tokens_used,
-        usage_estimated_cost, organization_id
+        id, name, type, endpoint, status, 
+        created_at, last_activity, user_id
       FROM connected_agents 
       WHERE status = 'active'
       ORDER BY created_at DESC
       LIMIT 50
     `
 
+    console.log("[v0] Found agents:", agents.length)
+
     for (const agent of agents) {
       nodes.push({
         id: `agent-${agent.id}`,
-        name: agent.name || `Agent ${agent.id.slice(0, 8)}`,
+        name: agent.name || `Agent ${agent.id.toString().slice(0, 8)}`,
         type: "agent",
-        path: ["Agents", agent.provider || "Unknown", agent.name || agent.id],
+        path: ["Agents", agent.type || "Unknown", agent.name || agent.id],
         metadata: {
-          provider: agent.provider,
+          provider: agent.type,
           status: agent.status,
           creationDate: agent.created_at?.toISOString().split("T")[0],
           endpoint: agent.endpoint,
-          cost: agent.usage_estimated_cost ? `$${agent.usage_estimated_cost}` : undefined,
-          performance: agent.usage_requests ? `${agent.usage_requests} requests` : undefined,
-          version: agent.model,
-          description: `${agent.provider} agent using ${agent.model}`,
+          description: `${agent.type} agent`,
         },
       })
     }
@@ -81,12 +80,14 @@ export async function buildDataLineage(): Promise<{ nodes: DataLineageNode[]; ed
         lm.id, lm.agent_id, lm.prompt, lm.response, lm.token_usage,
         lm.response_time, lm.evaluation_scores, lm.tool_calls, 
         lm.db_queries, lm.decisions, lm.created_at,
-        ca.name as agent_name, ca.provider
+        ca.name as agent_name, ca.type as agent_type
       FROM lineage_mapping lm
-      LEFT JOIN connected_agents ca ON lm.agent_id = ca.agent_id
+      LEFT JOIN connected_agents ca ON lm.agent_id = ca.id::text
       ORDER BY lm.created_at DESC
       LIMIT 100
     `
+
+    console.log("[v0] Found playground interactions:", playgroundInteractions.length)
 
     for (const interaction of playgroundInteractions) {
       // Create playground interaction node
@@ -132,11 +133,10 @@ export async function buildDataLineage(): Promise<{ nodes: DataLineageNode[]; ed
               status: "executed",
               creationDate: interaction.created_at?.toISOString().split("T")[0],
               description: `Tool call: ${toolCall.description || toolCall.name}`,
-              schema: JSON.stringify(toolCall.parameters),
+              schema: JSON.stringify(toolCall.parameters || {}),
             },
           })
 
-          // Create edge from playground interaction to tool call
           edges.push({
             source: `playground-${interaction.id}`,
             target: toolNodeId,
@@ -164,7 +164,6 @@ export async function buildDataLineage(): Promise<{ nodes: DataLineageNode[]; ed
             },
           })
 
-          // Create edge from playground interaction to database query
           edges.push({
             source: `playground-${interaction.id}`,
             target: queryNodeId,
@@ -192,7 +191,6 @@ export async function buildDataLineage(): Promise<{ nodes: DataLineageNode[]; ed
             },
           })
 
-          // Create edge from playground interaction to decision
           edges.push({
             source: `playground-${interaction.id}`,
             target: decisionNodeId,
@@ -208,18 +206,21 @@ export async function buildDataLineage(): Promise<{ nodes: DataLineageNode[]; ed
         al.id, al.user_id, al.action, al.resource_type, al.resource_id,
         al.details, al.timestamp, al.organization
       FROM audit_logs al
-      WHERE al.resource_type = 'AI_AGENT' 
-        AND al.action IN ('AGENT_PLAYGROUND_TEST', 'AGENT_API_CALL', 'AGENT_DEPLOYMENT', 'AGENT_EVALUATION')
+      WHERE al.resource_type IN ('AI_AGENT', 'PLAYGROUND', 'AGENT_TEST') 
+        OR al.action LIKE '%AGENT%'
+        OR al.action LIKE '%PLAYGROUND%'
       ORDER BY al.timestamp DESC
       LIMIT 50
     `
+
+    console.log("[v0] Found audit logs:", agentAuditLogs.length)
 
     for (const auditLog of agentAuditLogs) {
       const auditNodeId = `audit-${auditLog.id}`
 
       nodes.push({
         id: auditNodeId,
-        name: `${auditLog.action.replace("_", " ")}: ${auditLog.resource_id || "Agent"}`,
+        name: `${auditLog.action.replace(/_/g, " ")}: ${auditLog.resource_id || "System"}`,
         type: "evaluation",
         path: ["Audit", "Agent Actions", auditLog.action],
         metadata: {
@@ -231,18 +232,23 @@ export async function buildDataLineage(): Promise<{ nodes: DataLineageNode[]; ed
         },
       })
 
-      // Create edge from agent to audit log if resource_id exists
       if (auditLog.resource_id) {
-        edges.push({
-          source: `agent-${auditLog.resource_id}`,
-          target: auditNodeId,
-          relationship: "generates_audit",
-          metadata: {
-            action: auditLog.action,
-            details: auditLog.details,
-            timestamp: auditLog.timestamp,
-          },
-        })
+        // Check if resource_id matches any agent
+        const matchingAgent = agents.find(
+          (a) => a.id.toString() === auditLog.resource_id || a.name === auditLog.resource_id,
+        )
+        if (matchingAgent) {
+          edges.push({
+            source: `agent-${matchingAgent.id}`,
+            target: auditNodeId,
+            relationship: "generates_audit",
+            metadata: {
+              action: auditLog.action,
+              details: auditLog.details,
+              timestamp: auditLog.timestamp,
+            },
+          })
+        }
       }
     }
 
@@ -486,9 +492,10 @@ export async function buildDataLineage(): Promise<{ nodes: DataLineageNode[]; ed
       }
     }
 
+    console.log("[v0] Built lineage with", nodes.length, "nodes and", edges.length, "edges")
     return { nodes, edges }
   } catch (error) {
-    console.error("Failed to build data lineage:", error)
+    console.error("[v0] Failed to build data lineage:", error)
     return { nodes: [], edges: [] }
   }
 }

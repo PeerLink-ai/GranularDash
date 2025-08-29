@@ -300,6 +300,18 @@ export async function POST(request: NextRequest) {
     }
 
     const agent = agents[0]
+
+    console.log("[v0] Ensuring agent exists in connected_agents table...")
+    await sql`
+      INSERT INTO connected_agents (agent_id, name, provider, endpoint, api_key_encrypted, status, created_at, updated_at)
+      VALUES (${agentId}, ${agent.name}, ${agent.provider}, ${agent.endpoint || ""}, ${agent.api_key_encrypted || agent.api_key || ""}, ${agent.status || "active"}, NOW(), NOW())
+      ON CONFLICT (agent_id) DO UPDATE SET
+        name = EXCLUDED.name,
+        provider = EXCLUDED.provider,
+        updated_at = NOW()
+    `
+    console.log("[v0] Agent record ensured in connected_agents table")
+
     const startTime = Date.now()
     console.log("[v0] Testing agent:", agent.name, "provider:", agent.provider)
 

@@ -252,32 +252,124 @@ function buildEdges(data: LineageNode[]): Edge[] {
 function layoutNodes(data: LineageNode[], opts: { colGap?: number; rowGap?: number } = {}): Node[] {
   if (!Array.isArray(data)) return []
 
-  const colGap = opts.colGap ?? 360
-  const rowGap = opts.rowGap ?? 140
-  const byDepth = new Map<number, LineageNode[]>()
-  for (const n of data) {
-    const depth = Math.max(0, (n.path || []).length - 1)
-    if (!byDepth.has(depth)) byDepth.set(depth, [])
-    byDepth.get(depth)!.push(n)
-  }
-  for (const [, arr] of byDepth) arr.sort((a, b) => a.name.localeCompare(b.name))
+  const colGap = opts.colGap ?? 400
+  const rowGap = opts.rowGap ?? 120
 
-  const maxRows = Math.max(...Array.from(byDepth.values()).map((v) => v.length))
-  const nodes: Node[] = []
-  for (const [depth, arr] of byDepth) {
-    arr.forEach((n, i) => {
-      const yCenterPad = ((maxRows - arr.length) * rowGap) / 2
-      nodes.push({
-        id: n.id,
-        type: "default",
-        position: { x: depth * colGap, y: i * rowGap + yCenterPad },
-        sourcePosition: Position.Right,
-        targetPosition: Position.Left,
-        data: { label: n.name, node: n },
-        style: { width: 240, borderRadius: 10, borderWidth: 1, padding: 12 },
-      })
-    })
+  // Group nodes by agent and conversation chains
+  const agentGroups = new Map<string, LineageNode[]>()
+  const conversationChains = new Map<string, LineageNode[]>()
+
+  for (const n of data) {
+    // Group by agent ID for agent selection
+    const agentId = n.metadata?.agentId || "unknown"
+    if (!agentGroups.has(agentId)) agentGroups.set(agentId, [])
+    agentGroups.get(agentId)!.push(n)
+
+    // Group by session/conversation for thought chains
+    const sessionId = n.metadata?.sessionId || n.metadata?.parentInteractionId || n.id
+    if (!conversationChains.has(sessionId)) conversationChains.set(sessionId, [])
+    conversationChains.get(sessionId)!.push(n)
   }
+
+  // Create hierarchical layout: Agent -> Conversation -> Actions
+  const nodes: Node[] = []
+  let xOffset = 0
+
+  for (const [agentId, agentNodes] of agentGroups) {
+    // Create agent summary node
+    const agentSummary = {
+      id: `agent_${agentId}`,
+      type: "default",
+      position: { x: xOffset, y: 0 },
+      sourcePosition: Position.Right,
+      targetPosition: Position.Left,
+      data: {
+        label: `Agent: ${agentId}`,
+        node: {
+          id: `agent_${agentId}`,
+          name: `Agent ${agentId}`,
+          type: "agent" as const,
+          path: ["agents", agentId],
+          metadata: {
+            agentId,
+            totalActions: agentNodes.length,
+            avgResponseTime:
+              agentNodes.reduce((acc, n) => acc + (n.metadata?.responseTime || 0), 0) / agentNodes.length,
+            totalTokens: agentNodes.reduce(
+              (acc, n) =>
+                acc +
+                (typeof n.metadata?.tokenUsage === "object"
+                  ? n.metadata.tokenUsage.total || 0
+                  : n.metadata?.tokenUsage || 0),
+              0,
+            ),
+          },
+          nextNodes: [],
+        },
+      },
+      style: {
+        width: 280,
+        borderRadius: 12,
+        borderWidth: 2,
+        padding: 16,
+        backgroundColor: "#1e40af",
+        color: "white",
+        fontWeight: "bold",
+      },
+    }
+    nodes.push(agentSummary)
+
+    // Group agent's nodes by conversation chains
+    const agentConversations = new Map<string, LineageNode[]>()
+    for (const node of agentNodes) {
+      const sessionId = node.metadata?.sessionId || node.metadata?.parentInteractionId || "default"
+      if (!agentConversations.has(sessionId)) agentConversations.set(sessionId, [])
+      agentConversations.get(sessionId)!.push(node)
+    }
+
+    let yOffset = 150
+    for (const [sessionId, sessionNodes] of agentConversations) {
+      // Sort by timestamp to show thought progression
+      sessionNodes.sort((a, b) => {
+        const aTime = new Date(a.metadata?.timestamp || 0).getTime()
+        const bTime = new Date(b.metadata?.timestamp || 0).getTime()
+        return aTime - bTime
+      })
+
+      // Only show key nodes to reduce clutter
+      const keyNodes = sessionNodes.filter(
+        (node) =>
+          node.type === "agent_action" ||
+          node.type === "agent_evaluation" ||
+          (node.type === "agent_response" && node.metadata?.evaluationScore),
+      )
+
+      keyNodes.forEach((node, index) => {
+        nodes.push({
+          id: node.id,
+          type: "default",
+          position: { x: xOffset + 50 + index * 200, y: yOffset },
+          sourcePosition: Position.Right,
+          targetPosition: Position.Left,
+          data: { label: node.name, node },
+          style: {
+            width: 180,
+            borderRadius: 8,
+            borderWidth: 1,
+            padding: 10,
+            backgroundColor:
+              node.type === "agent_action" ? "#3b82f6" : node.type === "agent_evaluation" ? "#f59e0b" : "#10b981",
+            color: "white",
+          },
+        })
+      })
+
+      yOffset += 100
+    }
+
+    xOffset += 600
+  }
+
   return nodes
 }
 
@@ -544,60 +636,88 @@ function GraphCanvas({
   }, [onApiReady, rf])
 
   const styledNodes = React.useMemo(() => {
-    console.log("[v0] GraphCanvas received nodes:", nodes.length)
-    console.log("[v0] Sample nodes:", nodes.slice(0, 3))
+    console.log("[v0] Creating styled nodes:", nodes.length)
+    const styled = nodes.map((n): Node => {
+      const isSelected = n.id === selectedId
+      const isHighlighted = highlightSet.has(n.id)
+      const isDimmed = dimNonMatches && !isHighlighted && !isSelected
 
-    const styled = nodes.map((n) => {
-      const data = n.data as { label: string; node: LineageNode }
-      const theme = TYPE_THEME[data.node.type]
-      const isSelected = selectedId === n.id
-      const shouldDim = dimNonMatches && highlightSet && !highlightSet.has(n.id)
-      const IconComponent = theme.icon
+      // Enhanced styling for different node types
+      const getNodeStyle = (nodeType: string) => {
+        const baseStyle = {
+          borderRadius: 12,
+          borderWidth: isSelected ? 3 : 1,
+          padding: 16,
+          minHeight: 80,
+          boxShadow: isSelected ? "0 8px 25px rgba(0,0,0,0.15)" : "0 2px 8px rgba(0,0,0,0.1)",
+          transition: "all 0.2s ease",
+          opacity: isDimmed ? 0.3 : 1,
+        }
+
+        switch (nodeType) {
+          case "agent":
+            return { ...baseStyle, backgroundColor: "#1e40af", color: "white", borderColor: "#1d4ed8" }
+          case "agent_action":
+            return { ...baseStyle, backgroundColor: "#3b82f6", color: "white", borderColor: "#2563eb" }
+          case "agent_response":
+            return { ...baseStyle, backgroundColor: "#10b981", color: "white", borderColor: "#059669" }
+          case "agent_evaluation":
+            return { ...baseStyle, backgroundColor: "#f59e0b", color: "white", borderColor: "#d97706" }
+          default:
+            return { ...baseStyle, backgroundColor: "#6b7280", color: "white", borderColor: "#4b5563" }
+        }
+      }
 
       return {
         ...n,
-        style: {
-          ...n.style,
-          borderColor: isSelected ? "hsl(var(--foreground))" : undefined,
-          boxShadow: isSelected ? "0 0 0 2px hsl(var(--foreground)/.15)" : "none",
-          opacity: shouldDim ? 0.25 : 1,
-        },
+        style: getNodeStyle(n.data.node.type),
         data: {
           ...n.data,
           label: (
-            <div className={`flex flex-col gap-2 rounded-md border ${theme.border} ${theme.bg} p-3`}>
-              <div className="flex items-center gap-2">
-                <IconComponent className={`h-4 w-4 ${theme.accent}`} />
-                <div className="font-medium leading-none text-sm truncate">{data.node.name}</div>
-                {data.node.metadata.version && (
-                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0.5">
-                    v{data.node.metadata.version}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <h4 className="font-semibold text-sm truncate">{n.data.node.name}</h4>
+                {n.data.node.type === "agent" && (
+                  <Badge variant="secondary" className="text-xs">
+                    {n.data.node.metadata.totalActions} actions
                   </Badge>
                 )}
               </div>
 
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span className="capitalize">{data.node.type.replace("_", " ")}</span>
-                {data.node.metadata.timestamp && (
+              <div className="flex items-center gap-2 text-xs opacity-90">
+                <span className="capitalize">{n.data.node.type.replace("_", " ")}</span>
+                {n.data.node.metadata.timestamp && (
                   <div className="flex items-center gap-1">
                     <Clock className="h-3 w-3" />
-                    <span>{new Date(data.node.metadata.timestamp).toLocaleTimeString()}</span>
+                    <span>{new Date(n.data.node.metadata.timestamp).toLocaleTimeString()}</span>
                   </div>
                 )}
               </div>
 
-              {(data.node.type === "agent_action" || data.node.type === "agent_response") && (
+              {/* Enhanced metadata display for different node types */}
+              {n.data.node.type === "agent" && (
+                <div className="flex flex-wrap gap-1 text-xs">
+                  <Badge variant="outline" className="text-[10px] bg-white/20">
+                    {n.data.node.metadata.totalTokens} tokens
+                  </Badge>
+                  <Badge variant="outline" className="text-[10px] bg-white/20">
+                    {Math.round(n.data.node.metadata.avgResponseTime)}ms avg
+                  </Badge>
+                </div>
+              )}
+
+              {(n.data.node.type === "agent_action" || n.data.node.type === "agent_response") && (
                 <div className="flex items-center gap-2 text-xs">
-                  {data.node.metadata.tokenUsage && (
-                    <Badge variant="outline" className="text-[10px]">
-                      {typeof data.node.metadata.tokenUsage === "object"
-                        ? `${data.node.metadata.tokenUsage.total || data.node.metadata.tokenUsage.prompt + data.node.metadata.tokenUsage.completion || "N/A"} tokens`
-                        : `${data.node.metadata.tokenUsage} tokens`}
+                  {n.data.node.metadata.tokenUsage && (
+                    <Badge variant="outline" className="text-[10px] bg-white/20">
+                      {typeof n.data.node.metadata.tokenUsage === "object"
+                        ? `${n.data.node.metadata.tokenUsage.total || n.data.node.metadata.tokenUsage.prompt + n.data.node.metadata.tokenUsage.completion || "N/A"} tokens`
+                        : `${n.data.node.metadata.tokenUsage} tokens`}
                     </Badge>
                   )}
-                  {data.node.metadata.evaluationScore && (
-                    <Badge variant="outline" className="text-[10px]">
-                      Score: {String(data.node.metadata.evaluationScore)}
+                  {n.data.node.metadata.evaluationScore && (
+                    <Badge variant="outline" className="text-[10px] bg-white/20">
+                      Score: {String(n.data.node.metadata.evaluationScore)}
                     </Badge>
                   )}
                 </div>
@@ -757,13 +877,26 @@ export function DataModelLineage({
 
   const edgesRaw = React.useMemo(() => {
     if (!serverData?.edges) return []
-    return serverData.edges.map((e, i) => ({
-      id: `edge-${i}`,
-      source: e.source,
-      target: e.target,
+
+    // Create enhanced edges with conversation flow
+    const enhancedEdges = serverData.edges.map((edge) => ({
+      id: `${edge.source}-${edge.target}`,
+      source: edge.source,
+      target: edge.target,
       type: "smoothstep",
-      style: { stroke: "#64748b", strokeWidth: 2 },
+      animated: true,
+      style: {
+        stroke: "#3b82f6",
+        strokeWidth: 2,
+        strokeDasharray: "5,5",
+      },
+      markerEnd: {
+        type: "arrowclosed",
+        color: "#3b82f6",
+      },
     }))
+
+    return enhancedEdges
   }, [serverData?.edges])
 
   const activeTypes = React.useMemo(

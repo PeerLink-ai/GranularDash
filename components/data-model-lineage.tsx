@@ -53,8 +53,6 @@ import ReactFlow, {
   Controls,
   MiniMap,
   ReactFlowProvider,
-  useEdgesState,
-  useNodesState,
   Position,
   type Edge,
   type Node,
@@ -960,8 +958,13 @@ export function DataModelLineage({
     return layoutResult
   }, [filteredData])
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(rfNodesBase)
-  const [edges, setEdges, onEdgesChange] = useEdgesState([])
+  const [nodes, setNodes] = React.useState<Node[]>([])
+  const [edges, setEdges] = React.useState<Edge[]>([])
+
+  React.useEffect(() => {
+    console.log("[v0] Updating nodes state with:", rfNodesBase.length, "nodes")
+    setNodes(rfNodesBase)
+  }, [rfNodesBase])
 
   React.useEffect(() => {
     const validEdges = edgesRaw.filter(
@@ -969,7 +972,7 @@ export function DataModelLineage({
     )
     console.log("[v0] Setting edges:", validEdges.length)
     setEdges(validEdges)
-  }, [edgesRaw, rfNodesBase, setEdges])
+  }, [edgesRaw, rfNodesBase])
 
   const { out, incoming } = React.useMemo(() => buildAdjacency(edges), [edges])
 
@@ -1350,8 +1353,10 @@ export function DataModelLineage({
                 nodes={nodes}
                 edges={edges}
                 onNodeClick={(id) => {
-                  const n = raw.find((x) => x.id === id)
-                  if (n) setSelected(n)
+                  const clickedNode = raw.find((n) => n.id === id)
+                  if (clickedNode) {
+                    setSelected(clickedNode)
+                  }
                 }}
               />
 

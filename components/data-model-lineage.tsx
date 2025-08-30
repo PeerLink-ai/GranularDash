@@ -1,7 +1,5 @@
 "use client"
 
-import { useEffect } from "react"
-
 import * as React from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -58,6 +56,7 @@ import ReactFlow, {
   ReactFlowProvider,
   useEdgesState,
   useNodesState,
+  Position,
   type Edge,
   type Node,
   useReactFlow,
@@ -128,14 +127,13 @@ export interface LineageNode {
     parentInteractionId?: string
     processingTime?: number
     tokensUsed?: number
-    confidenceScore?: string
+    confidenceScore?: number
     modelUsed?: string
     reasoningSteps?: any
     decisionFactors?: any
     alternativesConsidered?: any
     outcomePrediction?: string
     actualOutcome?: string
-    groupedNodes?: LineageNode[]
   }
   nextNodes?: string[]
 }
@@ -259,13 +257,21 @@ function layoutNodes(data: LineageNode[], opts: { colGap?: number; rowGap?: numb
 
   // Group nodes by agent and conversation chains
   const agentGroups = new Map<string, LineageNode[]>()
+  const conversationChains = new Map<string, LineageNode[]>()
 
   for (const n of data) {
+    // Group by agent ID for agent selection
     const agentId = n.metadata?.agentId || "unknown"
     if (!agentGroups.has(agentId)) agentGroups.set(agentId, [])
     agentGroups.get(agentId)!.push(n)
+
+    // Group by session/conversation for thought chains
+    const sessionId = n.metadata?.sessionId || n.metadata?.parentInteractionId || n.id
+    if (!conversationChains.has(sessionId)) conversationChains.set(sessionId, [])
+    conversationChains.get(sessionId)!.push(n)
   }
 
+  // Create hierarchical layout: Agent -> Conversation -> Actions
   const nodes: Node[] = []
   let xOffset = 0
 
@@ -275,6 +281,8 @@ function layoutNodes(data: LineageNode[], opts: { colGap?: number; rowGap?: numb
       id: `agent_${agentId}`,
       type: "default",
       position: { x: xOffset, y: 0 },
+      sourcePosition: Position.Right,
+      targetPosition: Position.Left,
       data: {
         label: `Agent: ${agentId}`,
         node: {
@@ -300,16 +308,13 @@ function layoutNodes(data: LineageNode[], opts: { colGap?: number; rowGap?: numb
         },
       },
       style: {
-        width: 300,
-        height: 120,
-        borderRadius: 16,
-        borderWidth: 3,
-        padding: 20,
-        background: "linear-gradient(135deg, #1e40af 0%, #3b82f6 100%)",
+        width: 280,
+        borderRadius: 12,
+        borderWidth: 2,
+        padding: 16,
+        backgroundColor: "#1e40af",
         color: "white",
         fontWeight: "bold",
-        boxShadow: "0 8px 32px rgba(30, 64, 175, 0.3)",
-        border: "2px solid rgba(255,255,255,0.2)",
       },
     }
     nodes.push(agentSummary)
@@ -322,7 +327,7 @@ function layoutNodes(data: LineageNode[], opts: { colGap?: number; rowGap?: numb
       agentConversations.get(sessionId)!.push(node)
     }
 
-    let yOffset = 200
+    let yOffset = 150
     for (const [sessionId, sessionNodes] of agentConversations) {
       // Sort by timestamp to show thought progression
       sessionNodes.sort((a, b) => {
@@ -331,43 +336,38 @@ function layoutNodes(data: LineageNode[], opts: { colGap?: number; rowGap?: numb
         return aTime - bTime
       })
 
-      // Limit to max 4 nodes per conversation to prevent overcrowding
-      const displayNodes = sessionNodes.slice(0, 4)
+      // Only show key nodes to reduce clutter
+      const keyNodes = sessionNodes.filter(
+        (node) =>
+          node.type === "agent_action" ||
+          node.type === "agent_evaluation" ||
+          (node.type === "agent_response" && node.metadata?.evaluationScore),
+      )
 
-      displayNodes.forEach((node, index) => {
-        const nodeId = node.id
-        const nodeX = xOffset + 100 + index * 250
-        const nodeY = yOffset
-
+      keyNodes.forEach((node, index) => {
         nodes.push({
-          id: nodeId,
+          id: node.id,
           type: "default",
-          position: { x: nodeX, y: nodeY },
+          position: { x: xOffset + 50 + index * 200, y: yOffset },
+          sourcePosition: Position.Right,
+          targetPosition: Position.Left,
           data: { label: node.name, node },
           style: {
-            width: 220,
-            height: 100,
-            borderRadius: 12,
-            borderWidth: 2,
-            padding: 12,
-            background:
-              node.type === "agent_action"
-                ? "linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%)"
-                : node.type === "agent_evaluation"
-                  ? "linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)"
-                  : "linear-gradient(135deg, #10b981 0%, #34d399 100%)",
+            width: 180,
+            borderRadius: 8,
+            borderWidth: 1,
+            padding: 10,
+            backgroundColor:
+              node.type === "agent_action" ? "#3b82f6" : node.type === "agent_evaluation" ? "#f59e0b" : "#10b981",
             color: "white",
-            fontWeight: "600",
-            boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
-            border: "2px solid rgba(255,255,255,0.2)",
           },
         })
       })
 
-      yOffset += 180
+      yOffset += 100
     }
 
-    xOffset += 1000
+    xOffset += 600
   }
 
   return nodes
@@ -646,65 +646,26 @@ function GraphCanvas({
       // Enhanced styling for different node types
       const getNodeStyle = (nodeType: string) => {
         const baseStyle = {
-          borderRadius: 16,
-          borderWidth: isSelected ? 4 : 2,
+          borderRadius: 12,
+          borderWidth: isSelected ? 3 : 1,
           padding: 16,
-          minHeight: 100,
-          boxShadow: isSelected ? "0 12px 40px rgba(0,0,0,0.25)" : "0 6px 20px rgba(0,0,0,0.15)",
-          transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-          opacity: isDimmed ? 0.4 : 1,
-          transform: isSelected ? "scale(1.05)" : "scale(1)",
-          border: "2px solid rgba(255,255,255,0.2)",
+          minHeight: 80,
+          boxShadow: isSelected ? "0 8px 25px rgba(0,0,0,0.15)" : "0 2px 8px rgba(0,0,0,0.1)",
+          transition: "all 0.2s ease",
+          opacity: isDimmed ? 0.3 : 1,
         }
 
         switch (nodeType) {
           case "agent":
-            return {
-              ...baseStyle,
-              backgroundColor: "#1e40af",
-              color: "white",
-              borderColor: "#3b82f6",
-              background: "linear-gradient(135deg, #1e40af 0%, #3b82f6 100%)",
-            }
+            return { ...baseStyle, backgroundColor: "#1e40af", color: "white", borderColor: "#1d4ed8" }
           case "agent_action":
-            return {
-              ...baseStyle,
-              backgroundColor: "#3b82f6",
-              color: "white",
-              borderColor: "#60a5fa",
-              background: "linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%)",
-            }
+            return { ...baseStyle, backgroundColor: "#3b82f6", color: "white", borderColor: "#2563eb" }
           case "agent_response":
-            return {
-              ...baseStyle,
-              backgroundColor: "#10b981",
-              color: "white",
-              borderColor: "#34d399",
-              background: "linear-gradient(135deg, #10b981 0%, #34d399 100%)",
-            }
+            return { ...baseStyle, backgroundColor: "#10b981", color: "white", borderColor: "#059669" }
           case "agent_evaluation":
-            return {
-              ...baseStyle,
-              backgroundColor: "#f59e0b",
-              color: "white",
-              borderColor: "#fbbf24",
-              background: "linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)",
-            }
-          case "summary":
-            return {
-              ...baseStyle,
-              backgroundColor: "#8b5cf6",
-              color: "white",
-              borderColor: "#a78bfa",
-              background: "linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%)",
-            }
+            return { ...baseStyle, backgroundColor: "#f59e0b", color: "white", borderColor: "#d97706" }
           default:
-            return {
-              ...baseStyle,
-              backgroundColor: "#6b7280",
-              color: "white",
-              borderColor: "#9ca3af",
-            }
+            return { ...baseStyle, backgroundColor: "#6b7280", color: "white", borderColor: "#4b5563" }
         }
       }
 
@@ -716,11 +677,11 @@ function GraphCanvas({
           label: (
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between">
-                <h4 className="font-bold text-sm truncate">{n.data.node.name}</h4>
-                {n.data.node.metadata?.groupedNodes && (
-                  <span className="text-xs bg-white/20 px-2 py-1 rounded-full">
-                    +{n.data.node.metadata.groupedNodes.length}
-                  </span>
+                <h4 className="font-semibold text-sm truncate">{n.data.node.name}</h4>
+                {n.data.node.type === "agent" && (
+                  <Badge variant="secondary" className="text-xs">
+                    {n.data.node.metadata.totalActions} actions
+                  </Badge>
                 )}
               </div>
 
@@ -918,30 +879,23 @@ export function DataModelLineage({
   const edgesRaw = React.useMemo(() => {
     if (!serverData?.edges) return []
 
-    const enhancedEdges: Edge[] = []
-
-    // Add server edges
-    serverData.edges.forEach((edge, index) => {
-      enhancedEdges.push({
-        id: `${edge.source}-${edge.target}`,
-        source: edge.source,
-        target: edge.target,
-        type: "smoothstep",
-        animated: true,
-        style: {
-          stroke: `hsl(${220 + ((index * 30) % 120)}, 70%, 60%)`,
-          strokeWidth: 3,
-          strokeDasharray: "8,4",
-          filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.1))",
-        },
-        markerEnd: {
-          type: "arrowclosed",
-          color: `hsl(${220 + ((index * 30) % 120)}, 70%, 60%)`,
-          width: 20,
-          height: 20,
-        },
-      })
-    })
+    // Create enhanced edges with conversation flow
+    const enhancedEdges = serverData.edges.map((edge) => ({
+      id: `${edge.source}-${edge.target}`,
+      source: edge.source,
+      target: edge.target,
+      type: "smoothstep",
+      animated: true,
+      style: {
+        stroke: "#3b82f6",
+        strokeWidth: 2,
+        strokeDasharray: "5,5",
+      },
+      markerEnd: {
+        type: "arrowclosed",
+        color: "#3b82f6",
+      },
+    }))
 
     return enhancedEdges
   }, [serverData?.edges])
@@ -1014,97 +968,20 @@ export function DataModelLineage({
     })
   }, [raw, activeTypes, debouncedSearch])
 
-  const agentConnectionEdges = React.useMemo(() => {
-    const connectionEdges: Edge[] = []
-    const safeFilteredData = Array.isArray(filteredData) ? filteredData : []
-
-    if (safeFilteredData.length > 0) {
-      const agentGroups = new Map<string, LineageNode[]>()
-
-      for (const node of safeFilteredData) {
-        const agentId = node.metadata?.agentId || "unknown"
-        if (!agentGroups.has(agentId)) agentGroups.set(agentId, [])
-        agentGroups.get(agentId)!.push(node)
-      }
-
-      for (const [agentId, agentNodes] of agentGroups) {
-        const sortedNodes = agentNodes.sort((a, b) => {
-          const aTime = new Date(a.metadata?.timestamp || 0).getTime()
-          const bTime = new Date(b.metadata?.timestamp || 0).getTime()
-          return aTime - bTime
-        })
-
-        // Connect agent summary to first action
-        if (sortedNodes.length > 0) {
-          connectionEdges.push({
-            id: `agent_${agentId}-${sortedNodes[0].id}`,
-            source: `agent_${agentId}`,
-            target: sortedNodes[0].id,
-            type: "smoothstep",
-            animated: true,
-            style: {
-              stroke: "#60a5fa",
-              strokeWidth: 4,
-              strokeDasharray: "10,5",
-            },
-            markerEnd: {
-              type: "arrowclosed",
-              color: "#60a5fa",
-              width: 24,
-              height: 24,
-            },
-          })
-        }
-
-        // Connect sequential actions in thought chain
-        for (let i = 0; i < Math.min(sortedNodes.length - 1, 3); i++) {
-          const currentNode = sortedNodes[i]
-          const nextNode = sortedNodes[i + 1]
-
-          connectionEdges.push({
-            id: `${currentNode.id}-${nextNode.id}`,
-            source: currentNode.id,
-            target: nextNode.id,
-            type: "smoothstep",
-            animated: true,
-            style: {
-              stroke: nextNode.type === "agent_evaluation" ? "#fbbf24" : "#34d399",
-              strokeWidth: 3,
-              strokeDasharray: "6,3",
-            },
-            markerEnd: {
-              type: "arrowclosed",
-              color: nextNode.type === "agent_evaluation" ? "#fbbf24" : "#34d399",
-              width: 20,
-              height: 20,
-            },
-          })
-        }
-      }
-    }
-
-    return connectionEdges
-  }, [filteredData])
-
   const rfNodesBase = React.useMemo(() => {
-    console.log("[v0] Creating rfNodesBase from filteredData:", filteredData.length)
-    const layoutResult = layoutNodes(filteredData, { colGap: 500, rowGap: 150 })
-    console.log(
-      "[v0] Layout result positions:",
-      layoutResult.map((n) => ({ id: n.id, x: n.position.x, y: n.position.y })),
-    )
+    console.log("[v0] Creating ReactFlow nodes from filtered data:", filteredData.length)
+    const layoutResult = layoutNodes(filteredData)
+    console.log("[v0] Layout result:", layoutResult.length)
     return layoutResult
   }, [filteredData])
 
   const [nodes, setNodes, onNodesChange] = useNodesState(rfNodesBase)
   const [edges, , onEdgesChange] = useEdgesState(
-    [...edgesRaw, ...agentConnectionEdges].filter(
-      (e) => rfNodesBase.find((n) => n.id === e.source) && rfNodesBase.find((n) => n.id === e.target),
-    ),
+    edgesRaw.filter((e) => rfNodesBase.find((n) => n.id === e.source) && rfNodesBase.find((n) => n.id === e.target)),
   )
 
-  useEffect(() => {
-    console.log("[v0] Updating nodes state with:", rfNodesBase.length, "nodes")
+  React.useEffect(() => {
+    console.log("[v0] Updating ReactFlow nodes:", rfNodesBase.length)
     setNodes(rfNodesBase)
   }, [rfNodesBase, setNodes])
 

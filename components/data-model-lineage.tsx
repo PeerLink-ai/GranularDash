@@ -49,6 +49,7 @@ import ReactFlow, {
 } from "reactflow"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Label } from "@/components/ui/label"
+import { useNodesState, useEdgesState } from "reactflow"
 
 export interface DataModelLineageProps {
   onOpenDatasetVersioning: () => void
@@ -1125,73 +1126,34 @@ export function DataModelLineage({
     })
   }, [processedData, activeTypes, debouncedSearch])
 
-  function layoutAgentNodes(data: LineageNode[]): Node[] {
-    if (!Array.isArray(data)) return []
+  const [nodes, setNodes, onNodesChange] = useNodesState([])
+  const [edges, setEdges, onEdgesChange] = useEdgesState([])
 
-    if (viewMode === "agent-detail") {
-      // Vertical timeline layout for agent detail view
-      return data.map((n, i) => ({
-        id: n.id,
-        type: "default",
-        position: { x: 50, y: i * 180 },
-        sourcePosition: Position.Bottom,
-        targetPosition: Position.Top,
-        data: { label: n.name, node: n },
-        style: {
-          width: 320,
-          minHeight: 120,
-          borderRadius: 12,
-          borderWidth: 2,
-          borderColor: n.type === "agent_action" ? "#3b82f6" : "#10b981",
-          backgroundColor: n.type === "agent_action" ? "#eff6ff" : "#f0fdf4",
-          padding: 16,
-        },
-      }))
+  React.useEffect(() => {
+    if (serverData?.edges) {
+      const validEdges = serverData.edges
+        .filter((e) => filteredData.some((n) => n.id === e.source) && filteredData.some((n) => n.id === e.target))
+        .map((e, i) => ({
+          id: `edge-${i}`,
+          source: e.source,
+          target: e.target,
+          type: "smoothstep",
+          animated: true,
+          style: { stroke: "#6366f1", strokeWidth: 2 },
+        }))
+      setEdges(validEdges)
     }
+  }, [serverData, filteredData, setEdges])
 
-    // Grid layout for overview
-    const cols = Math.ceil(Math.sqrt(data.length))
-    return data.map((n, i) => {
-      const row = Math.floor(i / cols)
-      const col = i % cols
+  React.useEffect(() => {
+    console.log("[v0] Updating ReactFlow nodes:", filteredData.length)
+    setNodes(filteredData)
+  }, [filteredData, setNodes])
 
-      return {
-        id: n.id,
-        type: "default",
-        position: { x: col * 280, y: row * 200 },
-        sourcePosition: Position.Right,
-        targetPosition: Position.Left,
-        data: { label: n.name, node: n },
-        style: {
-          width: 240,
-          height: 160,
-          borderRadius: 12,
-          borderWidth: 2,
-          borderColor: "#6366f1",
-          backgroundColor: "#f8fafc",
-          padding: 16,
-          cursor: "pointer",
-        },
-      }
-    })
+  function onNodeClick(event: React.MouseEvent, node: Node) {
+    const lineageNode = node.data.node as LineageNode
+    setSelected(lineageNode)
   }
-
-  const rfNodesBase = React.useMemo(() => {
-    return layoutAgentNodes(filteredData)
-  }, [filteredData, viewMode])
-
-  const onNodeClick = React.useCallback(
-    (event: React.MouseEvent, node: Node) => {
-      const lineageNode = node.data.node as LineageNode
-      setSelected(lineageNode)
-
-      if (viewMode === "overview" && lineageNode.type === "agent") {
-        setSelectedAgent(lineageNode.metadata?.agentId || null)
-        setViewMode("agent-detail")
-      }
-    },
-    [viewMode, setSelected, setSelectedAgent, setViewMode],
-  )
 
   return (
     <div className="flex h-full">
@@ -1199,33 +1161,17 @@ export function DataModelLineage({
         <div className="border-b bg-background p-4">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-4">
-              <h2 className="text-xl font-semibold">
-                {viewMode === "overview" ? "Agent Overview" : `Agent ${selectedAgent} - Thought Chains`}
-              </h2>
-              {viewMode === "agent-detail" && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setViewMode("overview")
-                    setSelectedAgent(null)
-                  }}
-                >
-                  ← Back to Overview
-                </Button>
-              )}
+              <h2 className="text-xl font-semibold">Agent Overview</h2>
             </div>
             <div className="flex items-center gap-2">
-              <Badge variant="secondary">
-                {filteredData.length} {viewMode === "overview" ? "Agents" : "Conversations"}
-              </Badge>
+              <Badge variant="secondary">{filteredData.length} Agents</Badge>
               {loading && <Badge variant="outline">Loading...</Badge>}
             </div>
           </div>
 
           <div className="flex gap-2">
             <Input
-              placeholder={viewMode === "overview" ? "Search agents..." : "Search conversations..."}
+              placeholder="Search agents..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="max-w-sm"
@@ -1238,10 +1184,10 @@ export function DataModelLineage({
 
         <div className="flex-1 relative">
           <ReactFlow
-            nodes={rfNodesBase}
-            edges={edgesRaw}
-            onNodesChange={() => {}}
-            onEdgesChange={() => {}}
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
             onNodeClick={onNodeClick}
             fitView
             fitViewOptions={{ padding: 0.2 }}
@@ -1257,7 +1203,7 @@ export function DataModelLineage({
 
       <div className="w-80 border-l bg-muted/30 flex flex-col">
         <div className="p-4 border-b">
-          <h3 className="font-medium">{viewMode === "overview" ? "Agent Details" : "Conversation Details"}</h3>
+          <h3 className="font-medium">Agent Details</h3>
         </div>
 
         <ScrollArea className="flex-1 p-4">
@@ -1268,7 +1214,7 @@ export function DataModelLineage({
                 <Badge variant="outline">{selected.type}</Badge>
               </div>
 
-              {viewMode === "overview" && selected.type === "agent" && (
+              {selected.type === "agent" && (
                 <div className="space-y-3">
                   <div>
                     <Label className="text-sm font-medium">Total Interactions</Label>
@@ -1306,7 +1252,7 @@ export function DataModelLineage({
                 </div>
               )}
 
-              {viewMode === "agent-detail" && (
+              {selected.type === "agent_action" && (
                 <div className="space-y-3">
                   <div>
                     <Label className="text-sm font-medium">Chain Length</Label>
@@ -1347,9 +1293,7 @@ export function DataModelLineage({
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">
-              {viewMode === "overview"
-                ? "Click on an agent to see their activity details and thought chains."
-                : "Click on a conversation to see the detailed thought process."}
+              Click on an agent to see their activity details and thought chains.
             </p>
           )}
         </ScrollArea>

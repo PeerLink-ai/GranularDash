@@ -56,7 +56,6 @@ import ReactFlow, {
   ReactFlowProvider,
   useEdgesState,
   useNodesState,
-  Position,
   type Edge,
   type Node,
   useReactFlow,
@@ -258,22 +257,14 @@ function layoutNodes(data: LineageNode[], opts: { colGap?: number; rowGap?: numb
 
   // Group nodes by agent and conversation chains
   const agentGroups = new Map<string, LineageNode[]>()
-  const conversationChains = new Map<string, LineageNode[]>()
 
   for (const n of data) {
-    // Group by agent ID for agent selection
     const agentId = n.metadata?.agentId || "unknown"
     if (!agentGroups.has(agentId)) agentGroups.set(agentId, [])
     agentGroups.get(agentId)!.push(n)
-
-    // Group by session/conversation for thought chains
-    const sessionId = n.metadata?.sessionId || n.metadata?.parentInteractionId || n.id
-    if (!conversationChains.has(sessionId)) conversationChains.set(sessionId, [])
-    conversationChains.get(sessionId)!.push(n)
   }
 
   const nodes: Node[] = []
-  const edges: Edge[] = []
   let xOffset = 0
 
   for (const [agentId, agentNodes] of agentGroups) {
@@ -282,8 +273,6 @@ function layoutNodes(data: LineageNode[], opts: { colGap?: number; rowGap?: numb
       id: `agent_${agentId}`,
       type: "default",
       position: { x: xOffset, y: 0 },
-      sourcePosition: Position.Right,
-      targetPosition: Position.Left,
       data: {
         label: `Agent: ${agentId}`,
         node: {
@@ -314,10 +303,11 @@ function layoutNodes(data: LineageNode[], opts: { colGap?: number; rowGap?: numb
         borderRadius: 16,
         borderWidth: 3,
         padding: 20,
-        backgroundColor: "#1e40af",
+        background: "linear-gradient(135deg, #1e40af 0%, #3b82f6 100%)",
         color: "white",
         fontWeight: "bold",
         boxShadow: "0 8px 32px rgba(30, 64, 175, 0.3)",
+        border: "2px solid rgba(255,255,255,0.2)",
       },
     }
     nodes.push(agentSummary)
@@ -339,124 +329,46 @@ function layoutNodes(data: LineageNode[], opts: { colGap?: number; rowGap?: numb
         return aTime - bTime
       })
 
-      const keyNodes = sessionNodes.reduce((acc, node, index) => {
-        const isKeyNode =
-          node.type === "agent_action" ||
-          node.type === "agent_evaluation" ||
-          (node.type === "agent_response" && node.metadata?.evaluationScore) ||
-          index === 0 || // Always show first node
-          index === sessionNodes.length - 1 // Always show last node
-
-        if (isKeyNode) {
-          acc.push(node)
-        } else if (acc.length > 0) {
-          // Group similar nodes into the previous key node
-          const lastKey = acc[acc.length - 1]
-          if (!lastKey.metadata.groupedNodes) lastKey.metadata.groupedNodes = []
-          lastKey.metadata.groupedNodes.push(node)
-        }
-        return acc
-      }, [] as LineageNode[])
-
-      // Limit to max 5 nodes per conversation to prevent overcrowding
-      const displayNodes = keyNodes.slice(0, 5)
-      if (keyNodes.length > 5) {
-        // Add summary node for remaining actions
-        displayNodes.push({
-          id: `${sessionId}_more`,
-          name: `+${keyNodes.length - 4} more actions`,
-          type: "summary" as const,
-          path: ["summary"],
-          metadata: {
-            sessionId,
-            hiddenCount: keyNodes.length - 4,
-            timestamp: new Date().toISOString(),
-          },
-          nextNodes: [],
-        })
-      }
+      // Limit to max 4 nodes per conversation to prevent overcrowding
+      const displayNodes = sessionNodes.slice(0, 4)
 
       displayNodes.forEach((node, index) => {
         const nodeId = node.id
-        const nodeX = xOffset + 100 + index * 220
+        const nodeX = xOffset + 100 + index * 250
         const nodeY = yOffset
 
         nodes.push({
           id: nodeId,
           type: "default",
           position: { x: nodeX, y: nodeY },
-          sourcePosition: Position.Right,
-          targetPosition: Position.Left,
           data: { label: node.name, node },
           style: {
-            width: 200,
+            width: 220,
             height: 100,
             borderRadius: 12,
             borderWidth: 2,
             padding: 12,
-            backgroundColor:
+            background:
               node.type === "agent_action"
-                ? "#3b82f6"
+                ? "linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%)"
                 : node.type === "agent_evaluation"
-                  ? "#f59e0b"
-                  : node.type === "summary"
-                    ? "#8b5cf6"
-                    : "#10b981",
+                  ? "linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)"
+                  : "linear-gradient(135deg, #10b981 0%, #34d399 100%)",
             color: "white",
+            fontWeight: "600",
             boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
             border: "2px solid rgba(255,255,255,0.2)",
           },
         })
-
-        if (index === 0) {
-          // Connect agent summary to first action
-          edges.push({
-            id: `agent_${agentId}-${nodeId}`,
-            source: `agent_${agentId}`,
-            target: nodeId,
-            type: "smoothstep",
-            animated: true,
-            style: {
-              stroke: "#60a5fa",
-              strokeWidth: 3,
-              strokeDasharray: "8,4",
-            },
-            markerEnd: {
-              type: "arrowclosed",
-              color: "#60a5fa",
-            },
-          })
-        }
-
-        if (index > 0) {
-          // Connect sequential actions in the thought chain
-          const prevNodeId = displayNodes[index - 1].id
-          edges.push({
-            id: `${prevNodeId}-${nodeId}`,
-            source: prevNodeId,
-            target: nodeId,
-            type: "smoothstep",
-            animated: true,
-            style: {
-              stroke: node.type === "agent_evaluation" ? "#fbbf24" : "#34d399",
-              strokeWidth: 2,
-              strokeDasharray: "5,3",
-            },
-            markerEnd: {
-              type: "arrowclosed",
-              color: node.type === "agent_evaluation" ? "#fbbf24" : "#34d399",
-            },
-          })
-        }
       })
 
-      yOffset += 150
+      yOffset += 180
     }
 
-    xOffset += 800
+    xOffset += 1000
   }
 
-  return { nodes, edges }
+  return nodes
 }
 
 function buildAdjacency(edges: Edge[]) {
@@ -1004,25 +916,30 @@ export function DataModelLineage({
   const edgesRaw = React.useMemo(() => {
     if (!serverData?.edges) return []
 
-    const enhancedEdges = serverData.edges.map((edge, index) => ({
-      id: `${edge.source}-${edge.target}`,
-      source: edge.source,
-      target: edge.target,
-      type: "smoothstep",
-      animated: true,
-      style: {
-        stroke: `hsl(${220 + ((index * 30) % 120)}, 70%, 60%)`,
-        strokeWidth: 3,
-        strokeDasharray: "8,4",
-        filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.1))",
-      },
-      markerEnd: {
-        type: "arrowclosed",
-        color: `hsl(${220 + ((index * 30) % 120)}, 70%, 60%)`,
-        width: 20,
-        height: 20,
-      },
-    }))
+    const enhancedEdges: Edge[] = []
+
+    // Add server edges
+    serverData.edges.forEach((edge, index) => {
+      enhancedEdges.push({
+        id: `${edge.source}-${edge.target}`,
+        source: edge.source,
+        target: edge.target,
+        type: "smoothstep",
+        animated: true,
+        style: {
+          stroke: `hsl(${220 + ((index * 30) % 120)}, 70%, 60%)`,
+          strokeWidth: 3,
+          strokeDasharray: "8,4",
+          filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.1))",
+        },
+        markerEnd: {
+          type: "arrowclosed",
+          color: `hsl(${220 + ((index * 30) % 120)}, 70%, 60%)`,
+          width: 20,
+          height: 20,
+        },
+      })
+    })
 
     return enhancedEdges
   }, [serverData?.edges])
@@ -1095,16 +1012,88 @@ export function DataModelLineage({
     })
   }, [raw, activeTypes, debouncedSearch])
 
+  const agentConnectionEdges = React.useMemo(() => {
+    const connectionEdges: Edge[] = []
+    const safeFilteredData = Array.isArray(filteredData) ? filteredData : []
+
+    if (safeFilteredData.length > 0) {
+      const agentGroups = new Map<string, LineageNode[]>()
+
+      for (const node of safeFilteredData) {
+        const agentId = node.metadata?.agentId || "unknown"
+        if (!agentGroups.has(agentId)) agentGroups.set(agentId, [])
+        agentGroups.get(agentId)!.push(node)
+      }
+
+      for (const [agentId, agentNodes] of agentGroups) {
+        const sortedNodes = agentNodes.sort((a, b) => {
+          const aTime = new Date(a.metadata?.timestamp || 0).getTime()
+          const bTime = new Date(b.metadata?.timestamp || 0).getTime()
+          return aTime - bTime
+        })
+
+        // Connect agent summary to first action
+        if (sortedNodes.length > 0) {
+          connectionEdges.push({
+            id: `agent_${agentId}-${sortedNodes[0].id}`,
+            source: `agent_${agentId}`,
+            target: sortedNodes[0].id,
+            type: "smoothstep",
+            animated: true,
+            style: {
+              stroke: "#60a5fa",
+              strokeWidth: 4,
+              strokeDasharray: "10,5",
+            },
+            markerEnd: {
+              type: "arrowclosed",
+              color: "#60a5fa",
+              width: 24,
+              height: 24,
+            },
+          })
+        }
+
+        // Connect sequential actions in thought chain
+        for (let i = 0; i < Math.min(sortedNodes.length - 1, 3); i++) {
+          const currentNode = sortedNodes[i]
+          const nextNode = sortedNodes[i + 1]
+
+          connectionEdges.push({
+            id: `${currentNode.id}-${nextNode.id}`,
+            source: currentNode.id,
+            target: nextNode.id,
+            type: "smoothstep",
+            animated: true,
+            style: {
+              stroke: nextNode.type === "agent_evaluation" ? "#fbbf24" : "#34d399",
+              strokeWidth: 3,
+              strokeDasharray: "6,3",
+            },
+            markerEnd: {
+              type: "arrowclosed",
+              color: nextNode.type === "agent_evaluation" ? "#fbbf24" : "#34d399",
+              width: 20,
+              height: 20,
+            },
+          })
+        }
+      }
+    }
+
+    return connectionEdges
+  }, [filteredData])
+
   const rfNodesBase = React.useMemo(() => {
     console.log("[v0] Creating ReactFlow nodes from filtered data:", filteredData.length)
     const layoutResult = layoutNodes(filteredData)
     console.log("[v0] Layout result:", layoutResult.length)
-    return layoutResult
+    return { nodes: layoutResult, edges: [] }
   }, [filteredData])
 
   const [nodes, setNodes, onNodesChange] = useNodesState(rfNodesBase.nodes)
   const [edges, , onEdgesChange] = useEdgesState(
-    rfNodesBase.edges.filter(
+    [...edgesRaw, ...agentConnectionEdges].filter(
       (e) => rfNodesBase.nodes.find((n) => n.id === e.source) && rfNodesBase.nodes.find((n) => n.id === e.target),
     ),
   )

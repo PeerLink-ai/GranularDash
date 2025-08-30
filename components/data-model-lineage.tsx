@@ -43,7 +43,6 @@ import {
   Database,
   Zap,
   Activity,
-  Clock,
   User,
   Building,
 } from "lucide-react"
@@ -230,96 +229,80 @@ const TYPE_THEME: Record<
 
 type FocusMode = "all" | "upstream" | "downstream"
 
-function buildEdges(data: LineageNode[]): Edge[] {
-  if (!Array.isArray(data)) return []
-
-  const ids = new Set(data.map((n) => n.id))
-  const edges: Edge[] = []
-  for (const n of data) {
-    for (const nxt of n.nextNodes ?? []) {
-      if (!ids.has(nxt)) continue
-      edges.push({
-        id: `${n.id}->${nxt}`,
-        source: n.id,
-        target: nxt,
-        type: "smoothstep",
-      })
-    }
-  }
-  return edges
-}
-
 function layoutNodes(data: LineageNode[], opts: { colGap?: number; rowGap?: number } = {}): Node[] {
   if (!Array.isArray(data)) return []
 
-  const colGap = opts.colGap ?? 400
-  const rowGap = opts.rowGap ?? 120
+  const colGap = opts.colGap ?? 500
+  const rowGap = opts.rowGap ?? 180
 
-  // Group nodes by agent and conversation chains
+  // Group nodes by agent and create conversation flows
   const agentGroups = new Map<string, LineageNode[]>()
   const conversationChains = new Map<string, LineageNode[]>()
 
   for (const n of data) {
-    // Group by agent ID for agent selection
     const agentId = n.metadata?.agentId || "unknown"
     if (!agentGroups.has(agentId)) agentGroups.set(agentId, [])
     agentGroups.get(agentId)!.push(n)
 
-    // Group by session/conversation for thought chains
     const sessionId = n.metadata?.sessionId || n.metadata?.parentInteractionId || n.id
     if (!conversationChains.has(sessionId)) conversationChains.set(sessionId, [])
     conversationChains.get(sessionId)!.push(n)
   }
 
-  // Create hierarchical layout: Agent -> Conversation -> Actions
   const nodes: Node[] = []
-  let xOffset = 0
+  let xOffset = 100
 
   for (const [agentId, agentNodes] of agentGroups) {
-    // Create agent summary node
+    // Create sophisticated agent summary node
+    const totalTokens = agentNodes.reduce(
+      (acc, n) =>
+        acc +
+        (typeof n.metadata?.tokenUsage === "object" ? n.metadata.tokenUsage.total || 0 : n.metadata?.tokenUsage || 0),
+      0,
+    )
+
+    const avgScore = agentNodes.reduce((acc, n) => acc + (n.metadata?.evaluationScore || 0), 0) / agentNodes.length
+
     const agentSummary = {
       id: `agent_${agentId}`,
       type: "default",
-      position: { x: xOffset, y: 0 },
-      sourcePosition: Position.Right,
-      targetPosition: Position.Left,
+      position: { x: xOffset, y: 50 },
+      sourcePosition: Position.Bottom,
+      targetPosition: Position.Top,
       data: {
-        label: `Agent: ${agentId}`,
+        label: (
+          <div className="p-4 text-center">
+            <div className="text-lg font-bold text-white mb-2">Agent {agentId}</div>
+            <div className="text-sm text-blue-100 space-y-1">
+              <div>{agentNodes.length} Actions</div>
+              <div>{totalTokens.toLocaleString()} Tokens</div>
+              <div>Score: {avgScore.toFixed(1)}/10</div>
+            </div>
+          </div>
+        ),
         node: {
           id: `agent_${agentId}`,
           name: `Agent ${agentId}`,
           type: "agent" as const,
           path: ["agents", agentId],
-          metadata: {
-            agentId,
-            totalActions: agentNodes.length,
-            avgResponseTime:
-              agentNodes.reduce((acc, n) => acc + (n.metadata?.responseTime || 0), 0) / agentNodes.length,
-            totalTokens: agentNodes.reduce(
-              (acc, n) =>
-                acc +
-                (typeof n.metadata?.tokenUsage === "object"
-                  ? n.metadata.tokenUsage.total || 0
-                  : n.metadata?.tokenUsage || 0),
-              0,
-            ),
-          },
+          metadata: { agentId, totalActions: agentNodes.length, avgScore, totalTokens },
           nextNodes: [],
         },
       },
       style: {
-        width: 280,
-        borderRadius: 12,
-        borderWidth: 2,
-        padding: 16,
-        backgroundColor: "#1e40af",
+        width: 200,
+        height: 120,
+        borderRadius: 16,
+        border: "3px solid #1e40af",
+        background: "linear-gradient(135deg, #1e40af 0%, #3b82f6 100%)",
+        boxShadow: "0 8px 32px rgba(30, 64, 175, 0.3)",
         color: "white",
-        fontWeight: "bold",
       },
+      draggable: true,
     }
     nodes.push(agentSummary)
 
-    // Group agent's nodes by conversation chains
+    // Create conversation flows with better organization
     const agentConversations = new Map<string, LineageNode[]>()
     for (const node of agentNodes) {
       const sessionId = node.metadata?.sessionId || node.metadata?.parentInteractionId || "default"
@@ -327,50 +310,213 @@ function layoutNodes(data: LineageNode[], opts: { colGap?: number; rowGap?: numb
       agentConversations.get(sessionId)!.push(node)
     }
 
-    let yOffset = 150
+    let yOffset = 250
+    let conversationIndex = 0
+
     for (const [sessionId, sessionNodes] of agentConversations) {
-      // Sort by timestamp to show thought progression
+      // Sort by timestamp for proper flow
       sessionNodes.sort((a, b) => {
         const aTime = new Date(a.metadata?.timestamp || 0).getTime()
         const bTime = new Date(b.metadata?.timestamp || 0).getTime()
         return aTime - bTime
       })
 
-      // Only show key nodes to reduce clutter
-      const keyNodes = sessionNodes.filter(
-        (node) =>
-          node.type === "agent_action" ||
-          node.type === "agent_evaluation" ||
-          (node.type === "agent_response" && node.metadata?.evaluationScore),
-      )
+      // Create conversation header
+      const conversationHeader = {
+        id: `conversation_${sessionId}`,
+        type: "default",
+        position: { x: xOffset + 50, y: yOffset },
+        sourcePosition: Position.Right,
+        targetPosition: Position.Left,
+        data: {
+          label: (
+            <div className="p-2 text-center">
+              <div className="text-sm font-semibold text-gray-700">Conversation {conversationIndex + 1}</div>
+              <div className="text-xs text-gray-500">{sessionNodes.length} steps</div>
+            </div>
+          ),
+          node: {
+            id: `conversation_${sessionId}`,
+            name: `Conversation ${conversationIndex + 1}`,
+            type: "conversation" as const,
+            path: ["conversations", sessionId],
+            metadata: { sessionId, stepCount: sessionNodes.length },
+            nextNodes: [],
+          },
+        },
+        style: {
+          width: 140,
+          height: 60,
+          borderRadius: 12,
+          border: "2px solid #e5e7eb",
+          background: "linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)",
+          boxShadow: "0 4px 16px rgba(0, 0, 0, 0.1)",
+        },
+        draggable: true,
+      }
+      nodes.push(conversationHeader)
 
-      keyNodes.forEach((node, index) => {
+      // Create action nodes in a flowing pattern
+      sessionNodes.forEach((node, index) => {
+        const nodeStyle = {
+          action: {
+            background: "linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)",
+            border: "2px solid #1e40af",
+            color: "white",
+          },
+          response: {
+            background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+            border: "2px solid #047857",
+            color: "white",
+          },
+          evaluation: {
+            background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+            border: "2px solid #b45309",
+            color: "white",
+          },
+        }
+
+        const currentStyle = nodeStyle[node.type as keyof typeof nodeStyle] || nodeStyle.action
+
         nodes.push({
           id: node.id,
           type: "default",
-          position: { x: xOffset + 50 + index * 200, y: yOffset },
+          position: {
+            x: xOffset + 220 + index * 180,
+            y: yOffset + (index % 2 === 0 ? 0 : 40), // Stagger for visual flow
+          },
           sourcePosition: Position.Right,
           targetPosition: Position.Left,
-          data: { label: node.name, node },
-          style: {
-            width: 180,
-            borderRadius: 8,
-            borderWidth: 1,
-            padding: 10,
-            backgroundColor:
-              node.type === "agent_action" ? "#3b82f6" : node.type === "agent_evaluation" ? "#f59e0b" : "#10b981",
-            color: "white",
+          data: {
+            label: (
+              <div className="p-3 text-center">
+                <div className="text-sm font-semibold mb-1">{node.name}</div>
+                <div className="text-xs opacity-90">
+                  {node.metadata?.evaluationScore
+                    ? `Score: ${node.metadata.evaluationScore}/10`
+                    : node.metadata?.responseTime
+                      ? `${node.metadata.responseTime}ms`
+                      : node.type}
+                </div>
+              </div>
+            ),
+            node,
           },
+          style: {
+            width: 160,
+            height: 80,
+            borderRadius: 12,
+            ...currentStyle,
+            boxShadow: "0 6px 24px rgba(0, 0, 0, 0.15)",
+            transition: "all 0.3s ease",
+          },
+          draggable: true,
         })
       })
 
-      yOffset += 100
+      yOffset += 180
+      conversationIndex++
     }
 
-    xOffset += 600
+    xOffset += colGap
   }
 
   return nodes
+}
+
+function buildEdges(data: LineageNode[]): Edge[] {
+  if (!Array.isArray(data)) return []
+
+  const edges: Edge[] = []
+  const nodeIds = new Set(data.map((n) => n.id))
+
+  // Create edges from nextNodes relationships
+  for (const node of data) {
+    for (const nextId of node.nextNodes ?? []) {
+      if (!nodeIds.has(nextId)) continue
+
+      edges.push({
+        id: `${node.id}->${nextId}`,
+        source: node.id,
+        target: nextId,
+        type: "smoothstep",
+        animated: true,
+        style: {
+          stroke: "#3b82f6",
+          strokeWidth: 3,
+          strokeDasharray: "8,4",
+        },
+        markerEnd: {
+          type: "arrowclosed",
+          color: "#3b82f6",
+          width: 20,
+          height: 20,
+        },
+      })
+    }
+  }
+
+  // Add agent-to-conversation connections
+  const agentGroups = new Map<string, LineageNode[]>()
+  for (const node of data) {
+    const agentId = node.metadata?.agentId || "unknown"
+    if (!agentGroups.has(agentId)) agentGroups.set(agentId, [])
+    agentGroups.get(agentId)!.push(node)
+  }
+
+  for (const [agentId, agentNodes] of agentGroups) {
+    const conversations = new Map<string, LineageNode[]>()
+    for (const node of agentNodes) {
+      const sessionId = node.metadata?.sessionId || node.metadata?.parentInteractionId || "default"
+      if (!conversations.has(sessionId)) conversations.set(sessionId, [])
+      conversations.get(sessionId)!.push(node)
+    }
+
+    // Connect agent to conversations
+    for (const sessionId of conversations.keys()) {
+      edges.push({
+        id: `agent_${agentId}->conversation_${sessionId}`,
+        source: `agent_${agentId}`,
+        target: `conversation_${sessionId}`,
+        type: "smoothstep",
+        style: {
+          stroke: "#1e40af",
+          strokeWidth: 2,
+        },
+        markerEnd: {
+          type: "arrowclosed",
+          color: "#1e40af",
+        },
+      })
+
+      // Connect conversation to first action
+      const sessionNodes = conversations.get(sessionId)!
+      if (sessionNodes.length > 0) {
+        const firstNode = sessionNodes.sort((a, b) => {
+          const aTime = new Date(a.metadata?.timestamp || 0).getTime()
+          const bTime = new Date(b.metadata?.timestamp || 0).getTime()
+          return aTime - bTime
+        })[0]
+
+        edges.push({
+          id: `conversation_${sessionId}->${firstNode.id}`,
+          source: `conversation_${sessionId}`,
+          target: firstNode.id,
+          type: "smoothstep",
+          style: {
+            stroke: "#6b7280",
+            strokeWidth: 2,
+          },
+          markerEnd: {
+            type: "arrowclosed",
+            color: "#6b7280",
+          },
+        })
+      }
+    }
+  }
+
+  return edges
 }
 
 function buildAdjacency(edges: Edge[]) {
@@ -609,198 +755,92 @@ type GraphApi = {
 function GraphCanvas({
   nodes,
   edges,
-  selectedId,
   onNodeClick,
-  highlightSet,
-  dimNonMatches,
-  onApiReady,
-  graphRef,
 }: {
   nodes: Node[]
   edges: Edge[]
-  selectedId?: string
   onNodeClick: (id: string) => void
-  highlightSet: Set<string> | null
-  dimNonMatches: boolean
-  onApiReady?: (api: GraphApi) => void
-  graphRef: React.RefObject<HTMLDivElement>
 }) {
+  console.log("[v0] GraphCanvas received nodes:", nodes.length, "edges:", edges.length)
+
   const rf = useReactFlow()
+  const [styledNodes, setStyledNodes] = React.useState(nodes)
 
   React.useEffect(() => {
-    onApiReady?.({
-      fit: () => rf.fitView({ duration: 350, padding: 0.2 }),
-      zoomIn: () => rf.zoomIn({ duration: 150 }),
-      zoomOut: () => rf.zoomOut({ duration: 150 }),
-    })
-  }, [onApiReady, rf])
-
-  const styledNodes = React.useMemo(() => {
-    console.log("[v0] Creating styled nodes:", nodes.length)
-    const styled = nodes.map((n): Node => {
-      const isSelected = n.id === selectedId
-      const isHighlighted = highlightSet?.has(n.id) || false
-
-      const isDimmed = dimNonMatches && !isHighlighted && !isSelected
-
-      // Enhanced styling for different node types
-      const getNodeStyle = (nodeType: string) => {
-        const baseStyle = {
-          borderRadius: 12,
-          borderWidth: isSelected ? 3 : 1,
-          padding: 16,
-          minHeight: 80,
-          boxShadow: isSelected ? "0 8px 25px rgba(0,0,0,0.15)" : "0 2px 8px rgba(0,0,0,0.1)",
-          transition: "all 0.2s ease",
-          opacity: isDimmed ? 0.3 : 1,
-        }
-
-        switch (nodeType) {
-          case "agent":
-            return { ...baseStyle, backgroundColor: "#1e40af", color: "white", borderColor: "#1d4ed8" }
-          case "agent_action":
-            return { ...baseStyle, backgroundColor: "#3b82f6", color: "white", borderColor: "#2563eb" }
-          case "agent_response":
-            return { ...baseStyle, backgroundColor: "#10b981", color: "white", borderColor: "#059669" }
-          case "agent_evaluation":
-            return { ...baseStyle, backgroundColor: "#f59e0b", color: "white", borderColor: "#d97706" }
-          default:
-            return { ...baseStyle, backgroundColor: "#6b7280", color: "white", borderColor: "#4b5563" }
-        }
-      }
-
-      return {
-        ...n,
-        style: getNodeStyle(n.data.node.type),
-        data: {
-          ...n.data,
-          label: (
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <h4 className="font-semibold text-sm truncate">{n.data.node.name}</h4>
-                {n.data.node.type === "agent" && (
-                  <Badge variant="secondary" className="text-xs">
-                    {n.data.node.metadata.totalActions} actions
-                  </Badge>
-                )}
-              </div>
-
-              <div className="flex items-center gap-2 text-xs opacity-90">
-                <span className="capitalize">{n.data.node.type.replace("_", " ")}</span>
-                {n.data.node.metadata.timestamp && (
-                  <div className="flex items-center gap-1">
-                    <Clock className="h-3 w-3" />
-                    <span>{new Date(n.data.node.metadata.timestamp).toLocaleTimeString()}</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Enhanced metadata display for different node types */}
-              {n.data.node.type === "agent" && (
-                <div className="flex flex-wrap gap-1 text-xs">
-                  <Badge variant="outline" className="text-[10px] bg-white/20">
-                    {n.data.node.metadata.totalTokens} tokens
-                  </Badge>
-                  <Badge variant="outline" className="text-[10px] bg-white/20">
-                    {Math.round(n.data.node.metadata.avgResponseTime)}ms avg
-                  </Badge>
-                </div>
-              )}
-
-              {(n.data.node.type === "agent_action" || n.data.node.type === "agent_response") && (
-                <div className="flex items-center gap-2 text-xs">
-                  {n.data.node.metadata.tokenUsage && (
-                    <Badge variant="outline" className="text-[10px] bg-white/20">
-                      {typeof n.data.node.metadata.tokenUsage === "object"
-                        ? `${n.data.node.metadata.tokenUsage.total || n.data.node.metadata.tokenUsage.prompt + n.data.node.metadata.tokenUsage.completion || "N/A"} tokens`
-                        : `${n.data.node.metadata.tokenUsage} tokens`}
-                    </Badge>
-                  )}
-                  {n.data.node.metadata.evaluationScore && (
-                    <Badge variant="outline" className="text-[10px] bg-white/20">
-                      Score: {String(n.data.node.metadata.evaluationScore)}
-                    </Badge>
-                  )}
-                </div>
-              )}
-            </div>
-          ),
-        },
-      } satisfies Node
-    })
-
-    console.log("[v0] Styled nodes created:", styled.length)
-    return styled
-  }, [nodes, selectedId, highlightSet, dimNonMatches])
+    setStyledNodes(nodes)
+  }, [nodes])
 
   React.useEffect(() => {
-    console.log("[v0] ReactFlow nodes updated:", nodes.length)
     if (nodes.length > 0) {
-      // Force ReactFlow to re-render with new nodes
       setTimeout(() => {
-        rf.fitView({ duration: 350, padding: 0.2 })
-      }, 100)
+        rf.fitView({ duration: 500, padding: 0.1 })
+      }, 200)
     }
   }, [nodes, rf])
 
   return (
-    <div ref={graphRef} className="relative h-[520px] rounded-lg border">
+    <div className="relative h-[600px] rounded-xl border-2 border-gray-200 overflow-hidden bg-gradient-to-br from-slate-50 to-blue-50">
       <ReactFlow
         nodes={styledNodes}
         edges={edges}
         onNodeClick={(_, n) => onNodeClick(n.id)}
+        nodesDraggable={true}
         nodesConnectable={false}
-        nodesDraggable
-        elementsSelectable
+        elementsSelectable={true}
         fitView
-        fitViewOptions={{ duration: 350, padding: 0.2 }}
+        fitViewOptions={{ duration: 500, padding: 0.1 }}
         proOptions={{ hideAttribution: true }}
+        defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
+        minZoom={0.2}
+        maxZoom={2}
       >
         <MiniMap
           pannable
           zoomable
-          nodeStrokeWidth={2}
-          nodeColor="#3b82f6"
-          maskColor="rgba(0, 0, 0, 0.4)"
+          nodeStrokeWidth={3}
+          nodeColor={(node) => {
+            if (node.id.startsWith("agent_")) return "#1e40af"
+            if (node.id.startsWith("conversation_")) return "#6b7280"
+            return "#3b82f6"
+          }}
+          maskColor="rgba(0, 0, 0, 0.2)"
           style={{
-            backgroundColor: "white",
-            border: "1px solid #e5e7eb",
-            borderRadius: "8px",
-            width: 200,
-            height: 140,
+            backgroundColor: "rgba(255, 255, 255, 0.9)",
+            border: "2px solid #e5e7eb",
+            borderRadius: "12px",
+            width: 220,
+            height: 160,
+            backdropFilter: "blur(8px)",
           }}
         />
-        <Background />
+        <Background variant="dots" gap={20} size={1.5} color="#cbd5e1" style={{ opacity: 0.4 }} />
         <Controls
           position="bottom-right"
-          className="!bg-background/95 !border !border-border !rounded-lg !shadow-lg !backdrop-blur-sm"
-          showFitView={false}
-          showZoom={false}
-          showInteractive={false}
+          className="!bg-white/90 !border-2 !border-gray-200 !rounded-xl !shadow-xl !backdrop-blur-sm"
+          showFitView={true}
+          showZoom={true}
+          showInteractive={true}
         >
           <button
-            className="react-flow__controls-button !text-foreground hover:!bg-muted hover:!text-foreground transition-colors border-0 bg-transparent"
-            onClick={() => rf.zoomIn({ duration: 150 })}
+            className="react-flow__controls-button !text-gray-700 hover:!bg-blue-50 hover:!text-blue-700 transition-all duration-200 border-0 bg-transparent"
+            onClick={() => rf.zoomIn({ duration: 200 })}
             title="Zoom in"
-            aria-label="Zoom in"
           >
-            <ZoomIn className="h-4 w-4" />
+            <ZoomIn className="h-5 w-5" />
           </button>
           <button
-            className="react-flow__controls-button !text-foreground hover:!bg-muted hover:!text-foreground transition-colors border-0 bg-transparent"
-            onClick={() => rf.zoomOut({ duration: 150 })}
+            className="react-flow__controls-button !text-gray-700 hover:!bg-blue-50 hover:!text-blue-700 transition-all duration-200 border-0 bg-transparent"
+            onClick={() => rf.zoomOut({ duration: 200 })}
             title="Zoom out"
-            aria-label="Zoom out"
           >
-            <ZoomOut className="h-4 w-4" />
+            <ZoomOut className="h-5 w-5" />
           </button>
           <button
-            className="react-flow__controls-button !text-foreground hover:!bg-muted hover:!text-foreground transition-colors border-0 bg-transparent"
-            onClick={() => rf.fitView({ duration: 350, padding: 0.2 })}
+            className="react-flow__controls-button !text-gray-700 hover:!bg-blue-50 hover:!text-blue-700 transition-all duration-200 border-0 bg-transparent"
+            onClick={() => rf.fitView({ duration: 500, padding: 0.1 })}
             title="Fit view"
-            aria-label="Fit view"
           >
-            <Focus className="h-4 w-4" />
+            <Focus className="h-5 w-5" />
           </button>
         </Controls>
       </ReactFlow>
@@ -877,28 +917,31 @@ export function DataModelLineage({
   }, [serverData])
 
   const edgesRaw = React.useMemo(() => {
-    if (!serverData?.edges) return []
+    if (!serverData?.edges && !Array.isArray(raw)) return []
 
-    // Create enhanced edges with conversation flow
-    const enhancedEdges = serverData.edges.map((edge) => ({
+    // Use buildEdges function for proper connections
+    const builtEdges = buildEdges(raw)
+
+    // Add server edges if available
+    const serverEdges = (serverData?.edges || []).map((edge) => ({
       id: `${edge.source}-${edge.target}`,
       source: edge.source,
       target: edge.target,
       type: "smoothstep",
       animated: true,
       style: {
-        stroke: "#3b82f6",
+        stroke: "#10b981",
         strokeWidth: 2,
         strokeDasharray: "5,5",
       },
       markerEnd: {
         type: "arrowclosed",
-        color: "#3b82f6",
+        color: "#10b981",
       },
     }))
 
-    return enhancedEdges
-  }, [serverData?.edges])
+    return [...builtEdges, ...serverEdges]
+  }, [serverData?.edges, raw])
 
   const activeTypes = React.useMemo(
     () => new Set((Object.keys(typeFilter) as LineageNode["type"][]).filter((k) => typeFilter[k])),
@@ -1363,15 +1406,10 @@ export function DataModelLineage({
               <GraphCanvas
                 nodes={nodes}
                 edges={edges}
-                selectedId={selected?.id}
                 onNodeClick={(id) => {
                   const n = raw.find((x) => x.id === id)
                   if (n) setSelected(n)
                 }}
-                highlightSet={highlightSet}
-                dimNonMatches={focusMode !== "all"}
-                onApiReady={(api) => (apiRef.current = api)}
-                graphRef={graphRef}
               />
 
               <p className="text-xs text-muted-foreground">

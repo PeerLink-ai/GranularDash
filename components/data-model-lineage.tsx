@@ -126,7 +126,7 @@ export interface LineageNode {
     parentInteractionId?: string
     processingTime?: number
     tokensUsed?: number
-    confidenceScore?: number
+    confidenceScore?: string
     modelUsed?: string
     reasoningSteps?: any
     decisionFactors?: any
@@ -1085,22 +1085,22 @@ export function DataModelLineage({
   }, [filteredData])
 
   const rfNodesBase = React.useMemo(() => {
-    console.log("[v0] Creating ReactFlow nodes from filtered data:", filteredData.length)
-    const layoutResult = layoutNodes(filteredData)
-    console.log("[v0] Layout result:", layoutResult.length)
-    return { nodes: layoutResult, edges: [] }
+    if (!filteredData || filteredData.length === 0) return []
+
+    // Use the layoutNodes function directly to get positioned ReactFlow nodes
+    return layoutNodes(filteredData, { colGap: 400, rowGap: 150 })
   }, [filteredData])
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(rfNodesBase.nodes)
+  const [nodes, setNodes, onNodesChange] = useNodesState(rfNodesBase)
   const [edges, , onEdgesChange] = useEdgesState(
     [...edgesRaw, ...agentConnectionEdges].filter(
-      (e) => rfNodesBase.nodes.find((n) => n.id === e.source) && rfNodesBase.nodes.find((n) => n.id === e.target),
+      (e) => rfNodesBase.find((n) => n.id === e.source) && rfNodesBase.find((n) => n.id === e.target),
     ),
   )
 
   React.useEffect(() => {
-    console.log("[v0] Updating ReactFlow nodes:", rfNodesBase.nodes.length)
-    setNodes(rfNodesBase.nodes)
+    console.log("[v0] Updating ReactFlow nodes:", rfNodesBase.length)
+    setNodes(rfNodesBase)
   }, [rfNodesBase, setNodes])
 
   const { out, incoming } = React.useMemo(() => buildAdjacency(edges), [edges])

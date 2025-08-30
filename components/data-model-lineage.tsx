@@ -1321,11 +1321,18 @@ export function DataModelLineage({
 
           {!loading && raw.length === 0 && (
             <div className="text-center py-8 text-muted-foreground">
-              <div className="text-lg font-medium">No lineage data found</div>
-              <div className="text-sm mt-2">
-                Try running some playground tests or check if your database contains lineage data.
-                <br />
-                Check the browser console for detailed debugging information.
+              <div className="text-lg font-medium">No agent lineage data available</div>
+              <div className="text-sm mt-2 space-y-2">
+                <p>This view shows lineage data only for agents you have connected to your account.</p>
+                <p>To see agent interactions:</p>
+                <ul className="text-left inline-block mt-2 space-y-1">
+                  <li>• Connect agents through the Agent Management section</li>
+                  <li>• Run some agent interactions or playground tests</li>
+                  <li>• Ensure your connected agents have recorded activities</li>
+                </ul>
+                <p className="mt-3 text-xs text-muted-foreground/70">
+                  For security, only data from your connected agents is displayed.
+                </p>
               </div>
             </div>
           )}

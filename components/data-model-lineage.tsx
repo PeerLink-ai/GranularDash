@@ -1,8 +1,17 @@
 "use client"
 
 import * as React from "react"
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Separator } from "@/components/ui/separator"
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,6 +22,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import {
   Download,
@@ -21,11 +31,13 @@ import {
   Focus,
   GitBranch,
   ImageIcon,
+  Info,
   RotateCcw,
   Search,
   ZoomIn,
   ZoomOut,
   BadgeCheck,
+  RefreshCw,
   Bot,
   Brain,
   Database,
@@ -41,15 +53,14 @@ import ReactFlow, {
   Background,
   Controls,
   MiniMap,
+  ReactFlowProvider,
+  useEdgesState,
+  useNodesState,
   Position,
   type Edge,
   type Node,
   useReactFlow,
-  BackgroundVariant,
 } from "reactflow"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Label } from "@/components/ui/label"
-import { useNodesState, useEdgesState } from "reactflow"
 
 export interface DataModelLineageProps {
   onOpenDatasetVersioning: () => void
@@ -123,15 +134,6 @@ export interface LineageNode {
     alternativesConsidered?: any
     outcomePrediction?: string
     actualOutcome?: string
-    chainLength?: number
-    chainNodes?: LineageNode[]
-    startTime?: string
-    endTime?: string
-    thoughtChain?: { type: string; content: string; timestamp: string }[]
-    totalInteractions?: number
-    avgResponseTime?: number
-    recentActivity?: { type: string; timestamp: string; prompt: string }[]
-    lastActivity?: string
   }
   nextNodes?: string[]
 }
@@ -525,7 +527,7 @@ function GraphCanvas({
   nodes: Node[]
   edges: Edge[]
   selectedId?: string
-  onNodeClick: (event: React.MouseEvent, node: Node) => void
+  onNodeClick: (id: string) => void
   highlightSet: Set<string> | null
   dimNonMatches: boolean
   onApiReady?: (api: GraphApi) => void
@@ -625,7 +627,7 @@ function GraphCanvas({
       <ReactFlow
         nodes={styledNodes}
         edges={edges}
-        onNodeClick={onNodeClick}
+        onNodeClick={(_, n) => onNodeClick(n.id)}
         nodesConnectable={false}
         nodesDraggable
         elementsSelectable
@@ -690,10 +692,6 @@ export function DataModelLineage({
   onOpenTransformationSteps,
   onOpenModelVersionTracking,
 }: DataModelLineageProps) {
-  const [selectedAgent, setSelectedAgent] = React.useState<string | null>(null)
-  const [viewMode, setViewMode] = React.useState<"overview" | "agent-detail">("overview")
-  const [agentGroups, setAgentGroups] = React.useState<Map<string, LineageNode[]>>(new Map())
-
   const [serverData, setServerData] = React.useState<{
     nodes: LineageNode[]
     edges: { source: string; target: string }[]
@@ -721,7 +719,174 @@ export function DataModelLineage({
     organization: false,
   })
 
-  const loadLineage = React.useCallback(async () => {
+  React.useEffect(() => {
+    loadLineage()
+  }, [])
+
+  React.useEffect(() => {
+    console.log("[v0] Frontend received server data:", serverData)
+    if (serverData?.nodes && Array.isArray(serverData.nodes) && serverData.nodes.length > 0) {
+      console.log("[v0] Processing", serverData.nodes.length, "nodes and", serverData.edges?.length || 0, "edges")
+      const ids = new Set(serverData.nodes.map((n) => n.id))
+      const nextMap = new Map<string, string[]>()
+
+      const safeEdges = Array.isArray(serverData.edges) ? serverData.edges : []
+      for (const e of safeEdges) {
+        if (!ids.has(e.source) || !ids.has(e.target)) continue
+        const arr = nextMap.get(e.source) || []
+        arr.push(e.target)
+        nextMap.set(e.source, arr)
+      }
+
+      const normalized = serverData.nodes.map((n) => ({
+        ...n,
+        nextNodes: nextMap.get(n.id) || [],
+        path: Array.isArray(n.path) ? n.path : [],
+        metadata: n.metadata || {},
+      }))
+      console.log("[v0] Normalized nodes:", normalized.length)
+      console.log("[v0] Sample normalized nodes:", normalized.slice(0, 3))
+      setRaw(normalized as LineageNode[])
+      setSelected(normalized[0] || null)
+    } else {
+      console.log("[v0] No valid nodes received, setting empty state")
+      setRaw([])
+      setSelected(null)
+    }
+  }, [serverData])
+
+  const edgesRaw = React.useMemo(() => {
+    if (!serverData?.edges) return []
+    return serverData.edges.map((e, i) => ({
+      id: `edge-${i}`,
+      source: e.source,
+      target: e.target,
+      type: "smoothstep",
+      style: { stroke: "#64748b", strokeWidth: 2 },
+    }))
+  }, [serverData?.edges])
+
+  const activeTypes = React.useMemo(
+    () => new Set((Object.keys(typeFilter) as LineageNode["type"][]).filter((k) => typeFilter[k])),
+    [typeFilter],
+  )
+
+  const filteredData = React.useMemo(() => {
+    const safeRaw = Array.isArray(raw) ? raw : []
+    const q = debouncedSearch.trim().toLowerCase()
+    return safeRaw.filter((n) => {
+      if (!activeTypes.has(n.type)) return false
+      if (!q) return true
+      const hay = [
+        n.name,
+        n.type,
+        n.metadata?.owner,
+        n.metadata?.version,
+        n.metadata?.schema,
+        n.metadata?.sourceFile,
+        n.metadata?.status,
+        n.metadata?.description,
+        n.metadata?.provider,
+        n.metadata?.endpoint,
+        n.metadata?.cost,
+        n.metadata?.performance,
+        n.metadata?.agentId,
+        n.metadata?.actionType,
+        n.metadata?.prompt,
+        n.metadata?.response,
+        n.metadata?.tokenUsage,
+        n.metadata?.evaluationScore,
+        n.metadata?.parentActionId,
+        n.metadata?.timestamp,
+        n.metadata?.duration,
+        n.metadata?.model,
+        n.metadata?.temperature,
+        n.metadata?.maxTokens,
+        n.metadata?.interactionType,
+        n.metadata?.responseTime,
+        n.metadata?.qualityScores,
+        n.metadata?.evaluationFlags,
+        n.metadata?.auditHash,
+        n.metadata?.activityType,
+        n.metadata?.lineageId,
+        n.metadata?.activityData,
+        n.metadata?.thoughtType,
+        n.metadata?.thoughtContent,
+        n.metadata?.toolCalls,
+        n.metadata?.decisions,
+        n.metadata?.dbQueries,
+        n.metadata?.sessionId,
+        n.metadata?.parentInteractionId,
+        n.metadata?.processingTime,
+        n.metadata?.tokensUsed,
+        n.metadata?.confidenceScore,
+        n.metadata?.modelUsed,
+        n.metadata?.reasoningSteps,
+        n.metadata?.decisionFactors,
+        n.metadata?.alternativesConsidered,
+        n.metadata?.outcomePrediction,
+        n.metadata?.actualOutcome,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+      return hay.includes(q)
+    })
+  }, [raw, activeTypes, debouncedSearch])
+
+  const rfNodesBase = React.useMemo(() => {
+    console.log("[v0] Creating ReactFlow nodes from filtered data:", filteredData.length)
+    const layoutResult = layoutNodes(filteredData)
+    console.log("[v0] Layout result:", layoutResult.length)
+    return layoutResult
+  }, [filteredData])
+
+  const [nodes, setNodes, onNodesChange] = useNodesState(rfNodesBase)
+  const [edges, , onEdgesChange] = useEdgesState(
+    edgesRaw.filter((e) => rfNodesBase.find((n) => n.id === e.source) && rfNodesBase.find((n) => n.id === e.target)),
+  )
+
+  React.useEffect(() => {
+    console.log("[v0] Updating ReactFlow nodes:", rfNodesBase.length)
+    setNodes(rfNodesBase)
+  }, [rfNodesBase, setNodes])
+
+  const { out, incoming } = React.useMemo(() => buildAdjacency(edges), [edges])
+
+  const highlightSet = React.useMemo(() => {
+    if (!selected) return null
+    if (focusMode === "all") return null
+    const base = new Set<string>([selected.id])
+    if (focusMode === "upstream") for (const id of traverseUpstream(selected.id, incoming)) base.add(id)
+    if (focusMode === "downstream") for (const id of traverseDownstream(selected.id, out)) base.add(id)
+    return base
+  }, [focusMode, selected, out, incoming])
+
+  const graphRef = React.useRef<HTMLDivElement>(null)
+  const apiRef = React.useRef<GraphApi | null>(null)
+
+  const handleExportJSON = React.useCallback(() => {
+    const safeNodes = Array.isArray(nodes) ? nodes : []
+    const safeEdges = Array.isArray(edges) ? edges : []
+
+    const visibleNodes = safeNodes.map((n) => (n.data as any).node as LineageNode)
+    const visibleIds = new Set(visibleNodes.map((n) => n.id))
+    const visibleEdges = safeEdges.filter((e) => visibleIds.has(e.source) && visibleIds.has(e.target))
+    downloadJSON("lineage-visible.json", {
+      nodes: visibleNodes,
+      edges: visibleEdges,
+      generatedAt: new Date().toISOString(),
+    })
+  }, [nodes, edges])
+
+  const handleExportPNG = React.useCallback(async () => {
+    if (!graphRef.current) return
+    await downloadPNG("lineage-graph.png", graphRef.current)
+  }, [])
+
+  const breadcrumbSegments = Array.isArray(selected?.path) ? selected.path : []
+
+  const loadLineage = async () => {
     console.log("[v0] Starting to load lineage and agent actions from APIs...")
     setLoading(true)
     setError(null)
@@ -853,7 +1018,7 @@ export function DataModelLineage({
               outcomePrediction: thought.outcome_prediction,
               actualOutcome: thought.actual_outcome,
               sessionId: thought.session_id,
-              parentInteractionId: thought.parent_interaction_id,
+              auditHash: thought.audit_block_hash,
             },
             nextNodes: [],
           })
@@ -908,396 +1073,329 @@ export function DataModelLineage({
         lineageMapping: lineageData?.lineageMapping || [],
       })
     } catch (error) {
-      console.error("[v0] Error loading lineage:", error)
+      console.error("[v0] Error loading lineage data:", error)
       setError(error instanceof Error ? error.message : "Failed to load lineage data")
     } finally {
       setLoading(false)
     }
-  }, [])
-
-  React.useEffect(() => {
-    loadLineage()
-  }, [loadLineage])
-
-  React.useEffect(() => {
-    console.log("[v0] Frontend received server data:", serverData)
-    if (serverData?.nodes && Array.isArray(serverData.nodes) && serverData.nodes.length > 0) {
-      console.log("[v0] Processing", serverData.nodes.length, "nodes and", serverData.edges?.length || 0, "edges")
-      const ids = new Set(serverData.nodes.map((n) => n.id))
-      const nextMap = new Map<string, string[]>()
-
-      const safeEdges = Array.isArray(serverData.edges) ? serverData.edges : []
-      for (const e of safeEdges) {
-        if (!ids.has(e.source) || !ids.has(e.target)) continue
-        const arr = nextMap.get(e.source) || []
-        arr.push(e.target)
-        nextMap.set(e.source, arr)
-      }
-
-      const normalized = serverData.nodes.map((n) => ({
-        ...n,
-        nextNodes: nextMap.get(n.id) || [],
-        path: Array.isArray(n.path) ? n.path : [],
-        metadata: n.metadata || {},
-      }))
-      console.log("[v0] Normalized nodes:", normalized.length)
-      console.log("[v0] Sample normalized nodes:", normalized.slice(0, 3))
-      setRaw(normalized as LineageNode[])
-      setSelected(normalized[0] || null)
-    } else {
-      console.log("[v0] No valid nodes received, setting empty state")
-      setRaw([])
-      setSelected(null)
-    }
-  }, [serverData])
-
-  const edgesRaw = React.useMemo(() => {
-    if (!serverData?.edges) return []
-    return serverData.edges.map((e, i) => ({
-      id: `edge-${i}`,
-      source: e.source,
-      target: e.target,
-      type: "smoothstep",
-      style: { stroke: "#64748b", strokeWidth: 2 },
-    }))
-  }, [serverData?.edges])
-
-  const activeTypes = React.useMemo(
-    () => new Set((Object.keys(typeFilter) as LineageNode["type"][]).filter((k) => typeFilter[k])),
-    [typeFilter],
-  )
-
-  const processedData = React.useMemo(() => {
-    const safeRaw = Array.isArray(raw) ? raw : []
-
-    // Group nodes by agent ID for better organization
-    const groups = new Map<string, LineageNode[]>()
-    const agentSessions = new Map<string, Map<string, LineageNode[]>>()
-
-    safeRaw.forEach((node) => {
-      const agentId = node.metadata?.agentId || "system"
-      const sessionId = node.metadata?.sessionId || "default"
-
-      if (!groups.has(agentId)) groups.set(agentId, [])
-      groups.get(agentId)!.push(node)
-
-      if (!agentSessions.has(agentId)) agentSessions.set(agentId, new Map())
-      if (!agentSessions.get(agentId)!.has(sessionId)) {
-        agentSessions.get(agentId)!.set(sessionId, [])
-      }
-      agentSessions.get(agentId)!.get(sessionId)!.push(node)
-    })
-
-    setAgentGroups(groups)
-
-    // If viewing specific agent, show only their nodes with thought chains
-    if (viewMode === "agent-detail" && selectedAgent) {
-      const agentNodes = agentGroups.get(selectedAgent) || []
-
-      // Create thought chains by grouping related actions
-      const chains: LineageNode[] = []
-      const sessions = agentSessions.get(selectedAgent) || new Map()
-
-      sessions.forEach((sessionNodes, sessionId) => {
-        // Sort by timestamp to create proper chains
-        const sortedNodes = sessionNodes.sort((a, b) => {
-          const timeA = new Date(a.metadata?.timestamp || 0).getTime()
-          const timeB = new Date(b.metadata?.timestamp || 0).getTime()
-          return timeA - timeB
-        })
-
-        // Group into conversation chains (action -> response -> evaluation)
-        const conversationChains: LineageNode[][] = []
-        let currentChain: LineageNode[] = []
-
-        sortedNodes.forEach((node) => {
-          if (node.type === "agent_action") {
-            if (currentChain.length > 0) {
-              conversationChains.push([...currentChain])
-            }
-            currentChain = [node]
-          } else if (node.type === "agent_response" || node.type === "agent_evaluation") {
-            currentChain.push(node)
-          }
-        })
-
-        if (currentChain.length > 0) {
-          conversationChains.push(currentChain)
-        }
-
-        // Create summary nodes for each conversation chain
-        conversationChains.forEach((chain, chainIndex) => {
-          const firstNode = chain[0]
-          const lastNode = chain[chain.length - 1]
-
-          chains.push({
-            id: `chain_${sessionId}_${chainIndex}`,
-            name: `Conversation ${chainIndex + 1}`,
-            type: "agent_action",
-            path: ["agent", selectedAgent, sessionId, `chain_${chainIndex}`],
-            metadata: {
-              ...firstNode.metadata,
-              chainLength: chain.length,
-              chainNodes: chain,
-              startTime: firstNode.metadata?.timestamp,
-              endTime: lastNode.metadata?.timestamp,
-              totalTokens: chain.reduce((sum, n) => {
-                const tokens = n.metadata?.tokenUsage
-                if (typeof tokens === "object" && tokens?.total) return sum + tokens.total
-                if (typeof tokens === "number") return sum + tokens
-                return sum
-              }, 0),
-              thoughtChain: chain.map((n) => ({
-                type: n.type,
-                content: n.metadata?.prompt || n.metadata?.response || n.metadata?.thoughtContent,
-                timestamp: n.metadata?.timestamp,
-              })),
-            },
-            nextNodes: [],
-          })
-        })
-      })
-
-      return chains
-    }
-
-    // Overview mode: show agent summary nodes only
-    const agentSummaries: LineageNode[] = []
-    agentGroups.forEach((nodes, agentId) => {
-      const totalInteractions = nodes.length
-      const totalTokens = nodes.reduce((sum, n) => {
-        const tokens = n.metadata?.tokenUsage
-        if (typeof tokens === "object" && tokens?.total) return sum + tokens.total
-        if (typeof tokens === "number") return sum + tokens
-        return sum
-      }, 0)
-
-      const avgResponseTime =
-        nodes.reduce((sum, n) => {
-          return sum + (n.metadata?.responseTime || n.metadata?.processingTime || 0)
-        }, 0) / nodes.length
-
-      const recentActivity = nodes
-        .filter((n) => n.metadata?.timestamp)
-        .sort((a, b) => new Date(b.metadata!.timestamp!).getTime() - new Date(a.metadata!.timestamp!).getTime())
-        .slice(0, 5)
-
-      agentSummaries.push({
-        id: `agent_summary_${agentId}`,
-        name: `Agent ${agentId}`,
-        type: "agent",
-        path: ["agents", agentId],
-        metadata: {
-          agentId,
-          totalInteractions,
-          totalTokens,
-          avgResponseTime: Math.round(avgResponseTime),
-          recentActivity: recentActivity.map((n) => ({
-            type: n.type,
-            timestamp: n.metadata?.timestamp,
-            prompt: n.metadata?.prompt?.substring(0, 100) + "...",
-          })),
-          status: "active",
-          lastActivity: recentActivity[0]?.metadata?.timestamp,
-        },
-        nextNodes: [],
-      })
-    })
-
-    return agentSummaries
-  }, [raw, viewMode, selectedAgent])
-
-  const filteredData = React.useMemo(() => {
-    const q = debouncedSearch.trim().toLowerCase()
-    return processedData.filter((n) => {
-      if (!activeTypes.has(n.type)) return false
-      if (!q) return true
-      const searchText = [
-        n.name,
-        n.metadata?.agentId,
-        n.metadata?.prompt,
-        n.metadata?.response,
-        n.metadata?.thoughtContent,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase()
-      return searchText.includes(q)
-    })
-  }, [processedData, activeTypes, debouncedSearch])
-
-  const [nodes, setNodes, onNodesChange] = useNodesState([])
-  const [edges, setEdges, onEdgesChange] = useEdgesState([])
-
-  React.useEffect(() => {
-    if (serverData?.edges) {
-      const validEdges = serverData.edges
-        .filter((e) => filteredData.some((n) => n.id === e.source) && filteredData.some((n) => n.id === e.target))
-        .map((e, i) => ({
-          id: `edge-${i}`,
-          source: e.source,
-          target: e.target,
-          type: "smoothstep",
-          animated: true,
-          style: { stroke: "#6366f1", strokeWidth: 2 },
-        }))
-      setEdges(validEdges)
-    }
-  }, [serverData, filteredData, setEdges])
-
-  React.useEffect(() => {
-    console.log("[v0] Updating ReactFlow nodes:", filteredData.length)
-    setNodes(filteredData)
-  }, [filteredData, setNodes])
-
-  function onNodeClick(event: React.MouseEvent, node: Node) {
-    const lineageNode = node.data.node as LineageNode
-    setSelected(lineageNode)
   }
 
-  return (
-    <div className="flex h-full">
-      <div className="flex-1 flex flex-col">
-        <div className="border-b bg-background p-4">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-4">
-              <h2 className="text-xl font-semibold">Agent Overview</h2>
-            </div>
-            <div className="flex items-center gap-2">
-              <Badge variant="secondary">{filteredData.length} Agents</Badge>
-              {loading && <Badge variant="outline">Loading...</Badge>}
-            </div>
-          </div>
+  const debugInfo = React.useMemo(() => {
+    return {
+      serverDataNodes: serverData?.nodes?.length || 0,
+      serverDataEdges: serverData?.edges?.length || 0,
+      rawNodes: raw.length,
+      filteredNodes: filteredData.length,
+      rfNodes: nodes.length,
+      rfEdges: edges.length,
+    }
+  }, [serverData, raw, filteredData, nodes, edges])
 
-          <div className="flex gap-2">
-            <Input
-              placeholder="Search agents..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="max-w-sm"
-            />
-            <Button onClick={loadLineage} disabled={loading} size="sm">
-              Refresh
+  return (
+    <ReactFlowProvider>
+      <Card className="shadow-sm border-gray-200 dark:border-gray-800">
+        <CardHeader className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <CardTitle className="text-2xl font-bold text-foreground">Agent Actions & Data Lineage</CardTitle>
+              <CardDescription className="text-muted-foreground">
+                Visualize your complete AI pipeline: live agent actions, models, deployments, evaluations, and data
+                flows with real-time audit tracking.
+              </CardDescription>
+              <div className="mt-2 text-xs text-muted-foreground bg-muted/50 p-2 rounded">
+                Debug: Server({debugInfo.serverDataNodes}n, {debugInfo.serverDataEdges}e) → Raw({debugInfo.rawNodes}) →
+                Filtered({debugInfo.filteredNodes}) → Display({debugInfo.rfNodes}n, {debugInfo.rfEdges}e)
+                {loading && " | Loading..."}
+                {error && ` | Error: ${error}`}
+              </div>
+            </div>
+            <Button variant="outline" className="gap-2 bg-transparent" onClick={loadLineage} disabled={loading}>
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              {loading ? "Refreshing" : "Refresh"}
+            </Button>
+            <Button variant="outline" className="gap-2 bg-transparent" onClick={handleExportJSON}>
+              <Download className="h-4 w-4" />
+              Export JSON
             </Button>
           </div>
-        </div>
+          <div className="mt-4">
+            <Breadcrumb>
+              <BreadcrumbList>
+                {breadcrumbSegments.map((segment, idx) => (
+                  <React.Fragment key={`${segment}-${idx}`}>
+                    <BreadcrumbItem>
+                      {idx === breadcrumbSegments.length - 1 ? (
+                        <BreadcrumbPage className="font-semibold">{segment}</BreadcrumbPage>
+                      ) : (
+                        <BreadcrumbLink
+                          href="#"
+                          onClick={(e) => {
+                            e.preventDefault()
+                            const node = raw.find((n) => n.path[idx] === segment && n.path.length === idx + 1)
+                            if (node) setSelected(node)
+                          }}
+                        >
+                          {segment}
+                        </BreadcrumbLink>
+                      )}
+                    </BreadcrumbItem>
+                    {idx < breadcrumbSegments.length - 1 && <BreadcrumbSeparator />}
+                  </React.Fragment>
+                ))}
+              </BreadcrumbList>
+            </Breadcrumb>
+          </div>
+        </CardHeader>
 
-        <div className="flex-1 relative">
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onNodeClick={onNodeClick}
-            fitView
-            fitViewOptions={{ padding: 0.2 }}
-            minZoom={0.1}
-            maxZoom={2}
-            defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
-          >
-            <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
-            <Controls />
-          </ReactFlow>
-        </div>
-      </div>
+        <CardContent className="p-6 space-y-6">
+          <MetricsBar data={raw} />
+          <Separator className="bg-gray-200 dark:bg-gray-800" />
 
-      <div className="w-80 border-l bg-muted/30 flex flex-col">
-        <div className="p-4 border-b">
-          <h3 className="font-medium">Agent Details</h3>
-        </div>
+          <Toolbar
+            search={search}
+            setSearch={setSearch}
+            typeFilter={typeFilter}
+            setTypeFilter={setTypeFilter}
+            onFit={() => apiRef.current?.fit()}
+            onReset={() => {
+              setSearch("")
+              setTypeFilter({
+                agent: true,
+                agent_action: true,
+                agent_response: true,
+                agent_evaluation: true,
+                model: true,
+                deployment: true,
+                evaluation: true,
+                dataset: true,
+                transformation: true,
+                integration: true,
+                user: false,
+                organization: false,
+              })
+              setFocusMode("all")
+              apiRef.current?.fit()
+            }}
+            onExportJSON={handleExportJSON}
+            onExportPNG={handleExportPNG}
+          />
+          {error && (
+            <div className="text-sm text-destructive">
+              {"Failed to load live lineage: "}
+              {error}
+            </div>
+          )}
 
-        <ScrollArea className="flex-1 p-4">
-          {selected ? (
-            <div className="space-y-4">
-              <div>
-                <h4 className="font-medium mb-2">{selected.name}</h4>
-                <Badge variant="outline">{selected.type}</Badge>
+          {!loading && raw.length === 0 && (
+            <div className="text-center py-8 text-muted-foreground">
+              <div className="text-lg font-medium">No lineage data found</div>
+              <div className="text-sm mt-2">
+                Try running some playground tests or check if your database contains lineage data.
+                <br />
+                Check the browser console for detailed debugging information.
+              </div>
+            </div>
+          )}
+
+          <div className="grid lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Focus</span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant={focusMode === "all" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setFocusMode("all")}
+                  >
+                    All
+                  </Button>
+                  <Button
+                    variant={focusMode === "upstream" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setFocusMode("upstream")}
+                  >
+                    Upstream
+                  </Button>
+                  <Button
+                    variant={focusMode === "downstream" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setFocusMode("downstream")}
+                  >
+                    Downstream
+                  </Button>
+                </div>
               </div>
 
-              {selected.type === "agent" && (
-                <div className="space-y-3">
-                  <div>
-                    <Label className="text-sm font-medium">Total Interactions</Label>
-                    <p className="text-2xl font-bold text-blue-600">{selected.metadata?.totalInteractions || 0}</p>
-                  </div>
+              <GraphCanvas
+                nodes={nodes}
+                edges={edges}
+                selectedId={selected?.id}
+                onNodeClick={(id) => {
+                  const n = raw.find((x) => x.id === id)
+                  if (n) setSelected(n)
+                }}
+                highlightSet={highlightSet}
+                dimNonMatches={focusMode !== "all"}
+                onApiReady={(api) => (apiRef.current = api)}
+                graphRef={graphRef}
+              />
 
-                  <div>
-                    <Label className="text-sm font-medium">Total Tokens</Label>
-                    <p className="text-lg font-semibold">{(selected.metadata?.totalTokens || 0).toLocaleString()}</p>
-                  </div>
-
-                  <div>
-                    <Label className="text-sm font-medium">Avg Response Time</Label>
-                    <p className="text-lg">{selected.metadata?.avgResponseTime || 0}ms</p>
-                  </div>
-
-                  <div>
-                    <Label className="text-sm font-medium">Recent Activity</Label>
-                    <div className="space-y-2 mt-2">
-                      {(selected.metadata?.recentActivity || []).map((activity: any, i: number) => (
-                        <div key={i} className="p-2 bg-background rounded border">
-                          <div className="flex justify-between items-start mb-1">
-                            <Badge variant="secondary" className="text-xs">
-                              {activity.type}
-                            </Badge>
-                            <span className="text-xs text-muted-foreground">
-                              {activity.timestamp ? new Date(activity.timestamp).toLocaleTimeString() : ""}
-                            </span>
-                          </div>
-                          <p className="text-xs text-muted-foreground">{activity.prompt || "No prompt"}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {selected.type === "agent_action" && (
-                <div className="space-y-3">
-                  <div>
-                    <Label className="text-sm font-medium">Chain Length</Label>
-                    <p className="text-lg font-semibold">{selected.metadata?.chainLength || 0} interactions</p>
-                  </div>
-
-                  <div>
-                    <Label className="text-sm font-medium">Total Tokens</Label>
-                    <p className="text-lg">{selected.metadata?.totalTokens || 0}</p>
-                  </div>
-
-                  <div>
-                    <Label className="text-sm font-medium">Thought Chain</Label>
-                    <div className="space-y-2 mt-2 max-h-60 overflow-y-auto">
-                      {(selected.metadata?.thoughtChain || []).map((thought: any, i: number) => (
-                        <div key={i} className="p-2 bg-background rounded border">
-                          <div className="flex justify-between items-start mb-1">
-                            <Badge
-                              variant={thought.type === "agent_action" ? "default" : "secondary"}
-                              className="text-xs"
-                            >
-                              {thought.type.replace("agent_", "")}
-                            </Badge>
-                            <span className="text-xs text-muted-foreground">
-                              {thought.timestamp ? new Date(thought.timestamp).toLocaleTimeString() : ""}
-                            </span>
-                          </div>
-                          <p className="text-xs">
-                            {thought.content?.substring(0, 150)}
-                            {thought.content?.length > 150 ? "..." : ""}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
+              <p className="text-xs text-muted-foreground">
+                Tip: Drag to pan, scroll to zoom, and drag nodes to adjust layout. Agent actions show real-time audit
+                data.
+              </p>
             </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              Click on an agent to see their activity details and thought chains.
-            </p>
-          )}
-        </ScrollArea>
-      </div>
-    </div>
+
+            <div className="lg:col-span-1">
+              <Card className="h-full">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg">Node Details</CardTitle>
+                  <CardDescription>Inspect metadata and agent action details.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {selected ? (
+                    <div className="space-y-4">
+                      <div className="space-y-1">
+                        <div className="text-sm text-muted-foreground">Name</div>
+                        <div className="font-medium">{selected.name}</div>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="text-sm text-muted-foreground">Type</div>
+                        <div className="capitalize">{selected.type}</div>
+                      </div>
+
+                      <Tabs defaultValue="details" className="w-full">
+                        <TabsList className="grid grid-cols-3">
+                          <TabsTrigger value="details" className="gap-2">
+                            <Info className="h-4 w-4" />
+                            Details
+                          </TabsTrigger>
+                          <TabsTrigger value="path" className="gap-2">
+                            <GitBranch className="h-4 w-4" />
+                            Path
+                          </TabsTrigger>
+                          {selected.type.startsWith("agent") && selected.metadata.agentId && (
+                            <TabsTrigger value="agent" className="gap-2">
+                              <Bot className="h-4 w-4" />
+                              Agent
+                            </TabsTrigger>
+                          )}
+                        </TabsList>
+                        <TabsContent value="details" className="mt-3">
+                          <div className="space-y-2 text-sm">
+                            {Object.entries(selected.metadata).map(([key, value]) =>
+                              value ? (
+                                <div key={key}>
+                                  <div className="text-muted-foreground">
+                                    {key.replace(/([A-Z])/g, " $1").replace(/^./, (s) => s.toUpperCase())}
+                                  </div>
+                                  <div className="font-medium break-words">
+                                    {key === "prompt" || key === "response"
+                                      ? String(value).length > 100
+                                        ? `${String(value).substring(0, 100)}...`
+                                        : String(value)
+                                      : String(value)}
+                                  </div>
+                                </div>
+                              ) : null,
+                            )}
+                          </div>
+                        </TabsContent>
+                        <TabsContent value="path" className="mt-3">
+                          <ol className="list-decimal ml-4 space-y-1 text-sm">
+                            {selected.path.map((p, i) => (
+                              <li key={`${p}-${i}`} className="break-words">
+                                {p}
+                              </li>
+                            ))}
+                          </ol>
+                        </TabsContent>
+                        {selected.type.startsWith("agent") && selected.metadata.agentId && (
+                          <TabsContent value="agent" className="mt-3">
+                            <div className="space-y-3 text-sm">
+                              <div className="flex items-center gap-2">
+                                <Bot className="h-4 w-4 text-blue-500" />
+                                <span className="font-medium">Agent ID:</span>
+                                <code className="text-xs bg-muted px-1 rounded">{selected.metadata.agentId}</code>
+                              </div>
+
+                              {selected.metadata.prompt && (
+                                <div>
+                                  <div className="text-muted-foreground mb-1">Prompt:</div>
+                                  <div className="bg-muted/50 p-2 rounded text-xs max-h-32 overflow-y-auto">
+                                    {selected.metadata.prompt}
+                                  </div>
+                                </div>
+                              )}
+
+                              {selected.metadata.response && (
+                                <div>
+                                  <div className="text-muted-foreground mb-1">Response:</div>
+                                  <div className="bg-muted/50 p-2 rounded text-xs max-h-32 overflow-y-auto">
+                                    {selected.metadata.response}
+                                  </div>
+                                </div>
+                              )}
+
+                              <div className="flex flex-wrap gap-2">
+                                {selected.metadata.tokenUsage && (
+                                  <Badge variant="outline">
+                                    {typeof selected.metadata.tokenUsage === "object"
+                                      ? `${selected.metadata.tokenUsage.total || selected.metadata.tokenUsage.prompt + selected.metadata.tokenUsage.completion || "N/A"} tokens`
+                                      : `${selected.metadata.tokenUsage} tokens`}
+                                  </Badge>
+                                )}
+                                {selected.metadata.evaluationScore && (
+                                  <Badge variant="outline">Score: {String(selected.metadata.evaluationScore)}</Badge>
+                                )}
+                                {selected.metadata.duration && (
+                                  <Badge variant="outline">{String(selected.metadata.duration)}ms</Badge>
+                                )}
+                              </div>
+                            </div>
+                          </TabsContent>
+                        )}
+                      </Tabs>
+
+                      <Separator />
+
+                      <div className="flex flex-wrap gap-2">
+                        <Button variant="outline" size="sm" onClick={() => setFocusMode("upstream")}>
+                          View Upstream
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => setFocusMode("downstream")}>
+                          View Downstream
+                        </Button>
+                        {(selected.type === "dataset" ||
+                          selected.type === "transformation" ||
+                          selected.type === "model") && (
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={() => {
+                              if (selected.type === "dataset") onOpenDatasetVersioning()
+                              else if (selected.type === "transformation") onOpenTransformationSteps()
+                              else if (selected.type === "model") onOpenModelVersionTracking()
+                            }}
+                            className="gap-2"
+                          >
+                            <BadgeCheck className="h-4 w-4" />
+                            View More Details
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-muted-foreground text-sm">
+                      Select a node from the graph to view its details and agent actions.
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </ReactFlowProvider>
   )
 }

@@ -1010,23 +1010,23 @@ export function DataModelLineage({
   const breadcrumbSegments = Array.isArray(selected?.path) ? selected.path : []
 
   const loadLineage = async () => {
-    console.log("[v0] Starting to load lineage for user-connected agents only...")
+    console.log("[v0] Starting to load lineage and agent actions from APIs...")
     setLoading(true)
     setError(null)
     try {
-      // First get user's connected agents for security filtering
-      const connectedAgentsRes = await fetch("/api/connected-agents", { cache: "no-store" })
-      const connectedAgents = await connectedAgentsRes.json().catch(() => [])
-      const userAgentIds = new Set(connectedAgents.map((agent: any) => agent.agent_id))
-
-      console.log("[v0] User has access to agents:", Array.from(userAgentIds))
-
       const [lineageRes, governanceRes, activityRes, thoughtRes] = await Promise.all([
         fetch("/api/lineage", { cache: "no-store" }),
         fetch("/api/agent-governance", { cache: "no-store" }),
         fetch("/api/agent-activity", { cache: "no-store" }),
         fetch("/api/thought-process", { cache: "no-store" }),
       ])
+
+      console.log("[v0] API response statuses:", {
+        lineage: lineageRes.status,
+        governance: governanceRes.status,
+        activity: activityRes.status,
+        thought: thoughtRes.status,
+      })
 
       const [lineageData, governanceData, activityData, thoughtData] = await Promise.all([
         lineageRes.json().catch(() => ({ nodes: [], edges: [] })),
@@ -1035,170 +1035,160 @@ export function DataModelLineage({
         thoughtRes.json().catch(() => []),
       ])
 
-      // Security filter: only include data for user-connected agents
-      const filteredGovernanceData = Array.isArray(governanceData)
-        ? governanceData.filter((log: any) => userAgentIds.has(log.agent_id))
-        : []
+      console.log("[v0] Raw API responses:", { lineageData, governanceData, activityData, thoughtData })
 
-      const filteredActivityData = Array.isArray(activityData)
-        ? activityData.filter((activity: any) => userAgentIds.has(activity.agent_id))
-        : []
-
-      const filteredThoughtData = Array.isArray(thoughtData)
-        ? thoughtData.filter((thought: any) => userAgentIds.has(thought.agent_id))
-        : []
-
-      console.log("[v0] Filtered data for user agents:", {
-        governance: filteredGovernanceData.length,
-        activity: filteredActivityData.length,
-        thoughts: filteredThoughtData.length,
-      })
-
+      // Combine lineage nodes with agent action nodes
       const lineageNodes = Array.isArray(lineageData?.nodes) ? lineageData.nodes : []
       const lineageEdges = Array.isArray(lineageData?.edges) ? lineageData.edges : []
 
+      // Transform agent data into lineage nodes
       const agentNodes: LineageNode[] = []
       const agentEdges: { source: string; target: string }[] = []
 
-      // Group interactions by conversation/session for better organization
-      const conversationGroups = new Map<string, any[]>()
+      // Process governance logs
+      if (Array.isArray(governanceData)) {
+        governanceData.forEach((log: any, index: number) => {
+          const actionId = `gov_${log.id}`
+          agentNodes.push({
+            id: actionId,
+            name: `${log.interaction_type || "Interaction"} ${index + 1}`,
+            type: "agent_action",
+            path: ["governance", "interactions", log.agent_id || "unknown"],
+            metadata: {
+              agentId: log.agent_id,
+              interactionType: log.interaction_type,
+              prompt: log.prompt,
+              response: log.response,
+              timestamp: log.created_at,
+              responseTime: log.response_time_ms,
+              tokenUsage: log.token_usage,
+              qualityScores: log.quality_scores,
+              evaluationFlags: log.evaluation_flags,
+              auditHash: log.audit_block_hash,
+            },
+            nextNodes: [],
+          })
 
-      // Process governance logs with conversation grouping
-      filteredGovernanceData.forEach((log: any, index: number) => {
-        const conversationId = log.session_id || log.agent_id || "default"
-        if (!conversationGroups.has(conversationId)) {
-          conversationGroups.set(conversationId, [])
-        }
-        conversationGroups.get(conversationId)!.push({
-          ...log,
-          type: "governance",
-          index,
-        })
-      })
-
-      // Create organized nodes for each conversation
-      for (const [conversationId, interactions] of conversationGroups) {
-        // Sort interactions by timestamp for proper flow
-        interactions.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-
-        // Create conversation summary node
-        const agentId = interactions[0]?.agent_id || "unknown"
-        const conversationSummaryId = `conversation_${conversationId}`
-
-        agentNodes.push({
-          id: conversationSummaryId,
-          name: `Agent ${agentId} Conversation`,
-          type: "agent_summary",
-          path: ["conversations", agentId, conversationId],
-          metadata: {
-            agentId,
-            conversationId,
-            totalInteractions: interactions.length,
-            startTime: interactions[0]?.created_at,
-            endTime: interactions[interactions.length - 1]?.created_at,
-            totalTokens: interactions.reduce((sum, i) => sum + (i.token_usage?.total || 0), 0),
-            avgQualityScore:
-              interactions.reduce((sum, i) => sum + (i.quality_scores?.overall || 0), 0) / interactions.length,
-          },
-          nextNodes: [],
-        })
-
-        // Create prompt/response pairs with better organization
-        interactions.forEach((interaction, idx) => {
-          if (interaction.prompt) {
-            const promptId = `prompt_${interaction.id}`
+          // Create response node if response exists
+          if (log.response) {
+            const responseId = `gov_resp_${log.id}`
             agentNodes.push({
-              id: promptId,
-              name: `Prompt ${idx + 1}`,
-              type: "agent_action",
-              path: ["prompts", agentId, conversationId],
+              id: responseId,
+              name: `Response ${index + 1}`,
+              type: "agent_response",
+              path: ["governance", "responses", log.agent_id || "unknown"],
               metadata: {
-                agentId,
-                conversationId,
-                prompt: interaction.prompt,
-                timestamp: interaction.created_at,
-                tokenUsage: interaction.token_usage,
-                interactionType: interaction.interaction_type,
-                sequenceNumber: idx + 1,
+                agentId: log.agent_id,
+                response: log.response,
+                timestamp: log.created_at,
+                tokenUsage: log.token_usage,
+                qualityScores: log.quality_scores,
+                parentActionId: actionId,
               },
               nextNodes: [],
             })
-
-            // Connect conversation to prompt
-            agentEdges.push({ source: conversationSummaryId, target: promptId })
-
-            if (interaction.response) {
-              const responseId = `response_${interaction.id}`
-              agentNodes.push({
-                id: responseId,
-                name: `Response ${idx + 1}`,
-                type: "agent_response",
-                path: ["responses", agentId, conversationId],
-                metadata: {
-                  agentId,
-                  conversationId,
-                  response: interaction.response,
-                  timestamp: interaction.created_at,
-                  tokenUsage: interaction.token_usage,
-                  qualityScores: interaction.quality_scores,
-                  evaluationFlags: interaction.evaluation_flags,
-                  responseTime: interaction.response_time_ms,
-                  sequenceNumber: idx + 1,
-                  // Additional helpful details
-                  ratings: {
-                    accuracy: interaction.quality_scores?.accuracy || 0,
-                    relevance: interaction.quality_scores?.relevance || 0,
-                    completeness: interaction.quality_scores?.completeness || 0,
-                    overall: interaction.quality_scores?.overall || 0,
-                  },
-                  rationale: interaction.evaluation_flags?.rationale || "No evaluation rationale provided",
-                },
-                nextNodes: [],
-              })
-
-              // Connect prompt to response
-              agentEdges.push({ source: promptId, target: responseId })
-
-              // Connect to next prompt if exists
-              if (idx < interactions.length - 1) {
-                const nextPromptId = `prompt_${interactions[idx + 1].id}`
-                agentEdges.push({ source: responseId, target: nextPromptId })
-              }
-            }
+            agentEdges.push({ source: actionId, target: responseId })
           }
         })
       }
 
-      // Process filtered thought data for additional context
-      filteredThoughtData.forEach((thought: any, index: number) => {
-        const thoughtId = `thought_${thought.id}`
-        agentNodes.push({
-          id: thoughtId,
-          name: `Reasoning ${index + 1}`,
-          type: "agent_evaluation",
-          path: ["reasoning", thought.agent_id || "unknown"],
-          metadata: {
-            agentId: thought.agent_id,
-            thoughtType: thought.thought_type,
-            thoughtContent: thought.thought_content,
-            timestamp: thought.created_at,
-            confidenceScore: thought.confidence_score,
-            reasoningSteps: thought.reasoning_steps,
-            decisionFactors: thought.decision_factors,
-            // Enhanced details for helpfulness
-            modelUsed: thought.model_used,
-            temperature: thought.temperature,
-            alternativesConsidered: thought.alternatives_considered,
-            outcomePrediction: thought.outcome_prediction,
-          },
-          nextNodes: [],
+      // Process activity stream
+      if (Array.isArray(activityData)) {
+        activityData.forEach((activity: any, index: number) => {
+          const activityId = `activity_${activity.id}`
+          agentNodes.push({
+            id: activityId,
+            name: `${activity.activity_type || "Activity"} ${index + 1}`,
+            type: "agent_action",
+            path: ["activity", activity.activity_type || "unknown", activity.agent_id || "unknown"],
+            metadata: {
+              agentId: activity.agent_id,
+              activityType: activity.activity_type,
+              status: activity.status,
+              duration: activity.duration_ms,
+              timestamp: activity.timestamp,
+              lineageId: activity.lineage_id,
+              activityData: activity.activity_data,
+            },
+            nextNodes: [],
+          })
         })
-      })
+      }
 
+      // Process thought process logs
+      if (Array.isArray(thoughtData)) {
+        thoughtData.forEach((thought: any, index: number) => {
+          const thoughtId = `thought_${thought.id}`
+          agentNodes.push({
+            id: thoughtId,
+            name: `${thought.thought_type || "Thought"} ${index + 1}`,
+            type: "agent_evaluation",
+            path: ["thoughts", thought.thought_type || "unknown", thought.agent_id || "unknown"],
+            metadata: {
+              agentId: thought.agent_id,
+              thoughtType: thought.thought_type,
+              thoughtContent: thought.thought_content,
+              prompt: thought.prompt,
+              timestamp: thought.created_at,
+              processingTime: thought.processing_time_ms,
+              tokensUsed: thought.tokens_used,
+              confidenceScore: thought.confidence_score,
+              modelUsed: thought.model_used,
+              temperature: thought.temperature,
+              reasoningSteps: thought.reasoning_steps,
+              decisionFactors: thought.decision_factors,
+              alternativesConsidered: thought.alternatives_considered,
+              outcomePrediction: thought.outcome_prediction,
+              actualOutcome: thought.actual_outcome,
+              sessionId: thought.session_id,
+              auditHash: thought.audit_block_hash,
+            },
+            nextNodes: [],
+          })
+        })
+      }
+
+      // Process lineage mapping for connections
+      if (Array.isArray(lineageData?.lineageMapping)) {
+        lineageData.lineageMapping.forEach((mapping: any, index: number) => {
+          const mappingId = `lineage_${mapping.id}`
+          agentNodes.push({
+            id: mappingId,
+            name: `${mapping.interaction_type || "Interaction"} ${index + 1}`,
+            type: "agent_action",
+            path: ["lineage", mapping.interaction_type || "unknown", mapping.agent_id || "unknown"],
+            metadata: {
+              agentId: mapping.agent_id,
+              interactionType: mapping.interaction_type,
+              prompt: mapping.prompt,
+              response: mapping.response,
+              timestamp: mapping.created_at,
+              responseTime: mapping.response_time,
+              tokenUsage: mapping.token_usage,
+              toolCalls: mapping.tool_calls,
+              decisions: mapping.decisions,
+              evaluationScores: mapping.evaluation_scores,
+              dbQueries: mapping.db_queries,
+              sessionId: mapping.session_id,
+              parentInteractionId: mapping.parent_interaction_id,
+            },
+            nextNodes: [],
+          })
+
+          // Create connections based on parent_interaction_id
+          if (mapping.parent_interaction_id) {
+            const parentId = `lineage_${mapping.parent_interaction_id}`
+            agentEdges.push({ source: parentId, target: mappingId })
+          }
+        })
+      }
+
+      // Combine all nodes and edges
       const allNodes = [...lineageNodes, ...agentNodes]
       const allEdges = [...lineageEdges, ...agentEdges]
 
-      console.log("[v0] Combined user-scoped nodes:", allNodes.length, "edges:", allEdges.length)
+      console.log("[v0] Combined nodes:", allNodes.length, "edges:", allEdges.length)
+      console.log("[v0] Sample agent nodes:", agentNodes.slice(0, 3))
 
       setServerData({
         nodes: allNodes,
@@ -1206,7 +1196,7 @@ export function DataModelLineage({
         lineageMapping: lineageData?.lineageMapping || [],
       })
     } catch (error) {
-      console.error("[v0] Error loading user-scoped lineage data:", error)
+      console.error("[v0] Error loading lineage data:", error)
       setError(error instanceof Error ? error.message : "Failed to load lineage data")
     } finally {
       setLoading(false)
@@ -1321,18 +1311,11 @@ export function DataModelLineage({
 
           {!loading && raw.length === 0 && (
             <div className="text-center py-8 text-muted-foreground">
-              <div className="text-lg font-medium">No agent lineage data available</div>
-              <div className="text-sm mt-2 space-y-2">
-                <p>This view shows lineage data only for agents you have connected to your account.</p>
-                <p>To see agent interactions:</p>
-                <ul className="text-left inline-block mt-2 space-y-1">
-                  <li>• Connect agents through the Agent Management section</li>
-                  <li>• Run some agent interactions or playground tests</li>
-                  <li>• Ensure your connected agents have recorded activities</li>
-                </ul>
-                <p className="mt-3 text-xs text-muted-foreground/70">
-                  For security, only data from your connected agents is displayed.
-                </p>
+              <div className="text-lg font-medium">No lineage data found</div>
+              <div className="text-sm mt-2">
+                Try running some playground tests or check if your database contains lineage data.
+                <br />
+                Check the browser console for detailed debugging information.
               </div>
             </div>
           )}

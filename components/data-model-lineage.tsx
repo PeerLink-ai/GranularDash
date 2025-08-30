@@ -639,7 +639,8 @@ function GraphCanvas({
     console.log("[v0] Creating styled nodes:", nodes.length)
     const styled = nodes.map((n): Node => {
       const isSelected = n.id === selectedId
-      const isHighlighted = highlightSet.has(n.id)
+      const isHighlighted = highlightSet?.has(n.id) || false
+
       const isDimmed = dimNonMatches && !isHighlighted && !isSelected
 
       // Enhanced styling for different node types

@@ -1,5 +1,7 @@
 "use client"
 
+import { useEffect } from "react"
+
 import * as React from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -1085,10 +1087,13 @@ export function DataModelLineage({
   }, [filteredData])
 
   const rfNodesBase = React.useMemo(() => {
-    if (!filteredData || filteredData.length === 0) return []
-
-    // Use the layoutNodes function directly to get positioned ReactFlow nodes
-    return layoutNodes(filteredData, { colGap: 400, rowGap: 150 })
+    console.log("[v0] Creating rfNodesBase from filteredData:", filteredData.length)
+    const layoutResult = layoutNodes(filteredData, { colGap: 500, rowGap: 150 })
+    console.log(
+      "[v0] Layout result positions:",
+      layoutResult.map((n) => ({ id: n.id, x: n.position.x, y: n.position.y })),
+    )
+    return layoutResult
   }, [filteredData])
 
   const [nodes, setNodes, onNodesChange] = useNodesState(rfNodesBase)
@@ -1098,8 +1103,8 @@ export function DataModelLineage({
     ),
   )
 
-  React.useEffect(() => {
-    console.log("[v0] Updating ReactFlow nodes:", rfNodesBase.length)
+  useEffect(() => {
+    console.log("[v0] Updating nodes state with:", rfNodesBase.length, "nodes")
     setNodes(rfNodesBase)
   }, [rfNodesBase, setNodes])
 

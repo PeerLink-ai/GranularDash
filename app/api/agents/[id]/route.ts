@@ -95,13 +95,18 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
 
     const { id } = params
 
+    console.log("[v0] Attempting to delete agent:", id, "for user:", user.id)
+
     // Try connected_agents first
-    const [connectedAgent] = await sql`
+    const connectedAgents = await sql`
       SELECT * FROM connected_agents 
       WHERE id = ${id} AND user_id = ${user.id}
     `
 
-    if (connectedAgent) {
+    if (connectedAgents.length > 0) {
+      const connectedAgent = connectedAgents[0]
+      console.log("[v0] Found connected agent:", connectedAgent.name)
+
       // Delete the connected agent
       await sql`
         DELETE FROM connected_agents 
@@ -122,35 +127,46 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
       return NextResponse.json({ success: true, type: "connected" })
     }
 
-    const [createdAgent] = await sql`
+    // Try created_agents
+    const createdAgents = await sql`
       SELECT * FROM created_agents 
       WHERE id = ${id} AND user_id = ${user.id}
     `
 
-    if (!createdAgent) {
-      return NextResponse.json({ error: "Agent not found" }, { status: 404 })
+    if (createdAgents.length > 0) {
+      const createdAgent = createdAgents[0]
+      console.log("[v0] Found created agent:", createdAgent.name)
+
+      // Delete the created agent (CASCADE will handle related records)
+      await sql`
+        DELETE FROM created_agents 
+        WHERE id = ${id} AND user_id = ${user.id}
+      `
+
+      // Log the activity
+      await logActivity({
+        userId: user.id,
+        organization: user.organization,
+        action: `Deleted ${createdAgent.name} agent`,
+        resourceType: "created_agent",
+        resourceId: id,
+        description: `Permanently deleted ${createdAgent.agent_type} agent and all related data`,
+        status: "warning",
+      })
+
+      return NextResponse.json({ success: true, type: "created" })
     }
 
-    // Delete the created agent (CASCADE will handle related records)
-    await sql`
-      DELETE FROM created_agents 
-      WHERE id = ${id} AND user_id = ${user.id}
-    `
-
-    // Log the activity
-    await logActivity({
-      userId: user.id,
-      organization: user.organization,
-      action: `Deleted ${createdAgent.name} agent`,
-      resourceType: "created_agent",
-      resourceId: id,
-      description: `Permanently deleted ${createdAgent.agent_type} agent and all related data`,
-      status: "warning",
-    })
-
-    return NextResponse.json({ success: true, type: "created" })
+    console.log("[v0] No agent found with id:", id)
+    return NextResponse.json({ error: "Agent not found" }, { status: 404 })
   } catch (error) {
-    console.error("Failed to delete agent:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    console.error("[v0] Failed to delete agent:", error)
+    return NextResponse.json(
+      {
+        error: "Internal server error",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
   }
 }

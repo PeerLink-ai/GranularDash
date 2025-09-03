@@ -1035,7 +1035,10 @@ export function DataModelLineage({
         thoughtRes.json().catch(() => []),
       ])
 
-      console.log("[v0] Raw API responses:", { lineageData, governanceData, activityData, thoughtData })
+      console.log("[v0] Raw governance data:", governanceData)
+      console.log("[v0] Raw activity data:", activityData)
+      console.log("[v0] Raw thought data:", thoughtData)
+      console.log("[v0] Raw lineage mapping:", lineageData?.lineageMapping)
 
       // Combine lineage nodes with agent action nodes
       const lineageNodes = Array.isArray(lineageData?.nodes) ? lineageData.nodes : []
@@ -1048,6 +1051,8 @@ export function DataModelLineage({
       // Process governance logs
       if (Array.isArray(governanceData)) {
         governanceData.forEach((log: any, index: number) => {
+          console.log("[v0] Processing governance log for agent:", log.agent_id)
+
           const actionId = `gov_${log.id}`
           agentNodes.push({
             id: actionId,

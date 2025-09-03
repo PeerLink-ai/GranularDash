@@ -2,64 +2,14 @@
 
 import * as React from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Separator } from "@/components/ui/separator"
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { Input } from "@/components/ui/input"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
-import {
-  Download,
-  FileJson,
-  Filter,
-  Focus,
-  GitBranch,
-  ImageIcon,
-  Info,
-  RotateCcw,
-  Search,
-  ZoomIn,
-  ZoomOut,
-  BadgeCheck,
-  RefreshCw,
-  Bot,
-  Brain,
-  Database,
-  Zap,
-  Activity,
-  User,
-  Building,
-} from "lucide-react"
-
-import "reactflow/dist/style.css"
-import ReactFlow, {
-  Background,
-  Controls,
-  MiniMap,
-  ReactFlowProvider,
-  useEdgesState,
-  useNodesState,
-  Position,
-  type Edge,
-  type Node,
-  useReactFlow,
-} from "reactflow"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Separator } from "@/components/ui/separator"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Search, Bot, Clock, Zap, MessageSquare, Activity, ChevronRight, Filter, RefreshCw } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 export interface DataModelLineageProps {
   onOpenDatasetVersioning: () => void
@@ -67,785 +17,45 @@ export interface DataModelLineageProps {
   onOpenModelVersionTracking: () => void
 }
 
-export interface LineageNode {
+interface SDKLog {
   id: string
-  name: string
-  type:
-    | "agent"
-    | "model"
-    | "deployment"
-    | "evaluation"
-    | "dataset"
-    | "transformation"
-    | "integration"
-    | "user"
-    | "organization"
-    | "agent_action"
-    | "agent_response"
-    | "agent_evaluation"
-  path: string[]
-  metadata: {
-    sourceFile?: string
-    schema?: string
-    creationDate?: string
-    owner?: string
-    status?: string
-    accuracy?: string
-    version?: string
-    description?: string
-    provider?: string
-    endpoint?: string
-    cost?: string
-    performance?: string
-    agentId?: string
-    actionType?: string
+  agent_id: string
+  type: string
+  level: string
+  timestamp: bigint
+  created_at: string
+  payload: {
+    message?: string
     prompt?: string
     response?: string
-    tokenUsage?: number | { total?: number; prompt?: number; completion?: number }
-    evaluationScore?: number
-    parentActionId?: string
-    timestamp?: string
-    duration?: number
-    model?: string
-    temperature?: number
-    maxTokens?: number
-    interactionType?: string
+    tokenUsage?: {
+      prompt?: number
+      completion?: number
+      total?: number
+    }
     responseTime?: number
-    qualityScores?: any
-    evaluationFlags?: any
-    auditHash?: string
-    activityType?: string
-    lineageId?: string
-    activityData?: any
-    thoughtType?: string
-    thoughtContent?: string
-    toolCalls?: any
-    decisions?: any
-    dbQueries?: any
-    sessionId?: string
-    parentInteractionId?: string
-    processingTime?: number
-    tokensUsed?: number
-    confidenceScore?: number
-    modelUsed?: string
-    reasoningSteps?: any
-    decisionFactors?: any
-    alternativesConsidered?: any
-    outcomePrediction?: string
-    actualOutcome?: string
+    evaluation?: {
+      overall?: number
+      safety?: number
+      relevance?: number
+      coherence?: number
+      factuality?: number
+    }
+    action?: string
+    status?: string
+    duration_ms?: number
+    model?: string
+    [key: string]: any
   }
-  nextNodes?: string[]
 }
 
-const TYPE_THEME: Record<
-  LineageNode["type"],
-  { bg: string; border: string; text: string; accent: string; icon: React.ComponentType<any> }
-> = {
-  agent: {
-    bg: "bg-blue-50 dark:bg-blue-950/40",
-    border: "border-blue-200 dark:border-blue-900",
-    text: "text-blue-800 dark:text-blue-200",
-    accent: "text-blue-500",
-    icon: Bot,
-  },
-  agent_action: {
-    bg: "bg-cyan-50 dark:bg-cyan-950/40",
-    border: "border-cyan-200 dark:border-cyan-900",
-    text: "text-cyan-800 dark:text-cyan-200",
-    accent: "text-cyan-500",
-    icon: Zap,
-  },
-  agent_response: {
-    bg: "bg-teal-50 dark:bg-teal-950/40",
-    border: "border-teal-200 dark:border-teal-900",
-    text: "text-teal-800 dark:text-teal-200",
-    accent: "text-teal-500",
-    icon: Activity,
-  },
-  agent_evaluation: {
-    bg: "bg-indigo-50 dark:bg-indigo-950/40",
-    border: "border-indigo-200 dark:border-indigo-900",
-    text: "text-indigo-800 dark:text-indigo-200",
-    accent: "text-indigo-500",
-    icon: BadgeCheck,
-  },
-  model: {
-    bg: "bg-fuchsia-50 dark:bg-fuchsia-950/40",
-    border: "border-fuchsia-200 dark:border-fuchsia-900",
-    text: "text-fuchsia-800 dark:text-fuchsia-200",
-    accent: "text-fuchsia-500",
-    icon: Brain,
-  },
-  deployment: {
-    bg: "bg-green-50 dark:bg-green-950/40",
-    border: "border-green-200 dark:border-green-900",
-    text: "text-green-800 dark:text-green-200",
-    accent: "text-green-500",
-    icon: GitBranch,
-  },
-  evaluation: {
-    bg: "bg-orange-50 dark:bg-orange-950/40",
-    border: "border-orange-200 dark:border-orange-900",
-    text: "text-orange-800 dark:text-orange-200",
-    accent: "text-orange-500",
-    icon: BadgeCheck,
-  },
-  dataset: {
-    bg: "bg-emerald-50 dark:bg-emerald-950/40",
-    border: "border-emerald-200 dark:border-emerald-900",
-    text: "text-emerald-800 dark:text-emerald-200",
-    accent: "text-emerald-500",
-    icon: Database,
-  },
-  transformation: {
-    bg: "bg-amber-50 dark:bg-amber-950/40",
-    border: "border-amber-200 dark:border-amber-900",
-    text: "text-amber-800 dark:text-amber-200",
-    accent: "text-amber-500",
-    icon: Zap,
-  },
-  integration: {
-    bg: "bg-purple-50 dark:bg-purple-950/40",
-    border: "border-purple-200 dark:border-purple-900",
-    text: "text-purple-800 dark:text-purple-200",
-    accent: "text-purple-500",
-    icon: GitBranch,
-  },
-  user: {
-    bg: "bg-slate-50 dark:bg-slate-900/60",
-    border: "border-slate-200 dark:border-slate-800",
-    text: "text-slate-800 dark:text-slate-200",
-    accent: "text-slate-500",
-    icon: User,
-  },
-  organization: {
-    bg: "bg-gray-50 dark:bg-gray-900/60",
-    border: "border-gray-200 dark:border-gray-800",
-    text: "text-gray-800 dark:text-gray-200",
-    accent: "text-gray-500",
-    icon: Building,
-  },
-}
-
-type FocusMode = "all" | "upstream" | "downstream"
-
-function layoutNodes(data: LineageNode[], opts: { colGap?: number; rowGap?: number } = {}): Node[] {
-  if (!Array.isArray(data)) return []
-
-  const colGap = opts.colGap ?? 500
-  const rowGap = opts.rowGap ?? 180
-
-  // Group nodes by agent and create conversation flows
-  const agentGroups = new Map<string, LineageNode[]>()
-  const conversationChains = new Map<string, LineageNode[]>()
-
-  for (const n of data) {
-    const agentId = n.metadata?.agentId || "unknown"
-    if (!agentGroups.has(agentId)) agentGroups.set(agentId, [])
-    agentGroups.get(agentId)!.push(n)
-
-    const sessionId = n.metadata?.sessionId || n.metadata?.parentInteractionId || n.id
-    if (!conversationChains.has(sessionId)) conversationChains.set(sessionId, [])
-    conversationChains.get(sessionId)!.push(n)
-  }
-
-  const nodes: Node[] = []
-  let xOffset = 100
-
-  for (const [agentId, agentNodes] of agentGroups) {
-    // Create sophisticated agent summary node
-    const totalTokens = agentNodes.reduce(
-      (acc, n) =>
-        acc +
-        (typeof n.metadata?.tokenUsage === "object" ? n.metadata.tokenUsage.total || 0 : n.metadata?.tokenUsage || 0),
-      0,
-    )
-
-    const avgScore = agentNodes.reduce((acc, n) => acc + (n.metadata?.evaluationScore || 0), 0) / agentNodes.length
-
-    const agentSummary = {
-      id: `agent_${agentId}`,
-      type: "default",
-      position: { x: xOffset, y: 50 },
-      sourcePosition: Position.Bottom,
-      targetPosition: Position.Top,
-      data: {
-        label: (
-          <div className="p-4 text-center">
-            <div className="text-lg font-bold text-white mb-2">Agent {agentId}</div>
-            <div className="text-sm text-blue-100 space-y-1">
-              <div>{agentNodes.length} Actions</div>
-              <div>{totalTokens.toLocaleString()} Tokens</div>
-              <div>Score: {avgScore.toFixed(1)}/10</div>
-            </div>
-          </div>
-        ),
-        node: {
-          id: `agent_${agentId}`,
-          name: `Agent ${agentId}`,
-          type: "agent" as const,
-          path: ["agents", agentId],
-          metadata: { agentId, totalActions: agentNodes.length, avgScore, totalTokens },
-          nextNodes: [],
-        },
-      },
-      style: {
-        width: 200,
-        height: 120,
-        borderRadius: 16,
-        border: "3px solid #1e40af",
-        background: "linear-gradient(135deg, #1e40af 0%, #3b82f6 100%)",
-        boxShadow: "0 8px 32px rgba(30, 64, 175, 0.3)",
-        color: "white",
-      },
-      draggable: true,
-    }
-    nodes.push(agentSummary)
-
-    // Create conversation flows with better organization
-    const agentConversations = new Map<string, LineageNode[]>()
-    for (const node of agentNodes) {
-      const sessionId = node.metadata?.sessionId || node.metadata?.parentInteractionId || "default"
-      if (!agentConversations.has(sessionId)) agentConversations.set(sessionId, [])
-      agentConversations.get(sessionId)!.push(node)
-    }
-
-    let yOffset = 250
-    let conversationIndex = 0
-
-    for (const [sessionId, sessionNodes] of agentConversations) {
-      // Sort by timestamp for proper flow
-      sessionNodes.sort((a, b) => {
-        const aTime = new Date(a.metadata?.timestamp || 0).getTime()
-        const bTime = new Date(b.metadata?.timestamp || 0).getTime()
-        return aTime - bTime
-      })
-
-      // Create conversation header
-      const conversationHeader = {
-        id: `conversation_${sessionId}`,
-        type: "default",
-        position: { x: xOffset + 50, y: yOffset },
-        sourcePosition: Position.Right,
-        targetPosition: Position.Left,
-        data: {
-          label: (
-            <div className="p-2 text-center">
-              <div className="text-sm font-semibold text-gray-700">Conversation {conversationIndex + 1}</div>
-              <div className="text-xs text-gray-500">{sessionNodes.length} steps</div>
-            </div>
-          ),
-          node: {
-            id: `conversation_${sessionId}`,
-            name: `Conversation ${conversationIndex + 1}`,
-            type: "conversation" as const,
-            path: ["conversations", sessionId],
-            metadata: { sessionId, stepCount: sessionNodes.length },
-            nextNodes: [],
-          },
-        },
-        style: {
-          width: 140,
-          height: 60,
-          borderRadius: 12,
-          border: "2px solid #e5e7eb",
-          background: "linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)",
-          boxShadow: "0 4px 16px rgba(0, 0, 0, 0.1)",
-        },
-        draggable: true,
-      }
-      nodes.push(conversationHeader)
-
-      // Create action nodes in a flowing pattern
-      sessionNodes.forEach((node, index) => {
-        const nodeStyle = {
-          action: {
-            background: "linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)",
-            border: "2px solid #1e40af",
-            color: "white",
-          },
-          response: {
-            background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
-            border: "2px solid #047857",
-            color: "white",
-          },
-          evaluation: {
-            background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
-            border: "2px solid #b45309",
-            color: "white",
-          },
-        }
-
-        const currentStyle = nodeStyle[node.type as keyof typeof nodeStyle] || nodeStyle.action
-
-        nodes.push({
-          id: node.id,
-          type: "default",
-          position: {
-            x: xOffset + 220 + index * 180,
-            y: yOffset + (index % 2 === 0 ? 0 : 40), // Stagger for visual flow
-          },
-          sourcePosition: Position.Right,
-          targetPosition: Position.Left,
-          data: {
-            label: (
-              <div className="p-3 text-center">
-                <div className="text-sm font-semibold mb-1">{node.name}</div>
-                <div className="text-xs opacity-90">
-                  {node.metadata?.evaluationScore
-                    ? `Score: ${node.metadata.evaluationScore}/10`
-                    : node.metadata?.responseTime
-                      ? `${node.metadata.responseTime}ms`
-                      : node.type}
-                </div>
-              </div>
-            ),
-            node,
-          },
-          style: {
-            width: 160,
-            height: 80,
-            borderRadius: 12,
-            ...currentStyle,
-            boxShadow: "0 6px 24px rgba(0, 0, 0, 0.15)",
-            transition: "all 0.3s ease",
-          },
-          draggable: true,
-        })
-      })
-
-      yOffset += 180
-      conversationIndex++
-    }
-
-    xOffset += colGap
-  }
-
-  return nodes
-}
-
-function buildEdges(data: LineageNode[]): Edge[] {
-  if (!Array.isArray(data)) return []
-
-  const edges: Edge[] = []
-  const nodeIds = new Set(data.map((n) => n.id))
-
-  // Create edges from nextNodes relationships
-  for (const node of data) {
-    for (const nextId of node.nextNodes ?? []) {
-      if (!nodeIds.has(nextId)) continue
-
-      edges.push({
-        id: `${node.id}->${nextId}`,
-        source: node.id,
-        target: nextId,
-        type: "smoothstep",
-        animated: true,
-        style: {
-          stroke: "#3b82f6",
-          strokeWidth: 3,
-          strokeDasharray: "8,4",
-        },
-        markerEnd: {
-          type: "arrowclosed",
-          color: "#3b82f6",
-          width: 20,
-          height: 20,
-        },
-      })
-    }
-  }
-
-  // Add agent-to-conversation connections
-  const agentGroups = new Map<string, LineageNode[]>()
-  for (const node of data) {
-    const agentId = node.metadata?.agentId || "unknown"
-    if (!agentGroups.has(agentId)) agentGroups.set(agentId, [])
-    agentGroups.get(agentId)!.push(node)
-  }
-
-  for (const [agentId, agentNodes] of agentGroups) {
-    const conversations = new Map<string, LineageNode[]>()
-    for (const node of agentNodes) {
-      const sessionId = node.metadata?.sessionId || node.metadata?.parentInteractionId || "default"
-      if (!conversations.has(sessionId)) conversations.set(sessionId, [])
-      conversations.get(sessionId)!.push(node)
-    }
-
-    // Connect agent to conversations
-    for (const sessionId of conversations.keys()) {
-      edges.push({
-        id: `agent_${agentId}->conversation_${sessionId}`,
-        source: `agent_${agentId}`,
-        target: `conversation_${sessionId}`,
-        type: "smoothstep",
-        style: {
-          stroke: "#1e40af",
-          strokeWidth: 2,
-        },
-        markerEnd: {
-          type: "arrowclosed",
-          color: "#1e40af",
-        },
-      })
-
-      // Connect conversation to first action
-      const sessionNodes = conversations.get(sessionId)!
-      if (sessionNodes.length > 0) {
-        const firstNode = sessionNodes.sort((a, b) => {
-          const aTime = new Date(a.metadata?.timestamp || 0).getTime()
-          const bTime = new Date(b.metadata?.timestamp || 0).getTime()
-          return aTime - bTime
-        })[0]
-
-        edges.push({
-          id: `conversation_${sessionId}->${firstNode.id}`,
-          source: `conversation_${sessionId}`,
-          target: firstNode.id,
-          type: "smoothstep",
-          style: {
-            stroke: "#6b7280",
-            strokeWidth: 2,
-          },
-          markerEnd: {
-            type: "arrowclosed",
-            color: "#6b7280",
-          },
-        })
-      }
-    }
-  }
-
-  return edges
-}
-
-function buildAdjacency(edges: Edge[]) {
-  if (!Array.isArray(edges)) return { out: new Map(), incoming: new Map() }
-
-  const out = new Map<string, Set<string>>()
-  const incoming = new Map<string, Set<string>>()
-  for (const e of edges) {
-    if (!out.has(e.source)) out.set(e.source, new Set())
-    if (!incoming.has(e.target)) incoming.set(e.target, new Set())
-    out.get(e.source)!.add(e.target)
-    incoming.get(e.target)!.add(e.source)
-    if (!out.has(e.target)) out.set(e.target, new Set())
-    if (!incoming.has(e.source)) incoming.set(e.source, new Set())
-  }
-  return { out, incoming }
-}
-
-function traverseUpstream(id: string, incoming: Map<string, Set<string>>) {
-  const seen = new Set<string>()
-  const stack = [id]
-  while (stack.length) {
-    const cur = stack.pop()!
-    for (const p of incoming.get(cur) ?? []) {
-      if (!seen.has(p)) {
-        seen.add(p)
-        stack.push(p)
-      }
-    }
-  }
-  return seen
-}
-
-function traverseDownstream(id: string, out: Map<string, Set<string>>) {
-  const seen = new Set<string>()
-  const stack = [id]
-  while (stack.length) {
-    const cur = stack.pop()!
-    for (const c of out.get(cur) ?? []) {
-      if (!seen.has(c)) {
-        seen.add(c)
-        stack.push(c)
-      }
-    }
-  }
-  return seen
-}
-
-function downloadJSON(filename: string, data: unknown) {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement("a")
-  a.href = url
-  a.download = filename
-  a.click()
-  URL.revokeObjectURL(url)
-}
-
-async function downloadPNG(filename: string, element: HTMLElement) {
-  const htmlToImage = await import("html-to-image")
-  const dataUrl = await htmlToImage.toPng(element, { pixelRatio: 2, cacheBust: true })
-  const a = document.createElement("a")
-  a.href = dataUrl
-  a.download = filename
-  a.click()
-}
-
-function useDebounced<T>(value: T, delay = 250) {
-  const [debounced, setDebounced] = React.useState(value)
-  React.useEffect(() => {
-    const t = setTimeout(() => setDebounced(value), delay)
-    return () => clearTimeout(t)
-  }, [value, delay])
-  return debounced
-}
-
-function MetricsBar({ data }: { data: LineageNode[] }) {
-  const counts = React.useMemo(() => {
-    const safeData = Array.isArray(data) ? data : []
-    const c: Record<LineageNode["type"], number> = {
-      agent: 0,
-      agent_action: 0,
-      agent_response: 0,
-      agent_evaluation: 0,
-      model: 0,
-      deployment: 0,
-      evaluation: 0,
-      dataset: 0,
-      transformation: 0,
-      integration: 0,
-      user: 0,
-      organization: 0,
-    }
-    safeData.forEach((n) => (c[n.type] += 1))
-    return c
-  }, [data])
-
-  const items: { label: string; key: LineageNode["type"]; value: number }[] = [
-    { label: "Agents", key: "agent", value: counts.agent },
-    { label: "Actions", key: "agent_action", value: counts.agent_action },
-    { label: "Responses", key: "agent_response", value: counts.agent_response },
-    { label: "Evaluations", key: "agent_evaluation", value: counts.agent_evaluation },
-    { label: "Models", key: "model", value: counts.model },
-    { label: "Deployments", key: "deployment", value: counts.deployment },
-    { label: "Datasets", key: "dataset", value: counts.dataset },
-  ]
-
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3">
-      {items.map((it) => (
-        <Card key={it.key} className={`${TYPE_THEME[it.key].bg} ${TYPE_THEME[it.key].border}`}>
-          <CardHeader className="py-3">
-            <CardTitle className={`text-sm ${TYPE_THEME[it.key].text} flex items-center gap-2`}>
-              {React.createElement(TYPE_THEME[it.key].icon, { className: "h-4 w-4" })}
-              {it.label}
-            </CardTitle>
-            <CardDescription className="text-xl font-semibold text-foreground">{it.value}</CardDescription>
-          </CardHeader>
-        </Card>
-      ))}
-    </div>
-  )
-}
-
-function Toolbar({
-  search,
-  setSearch,
-  typeFilter,
-  setTypeFilter,
-  onFit,
-  onReset,
-  onExportJSON,
-  onExportPNG,
-}: {
-  search: string
-  setSearch: (s: string) => void
-  typeFilter: Record<LineageNode["type"], boolean>
-  setTypeFilter: (f: Record<LineageNode["type"], boolean>) => void
-  onFit: () => void
-  onReset: () => void
-  onExportJSON: () => void
-  onExportPNG: () => void
-}) {
-  return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex items-center gap-2 w-full sm:w-[520px]">
-        <div className="relative flex-1">
-          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search agents, actions, models, datasets, or any metadata..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-8"
-          />
-        </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="gap-2 bg-transparent">
-              <Filter className="h-4 w-4" />
-              Filters
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-56">
-            <DropdownMenuLabel>Types</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            {(
-              [
-                "agent",
-                "agent_action",
-                "agent_response",
-                "agent_evaluation",
-                "model",
-                "deployment",
-                "evaluation",
-                "dataset",
-                "transformation",
-                "integration",
-              ] as LineageNode["type"][]
-            ).map((t) => (
-              <DropdownMenuItem key={t} onSelect={(e) => e.preventDefault()} className="cursor-default">
-                <div className="flex items-center gap-2 w-full">
-                  <Checkbox
-                    checked={typeFilter[t]}
-                    onCheckedChange={(v) => setTypeFilter({ ...typeFilter, [t]: Boolean(v) })}
-                    id={`type-${t}`}
-                  />
-                  {React.createElement(TYPE_THEME[t].icon, { className: "h-4 w-4" })}
-                  <label htmlFor={`type-${t}`} className="text-sm capitalize cursor-pointer">
-                    {t.replace("_", " ")}
-                  </label>
-                </div>
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
-      <div className="flex items-center gap-2">
-        <Button variant="outline" onClick={onFit} className="gap-2 bg-transparent">
-          <Focus className="h-4 w-4" />
-          Fit
-        </Button>
-        <Button variant="outline" onClick={onReset} className="gap-2 bg-transparent">
-          <RotateCcw className="h-4 w-4" />
-          Reset
-        </Button>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="gap-2 bg-transparent">
-              <Download className="h-4 w-4" />
-              Export
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={onExportJSON} className="gap-2">
-              <FileJson className="h-4 w-4" />
-              JSON (visible)
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onExportPNG} className="gap-2">
-              <ImageIcon className="h-4 w-4" />
-              PNG (graph)
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-    </div>
-  )
-}
-
-type GraphApi = {
-  fit: () => void
-  zoomIn: () => void
-  zoomOut: () => void
-}
-
-function GraphCanvas({
-  nodes,
-  edges,
-  onNodeClick,
-}: {
-  nodes: Node[]
-  edges: Edge[]
-  onNodeClick: (id: string) => void
-}) {
-  console.log("[v0] GraphCanvas received nodes:", nodes.length, "edges:", edges.length)
-
-  const rf = useReactFlow()
-  const [styledNodes, setStyledNodes] = React.useState(nodes)
-
-  React.useEffect(() => {
-    setStyledNodes(nodes)
-  }, [nodes])
-
-  React.useEffect(() => {
-    if (nodes.length > 0) {
-      setTimeout(() => {
-        rf.fitView({ duration: 500, padding: 0.1 })
-      }, 200)
-    }
-  }, [nodes, rf])
-
-  return (
-    <div className="relative h-[600px] rounded-xl border-2 border-gray-200 overflow-hidden bg-gradient-to-br from-slate-50 to-blue-50">
-      <ReactFlow
-        nodes={styledNodes}
-        edges={edges}
-        onNodeClick={(_, n) => onNodeClick(n.id)}
-        nodesDraggable={true}
-        nodesConnectable={false}
-        elementsSelectable={true}
-        fitView
-        fitViewOptions={{ duration: 500, padding: 0.1 }}
-        proOptions={{ hideAttribution: true }}
-        defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
-        minZoom={0.2}
-        maxZoom={2}
-      >
-        <MiniMap
-          pannable
-          zoomable
-          nodeStrokeWidth={3}
-          nodeColor={(node) => {
-            if (node.id.startsWith("agent_")) return "#1e40af"
-            if (node.id.startsWith("conversation_")) return "#6b7280"
-            return "#3b82f6"
-          }}
-          maskColor="rgba(0, 0, 0, 0.2)"
-          style={{
-            backgroundColor: "rgba(255, 255, 255, 0.9)",
-            border: "2px solid #e5e7eb",
-            borderRadius: "12px",
-            width: 220,
-            height: 160,
-            backdropFilter: "blur(8px)",
-          }}
-        />
-        <Background variant="dots" gap={20} size={1.5} color="#cbd5e1" style={{ opacity: 0.4 }} />
-        <Controls
-          position="bottom-right"
-          className="!bg-white/90 !border-2 !border-gray-200 !rounded-xl !shadow-xl !backdrop-blur-sm"
-          showFitView={true}
-          showZoom={true}
-          showInteractive={true}
-        >
-          <button
-            className="react-flow__controls-button !text-gray-700 hover:!bg-blue-50 hover:!text-blue-700 transition-all duration-200 border-0 bg-transparent"
-            onClick={() => rf.zoomIn({ duration: 200 })}
-            title="Zoom in"
-          >
-            <ZoomIn className="h-5 w-5" />
-          </button>
-          <button
-            className="react-flow__controls-button !text-gray-700 hover:!bg-blue-50 hover:!text-blue-700 transition-all duration-200 border-0 bg-transparent"
-            onClick={() => rf.zoomOut({ duration: 200 })}
-            title="Zoom out"
-          >
-            <ZoomOut className="h-5 w-5" />
-          </button>
-          <button
-            className="react-flow__controls-button !text-gray-700 hover:!bg-blue-50 hover:!text-blue-700 transition-all duration-200 border-0 bg-transparent"
-            onClick={() => rf.fitView({ duration: 500, padding: 0.1 })}
-            title="Fit view"
-          >
-            <Focus className="h-5 w-5" />
-          </button>
-        </Controls>
-      </ReactFlow>
-    </div>
-  )
+interface AgentGroup {
+  agentId: string
+  logs: SDKLog[]
+  totalLogs: number
+  lastActivity: string
+  avgResponseTime: number
+  successRate: number
 }
 
 export function DataModelLineage({
@@ -853,402 +63,32 @@ export function DataModelLineage({
   onOpenTransformationSteps,
   onOpenModelVersionTracking,
 }: DataModelLineageProps) {
-  const [serverData, setServerData] = React.useState<{
-    nodes: LineageNode[]
-    edges: { source: string; target: string }[]
-    lineageMapping?: any[]
-  } | null>(null)
+  const [logs, setLogs] = React.useState<SDKLog[]>([])
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
-  const [raw, setRaw] = React.useState<LineageNode[]>([])
-  const [focusMode, setFocusMode] = React.useState<FocusMode>("all")
-  const [selected, setSelected] = React.useState<LineageNode | null>(null)
   const [search, setSearch] = React.useState("")
-  const debouncedSearch = useDebounced(search)
-  const [typeFilter, setTypeFilter] = React.useState<Record<LineageNode["type"], boolean>>({
-    agent: true,
-    agent_action: true,
-    agent_response: true,
-    agent_evaluation: true,
-    model: true,
-    deployment: true,
-    evaluation: true,
-    dataset: true,
-    transformation: true,
-    integration: true,
-    user: false,
-    organization: false,
-  })
-
-  React.useEffect(() => {
-    loadLineage()
-  }, [])
-
-  React.useEffect(() => {
-    console.log("[v0] Frontend received server data:", serverData)
-    if (serverData?.nodes && Array.isArray(serverData.nodes) && serverData.nodes.length > 0) {
-      console.log("[v0] Processing", serverData.nodes.length, "nodes and", serverData.edges?.length || 0, "edges")
-      const ids = new Set(serverData.nodes.map((n) => n.id))
-      const nextMap = new Map<string, string[]>()
-
-      const safeEdges = Array.isArray(serverData.edges) ? serverData.edges : []
-      for (const e of safeEdges) {
-        if (!ids.has(e.source) || !ids.has(e.target)) continue
-        const arr = nextMap.get(e.source) || []
-        arr.push(e.target)
-        nextMap.set(e.source, arr)
-      }
-
-      const normalized = serverData.nodes.map((n) => ({
-        ...n,
-        nextNodes: nextMap.get(n.id) || [],
-        path: Array.isArray(n.path) ? n.path : [],
-        metadata: n.metadata || {},
-      }))
-      console.log("[v0] Normalized nodes:", normalized.length)
-      console.log("[v0] Sample normalized nodes:", normalized.slice(0, 3))
-      setRaw(normalized as LineageNode[])
-      setSelected(normalized[0] || null)
-    } else {
-      console.log("[v0] No valid nodes received, setting empty state")
-      setRaw([])
-      setSelected(null)
-    }
-  }, [serverData])
-
-  const edgesRaw = React.useMemo(() => {
-    if (!serverData?.edges && !Array.isArray(raw)) return []
-
-    // Use buildEdges function for proper connections
-    const builtEdges = buildEdges(raw)
-
-    // Add server edges if available
-    const serverEdges = (serverData?.edges || []).map((edge) => ({
-      id: `${edge.source}-${edge.target}`,
-      source: edge.source,
-      target: edge.target,
-      type: "smoothstep",
-      animated: true,
-      style: {
-        stroke: "#10b981",
-        strokeWidth: 2,
-        strokeDasharray: "5,5",
-      },
-      markerEnd: {
-        type: "arrowclosed",
-        color: "#10b981",
-      },
-    }))
-
-    return [...builtEdges, ...serverEdges]
-  }, [serverData?.edges, raw])
-
-  const activeTypes = React.useMemo(
-    () => new Set((Object.keys(typeFilter) as LineageNode["type"][]).filter((k) => typeFilter[k])),
-    [typeFilter],
-  )
-
-  const filteredData = React.useMemo(() => {
-    const safeRaw = Array.isArray(raw) ? raw : []
-    const q = debouncedSearch.trim().toLowerCase()
-    return safeRaw.filter((n) => {
-      if (!activeTypes.has(n.type)) return false
-      if (!q) return true
-      const hay = [
-        n.name,
-        n.type,
-        n.metadata?.owner,
-        n.metadata?.version,
-        n.metadata?.schema,
-        n.metadata?.sourceFile,
-        n.metadata?.status,
-        n.metadata?.description,
-        n.metadata?.provider,
-        n.metadata?.endpoint,
-        n.metadata?.cost,
-        n.metadata?.performance,
-        n.metadata?.agentId,
-        n.metadata?.actionType,
-        n.metadata?.prompt,
-        n.metadata?.response,
-        n.metadata?.tokenUsage,
-        n.metadata?.evaluationScore,
-        n.metadata?.parentActionId,
-        n.metadata?.timestamp,
-        n.metadata?.duration,
-        n.metadata?.model,
-        n.metadata?.temperature,
-        n.metadata?.maxTokens,
-        n.metadata?.interactionType,
-        n.metadata?.responseTime,
-        n.metadata?.qualityScores,
-        n.metadata?.evaluationFlags,
-        n.metadata?.auditHash,
-        n.metadata?.activityType,
-        n.metadata?.lineageId,
-        n.metadata?.activityData,
-        n.metadata?.thoughtType,
-        n.metadata?.thoughtContent,
-        n.metadata?.toolCalls,
-        n.metadata?.decisions,
-        n.metadata?.dbQueries,
-        n.metadata?.sessionId,
-        n.metadata?.parentInteractionId,
-        n.metadata?.processingTime,
-        n.metadata?.tokensUsed,
-        n.metadata?.confidenceScore,
-        n.metadata?.modelUsed,
-        n.metadata?.reasoningSteps,
-        n.metadata?.decisionFactors,
-        n.metadata?.alternativesConsidered,
-        n.metadata?.outcomePrediction,
-        n.metadata?.actualOutcome,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase()
-      return hay.includes(q)
-    })
-  }, [raw, activeTypes, debouncedSearch])
-
-  const rfNodesBase = React.useMemo(() => {
-    console.log("[v0] Creating ReactFlow nodes from filtered data:", filteredData.length)
-    const layoutResult = layoutNodes(filteredData)
-    console.log("[v0] Layout result:", layoutResult.length)
-    return layoutResult
-  }, [filteredData])
-
-  const [nodes, setNodes, onNodesChange] = useNodesState(rfNodesBase)
-  const [edges, , onEdgesChange] = useEdgesState(
-    edgesRaw.filter((e) => rfNodesBase.find((n) => n.id === e.source) && rfNodesBase.find((n) => n.id === e.target)),
-  )
-
-  React.useEffect(() => {
-    console.log("[v0] Updating ReactFlow nodes:", rfNodesBase.length)
-    setNodes(rfNodesBase)
-  }, [rfNodesBase, setNodes])
-
-  const { out, incoming } = React.useMemo(() => buildAdjacency(edges), [edges])
-
-  const highlightSet = React.useMemo(() => {
-    if (!selected) return null
-    if (focusMode === "all") return null
-    const base = new Set<string>([selected.id])
-    if (focusMode === "upstream") for (const id of traverseUpstream(selected.id, incoming)) base.add(id)
-    if (focusMode === "downstream") for (const id of traverseDownstream(selected.id, out)) base.add(id)
-    return base
-  }, [focusMode, selected, out, incoming])
-
-  const graphRef = React.useRef<HTMLDivElement>(null)
-  const apiRef = React.useRef<GraphApi | null>(null)
-
-  const handleExportJSON = React.useCallback(() => {
-    const safeNodes = Array.isArray(nodes) ? nodes : []
-    const safeEdges = Array.isArray(edges) ? edges : []
-
-    const visibleNodes = safeNodes.map((n) => (n.data as any).node as LineageNode)
-    const visibleIds = new Set(visibleNodes.map((n) => n.id))
-    const visibleEdges = safeEdges.filter((e) => visibleIds.has(e.source) && visibleIds.has(e.target))
-    downloadJSON("lineage-visible.json", {
-      nodes: visibleNodes,
-      edges: visibleEdges,
-      generatedAt: new Date().toISOString(),
-    })
-  }, [nodes, edges])
-
-  const handleExportPNG = React.useCallback(async () => {
-    if (!graphRef.current) return
-    await downloadPNG("lineage-graph.png", graphRef.current)
-  }, [])
-
-  const breadcrumbSegments = Array.isArray(selected?.path) ? selected.path : []
+  const [selectedAgent, setSelectedAgent] = React.useState<string | null>(null)
+  const [typeFilter, setTypeFilter] = React.useState<string>("all")
 
   const loadLineage = async () => {
-    console.log("[v0] Starting to load lineage and agent actions from APIs...")
+    console.log("[v0] Loading lineage data from sdk_logs...")
     setLoading(true)
     setError(null)
     try {
-      const [lineageRes, governanceRes, activityRes, thoughtRes] = await Promise.all([
-        fetch("/api/lineage", { cache: "no-store" }),
-        fetch("/api/agent-governance", { cache: "no-store" }),
-        fetch("/api/agent-activity", { cache: "no-store" }),
-        fetch("/api/thought-process", { cache: "no-store" }),
-      ])
+      const response = await fetch("/api/lineage", { cache: "no-store" })
 
-      console.log("[v0] API response statuses:", {
-        lineage: lineageRes.status,
-        governance: governanceRes.status,
-        activity: activityRes.status,
-        thought: thoughtRes.status,
-      })
-
-      const [lineageData, governanceData, activityData, thoughtData] = await Promise.all([
-        lineageRes.json().catch(() => ({ nodes: [], edges: [] })),
-        governanceRes.json().catch(() => []),
-        activityRes.json().catch(() => []),
-        thoughtRes.json().catch(() => []),
-      ])
-
-      console.log("[v0] Raw API responses:", { lineageData, governanceData, activityData, thoughtData })
-
-      // Combine lineage nodes with agent action nodes
-      const lineageNodes = Array.isArray(lineageData?.nodes) ? lineageData.nodes : []
-      const lineageEdges = Array.isArray(lineageData?.edges) ? lineageData.edges : []
-
-      // Transform agent data into lineage nodes
-      const agentNodes: LineageNode[] = []
-      const agentEdges: { source: string; target: string }[] = []
-
-      // Process governance logs
-      if (Array.isArray(governanceData)) {
-        governanceData.forEach((log: any, index: number) => {
-          const actionId = `gov_${log.id}`
-          agentNodes.push({
-            id: actionId,
-            name: `${log.interaction_type || "Interaction"} ${index + 1}`,
-            type: "agent_action",
-            path: ["governance", "interactions", log.agent_id || "unknown"],
-            metadata: {
-              agentId: log.agent_id,
-              interactionType: log.interaction_type,
-              prompt: log.prompt,
-              response: log.response,
-              timestamp: log.created_at,
-              responseTime: log.response_time_ms,
-              tokenUsage: log.token_usage,
-              qualityScores: log.quality_scores,
-              evaluationFlags: log.evaluation_flags,
-              auditHash: log.audit_block_hash,
-            },
-            nextNodes: [],
-          })
-
-          // Create response node if response exists
-          if (log.response) {
-            const responseId = `gov_resp_${log.id}`
-            agentNodes.push({
-              id: responseId,
-              name: `Response ${index + 1}`,
-              type: "agent_response",
-              path: ["governance", "responses", log.agent_id || "unknown"],
-              metadata: {
-                agentId: log.agent_id,
-                response: log.response,
-                timestamp: log.created_at,
-                tokenUsage: log.token_usage,
-                qualityScores: log.quality_scores,
-                parentActionId: actionId,
-              },
-              nextNodes: [],
-            })
-            agentEdges.push({ source: actionId, target: responseId })
-          }
-        })
+      if (!response.ok) {
+        throw new Error(`Failed to fetch lineage data: ${response.status}`)
       }
 
-      // Process activity stream
-      if (Array.isArray(activityData)) {
-        activityData.forEach((activity: any, index: number) => {
-          const activityId = `activity_${activity.id}`
-          agentNodes.push({
-            id: activityId,
-            name: `${activity.activity_type || "Activity"} ${index + 1}`,
-            type: "agent_action",
-            path: ["activity", activity.activity_type || "unknown", activity.agent_id || "unknown"],
-            metadata: {
-              agentId: activity.agent_id,
-              activityType: activity.activity_type,
-              status: activity.status,
-              duration: activity.duration_ms,
-              timestamp: activity.timestamp,
-              lineageId: activity.lineage_id,
-              activityData: activity.activity_data,
-            },
-            nextNodes: [],
-          })
-        })
-      }
+      const data = await response.json()
+      console.log("[v0] Received lineage data:", data)
 
-      // Process thought process logs
-      if (Array.isArray(thoughtData)) {
-        thoughtData.forEach((thought: any, index: number) => {
-          const thoughtId = `thought_${thought.id}`
-          agentNodes.push({
-            id: thoughtId,
-            name: `${thought.thought_type || "Thought"} ${index + 1}`,
-            type: "agent_evaluation",
-            path: ["thoughts", thought.thought_type || "unknown", thought.agent_id || "unknown"],
-            metadata: {
-              agentId: thought.agent_id,
-              thoughtType: thought.thought_type,
-              thoughtContent: thought.thought_content,
-              prompt: thought.prompt,
-              timestamp: thought.created_at,
-              processingTime: thought.processing_time_ms,
-              tokensUsed: thought.tokens_used,
-              confidenceScore: thought.confidence_score,
-              modelUsed: thought.model_used,
-              temperature: thought.temperature,
-              reasoningSteps: thought.reasoning_steps,
-              decisionFactors: thought.decision_factors,
-              alternativesConsidered: thought.alternatives_considered,
-              outcomePrediction: thought.outcome_prediction,
-              actualOutcome: thought.actual_outcome,
-              sessionId: thought.session_id,
-              auditHash: thought.audit_block_hash,
-            },
-            nextNodes: [],
-          })
-        })
-      }
+      // Extract SDK logs from the lineage mapping data
+      const sdkLogs = data.lineageMapping || []
+      console.log("[v0] Processing", sdkLogs.length, "SDK logs")
 
-      // Process lineage mapping for connections
-      if (Array.isArray(lineageData?.lineageMapping)) {
-        lineageData.lineageMapping.forEach((mapping: any, index: number) => {
-          const mappingId = `lineage_${mapping.id}`
-          agentNodes.push({
-            id: mappingId,
-            name: `${mapping.interaction_type || "Interaction"} ${index + 1}`,
-            type: "agent_action",
-            path: ["lineage", mapping.interaction_type || "unknown", mapping.agent_id || "unknown"],
-            metadata: {
-              agentId: mapping.agent_id,
-              interactionType: mapping.interaction_type,
-              prompt: mapping.prompt,
-              response: mapping.response,
-              timestamp: mapping.created_at,
-              responseTime: mapping.response_time,
-              tokenUsage: mapping.token_usage,
-              toolCalls: mapping.tool_calls,
-              decisions: mapping.decisions,
-              evaluationScores: mapping.evaluation_scores,
-              dbQueries: mapping.db_queries,
-              sessionId: mapping.session_id,
-              parentInteractionId: mapping.parent_interaction_id,
-            },
-            nextNodes: [],
-          })
-
-          // Create connections based on parent_interaction_id
-          if (mapping.parent_interaction_id) {
-            const parentId = `lineage_${mapping.parent_interaction_id}`
-            agentEdges.push({ source: parentId, target: mappingId })
-          }
-        })
-      }
-
-      // Combine all nodes and edges
-      const allNodes = [...lineageNodes, ...agentNodes]
-      const allEdges = [...lineageEdges, ...agentEdges]
-
-      console.log("[v0] Combined nodes:", allNodes.length, "edges:", allEdges.length)
-      console.log("[v0] Sample agent nodes:", agentNodes.slice(0, 3))
-
-      setServerData({
-        nodes: allNodes,
-        edges: allEdges,
-        lineageMapping: lineageData?.lineageMapping || [],
-      })
+      setLogs(sdkLogs)
     } catch (error) {
       console.error("[v0] Error loading lineage data:", error)
       setError(error instanceof Error ? error.message : "Failed to load lineage data")
@@ -1257,317 +97,372 @@ export function DataModelLineage({
     }
   }
 
-  const debugInfo = React.useMemo(() => {
-    return {
-      serverDataNodes: serverData?.nodes?.length || 0,
-      serverDataEdges: serverData?.edges?.length || 0,
-      rawNodes: raw.length,
-      filteredNodes: filteredData.length,
-      rfNodes: nodes.length,
-      rfEdges: edges.length,
+  React.useEffect(() => {
+    loadLineage()
+  }, [])
+
+  const agentGroups = React.useMemo((): AgentGroup[] => {
+    const groups = new Map<string, SDKLog[]>()
+
+    // Filter logs based on search and type
+    const filteredLogs = logs.filter((log) => {
+      const matchesSearch =
+        search === "" ||
+        log.agent_id.toLowerCase().includes(search.toLowerCase()) ||
+        log.payload?.message?.toLowerCase().includes(search.toLowerCase()) ||
+        log.payload?.prompt?.toLowerCase().includes(search.toLowerCase())
+
+      const matchesType = typeFilter === "all" || log.type === typeFilter
+
+      return matchesSearch && matchesType
+    })
+
+    // Group by agent_id
+    filteredLogs.forEach((log) => {
+      if (!groups.has(log.agent_id)) {
+        groups.set(log.agent_id, [])
+      }
+      groups.get(log.agent_id)!.push(log)
+    })
+
+    // Convert to AgentGroup objects with stats
+    return Array.from(groups.entries())
+      .map(([agentId, agentLogs]) => {
+        const sortedLogs = agentLogs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+
+        const responseTimes = agentLogs
+          .map((log) => log.payload?.responseTime || log.payload?.duration_ms)
+          .filter(Boolean) as number[]
+
+        const avgResponseTime =
+          responseTimes.length > 0 ? responseTimes.reduce((sum, time) => sum + time, 0) / responseTimes.length : 0
+
+        const successCount = agentLogs.filter((log) => log.payload?.status === "success" || log.level === "info").length
+
+        const successRate = agentLogs.length > 0 ? (successCount / agentLogs.length) * 100 : 0
+
+        return {
+          agentId,
+          logs: sortedLogs,
+          totalLogs: agentLogs.length,
+          lastActivity: sortedLogs[0]?.created_at || "",
+          avgResponseTime,
+          successRate,
+        }
+      })
+      .sort((a, b) => new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime())
+  }, [logs, search, typeFilter])
+
+  // Get unique log types for filter
+  const logTypes = React.useMemo(() => {
+    const types = new Set(logs.map((log) => log.type))
+    return Array.from(types).sort()
+  }, [logs])
+
+  const formatTimestamp = (timestamp: string) => {
+    return new Date(timestamp).toLocaleString()
+  }
+
+  const formatDuration = (ms: number) => {
+    if (ms < 1000) return `${ms}ms`
+    return `${(ms / 1000).toFixed(1)}s`
+  }
+
+  const getLevelColor = (level: string) => {
+    switch (level.toLowerCase()) {
+      case "error":
+        return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+      case "warn":
+        return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
+      case "info":
+        return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+      default:
+        return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200"
     }
-  }, [serverData, raw, filteredData, nodes, edges])
+  }
 
-  return (
-    <ReactFlowProvider>
+  const getTypeColor = (type: string) => {
+    switch (type) {
+      case "playground_test":
+        return "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200"
+      case "request":
+        return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+      case "inference":
+        return "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200"
+      case "security":
+        return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+      case "performance":
+        return "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200"
+      default:
+        return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200"
+    }
+  }
+
+  if (loading) {
+    return (
       <Card className="shadow-sm border-gray-200 dark:border-gray-800">
-        <CardHeader className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <CardTitle className="text-2xl font-bold text-foreground">Agent Actions & Data Lineage</CardTitle>
-              <CardDescription className="text-muted-foreground">
-                Visualize your complete AI pipeline: live agent actions, models, deployments, evaluations, and data
-                flows with real-time audit tracking.
-              </CardDescription>
-              <div className="mt-2 text-xs text-muted-foreground bg-muted/50 p-2 rounded">
-                Debug: Server({debugInfo.serverDataNodes}n, {debugInfo.serverDataEdges}e) → Raw({debugInfo.rawNodes}) →
-                Filtered({debugInfo.filteredNodes}) → Display({debugInfo.rfNodes}n, {debugInfo.rfEdges}e)
-                {loading && " | Loading..."}
-                {error && ` | Error: ${error}`}
-              </div>
-            </div>
-            <Button variant="outline" className="gap-2 bg-transparent" onClick={loadLineage} disabled={loading}>
-              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-              {loading ? "Refreshing" : "Refresh"}
-            </Button>
-            <Button variant="outline" className="gap-2 bg-transparent" onClick={handleExportJSON}>
-              <Download className="h-4 w-4" />
-              Export JSON
-            </Button>
-          </div>
-          <div className="mt-4">
-            <Breadcrumb>
-              <BreadcrumbList>
-                {breadcrumbSegments.map((segment, idx) => (
-                  <React.Fragment key={`${segment}-${idx}`}>
-                    <BreadcrumbItem>
-                      {idx === breadcrumbSegments.length - 1 ? (
-                        <BreadcrumbPage className="font-semibold">{segment}</BreadcrumbPage>
-                      ) : (
-                        <BreadcrumbLink
-                          href="#"
-                          onClick={(e) => {
-                            e.preventDefault()
-                            const node = raw.find((n) => n.path[idx] === segment && n.path.length === idx + 1)
-                            if (node) setSelected(node)
-                          }}
-                        >
-                          {segment}
-                        </BreadcrumbLink>
-                      )}
-                    </BreadcrumbItem>
-                    {idx < breadcrumbSegments.length - 1 && <BreadcrumbSeparator />}
-                  </React.Fragment>
-                ))}
-              </BreadcrumbList>
-            </Breadcrumb>
-          </div>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <RefreshCw className="h-5 w-5 animate-spin" />
+            Loading Agent Activity...
+          </CardTitle>
         </CardHeader>
-
-        <CardContent className="p-6 space-y-6">
-          <MetricsBar data={raw} />
-          <Separator className="bg-gray-200 dark:bg-gray-800" />
-
-          <Toolbar
-            search={search}
-            setSearch={setSearch}
-            typeFilter={typeFilter}
-            setTypeFilter={setTypeFilter}
-            onFit={() => apiRef.current?.fit()}
-            onReset={() => {
-              setSearch("")
-              setTypeFilter({
-                agent: true,
-                agent_action: true,
-                agent_response: true,
-                agent_evaluation: true,
-                model: true,
-                deployment: true,
-                evaluation: true,
-                dataset: true,
-                transformation: true,
-                integration: true,
-                user: false,
-                organization: false,
-              })
-              setFocusMode("all")
-              apiRef.current?.fit()
-            }}
-            onExportJSON={handleExportJSON}
-            onExportPNG={handleExportPNG}
-          />
-          {error && (
-            <div className="text-sm text-destructive">
-              {"Failed to load live lineage: "}
-              {error}
-            </div>
-          )}
-
-          {!loading && raw.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground">
-              <div className="text-lg font-medium">No lineage data found</div>
-              <div className="text-sm mt-2">
-                Try running some playground tests or check if your database contains lineage data.
-                <br />
-                Check the browser console for detailed debugging information.
-              </div>
-            </div>
-          )}
-
-          <div className="grid lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-3">
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">Focus</span>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant={focusMode === "all" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setFocusMode("all")}
-                  >
-                    All
-                  </Button>
-                  <Button
-                    variant={focusMode === "upstream" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setFocusMode("upstream")}
-                  >
-                    Upstream
-                  </Button>
-                  <Button
-                    variant={focusMode === "downstream" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setFocusMode("downstream")}
-                  >
-                    Downstream
-                  </Button>
-                </div>
-              </div>
-
-              <GraphCanvas
-                nodes={nodes}
-                edges={edges}
-                onNodeClick={(id) => {
-                  const n = raw.find((x) => x.id === id)
-                  if (n) setSelected(n)
-                }}
-              />
-
-              <p className="text-xs text-muted-foreground">
-                Tip: Drag to pan, scroll to zoom, and drag nodes to adjust layout. Agent actions show real-time audit
-                data.
-              </p>
-            </div>
-
-            <div className="lg:col-span-1">
-              <Card className="h-full">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg">Node Details</CardTitle>
-                  <CardDescription>Inspect metadata and agent action details.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {selected ? (
-                    <div className="space-y-4">
-                      <div className="space-y-1">
-                        <div className="text-sm text-muted-foreground">Name</div>
-                        <div className="font-medium">{selected.name}</div>
-                      </div>
-                      <div className="space-y-1">
-                        <div className="text-sm text-muted-foreground">Type</div>
-                        <div className="capitalize">{selected.type}</div>
-                      </div>
-
-                      <Tabs defaultValue="details" className="w-full">
-                        <TabsList className="grid grid-cols-3">
-                          <TabsTrigger value="details" className="gap-2">
-                            <Info className="h-4 w-4" />
-                            Details
-                          </TabsTrigger>
-                          <TabsTrigger value="path" className="gap-2">
-                            <GitBranch className="h-4 w-4" />
-                            Path
-                          </TabsTrigger>
-                          {selected.type.startsWith("agent") && selected.metadata.agentId && (
-                            <TabsTrigger value="agent" className="gap-2">
-                              <Bot className="h-4 w-4" />
-                              Agent
-                            </TabsTrigger>
-                          )}
-                        </TabsList>
-                        <TabsContent value="details" className="mt-3">
-                          <div className="space-y-2 text-sm">
-                            {Object.entries(selected.metadata).map(([key, value]) =>
-                              value ? (
-                                <div key={key}>
-                                  <div className="text-muted-foreground">
-                                    {key.replace(/([A-Z])/g, " $1").replace(/^./, (s) => s.toUpperCase())}
-                                  </div>
-                                  <div className="font-medium break-words">
-                                    {key === "prompt" || key === "response"
-                                      ? String(value).length > 100
-                                        ? `${String(value).substring(0, 100)}...`
-                                        : String(value)
-                                      : String(value)}
-                                  </div>
-                                </div>
-                              ) : null,
-                            )}
-                          </div>
-                        </TabsContent>
-                        <TabsContent value="path" className="mt-3">
-                          <ol className="list-decimal ml-4 space-y-1 text-sm">
-                            {selected.path.map((p, i) => (
-                              <li key={`${p}-${i}`} className="break-words">
-                                {p}
-                              </li>
-                            ))}
-                          </ol>
-                        </TabsContent>
-                        {selected.type.startsWith("agent") && selected.metadata.agentId && (
-                          <TabsContent value="agent" className="mt-3">
-                            <div className="space-y-3 text-sm">
-                              <div className="flex items-center gap-2">
-                                <Bot className="h-4 w-4 text-blue-500" />
-                                <span className="font-medium">Agent ID:</span>
-                                <code className="text-xs bg-muted px-1 rounded">{selected.metadata.agentId}</code>
-                              </div>
-
-                              {selected.metadata.prompt && (
-                                <div>
-                                  <div className="text-muted-foreground mb-1">Prompt:</div>
-                                  <div className="bg-muted/50 p-2 rounded text-xs max-h-32 overflow-y-auto">
-                                    {selected.metadata.prompt}
-                                  </div>
-                                </div>
-                              )}
-
-                              {selected.metadata.response && (
-                                <div>
-                                  <div className="text-muted-foreground mb-1">Response:</div>
-                                  <div className="bg-muted/50 p-2 rounded text-xs max-h-32 overflow-y-auto">
-                                    {selected.metadata.response}
-                                  </div>
-                                </div>
-                              )}
-
-                              <div className="flex flex-wrap gap-2">
-                                {selected.metadata.tokenUsage && (
-                                  <Badge variant="outline">
-                                    {typeof selected.metadata.tokenUsage === "object"
-                                      ? `${selected.metadata.tokenUsage.total || selected.metadata.tokenUsage.prompt + selected.metadata.tokenUsage.completion || "N/A"} tokens`
-                                      : `${selected.metadata.tokenUsage} tokens`}
-                                  </Badge>
-                                )}
-                                {selected.metadata.evaluationScore && (
-                                  <Badge variant="outline">Score: {String(selected.metadata.evaluationScore)}</Badge>
-                                )}
-                                {selected.metadata.duration && (
-                                  <Badge variant="outline">{String(selected.metadata.duration)}ms</Badge>
-                                )}
-                              </div>
-                            </div>
-                          </TabsContent>
-                        )}
-                      </Tabs>
-
-                      <Separator />
-
-                      <div className="flex flex-wrap gap-2">
-                        <Button variant="outline" size="sm" onClick={() => setFocusMode("upstream")}>
-                          View Upstream
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => setFocusMode("downstream")}>
-                          View Downstream
-                        </Button>
-                        {(selected.type === "dataset" ||
-                          selected.type === "transformation" ||
-                          selected.type === "model") && (
-                          <Button
-                            variant="default"
-                            size="sm"
-                            onClick={() => {
-                              if (selected.type === "dataset") onOpenDatasetVersioning()
-                              else if (selected.type === "transformation") onOpenTransformationSteps()
-                              else if (selected.type === "model") onOpenModelVersionTracking()
-                            }}
-                            className="gap-2"
-                          >
-                            <BadgeCheck className="h-4 w-4" />
-                            View More Details
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-muted-foreground text-sm">
-                      Select a node from the graph to view its details and agent actions.
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
+        <CardContent>
+          <div className="flex items-center justify-center py-8">
+            <div className="text-muted-foreground">Loading lineage data...</div>
           </div>
         </CardContent>
       </Card>
-    </ReactFlowProvider>
+    )
+  }
+
+  if (error) {
+    return (
+      <Card className="shadow-sm border-gray-200 dark:border-gray-800">
+        <CardHeader>
+          <CardTitle className="text-red-600">Error Loading Lineage</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-red-600 mb-4">{error}</div>
+          <Button onClick={loadLineage} variant="outline">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Retry
+          </Button>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <Card className="shadow-sm border-gray-200 dark:border-gray-800">
+      <CardHeader className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <CardTitle className="text-2xl font-bold text-foreground flex items-center gap-2">
+              <Activity className="h-6 w-6" />
+              Agent Activity Lineage
+            </CardTitle>
+            <CardDescription className="text-muted-foreground">
+              Real-time agent activity organized by agent with detailed audit logs from SDK
+            </CardDescription>
+          </div>
+          <Button onClick={loadLineage} variant="outline" size="sm">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
+          </Button>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-4 mt-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search agents, messages, or prompts..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <Filter className="h-4 w-4 text-muted-foreground" />
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className="px-3 py-2 border border-input bg-background rounded-md text-sm"
+            >
+              <option value="all">All Types</option>
+              {logTypes.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-4 text-sm text-muted-foreground mt-2">
+          <span>{agentGroups.length} agents</span>
+          <span>{logs.length} total logs</span>
+        </div>
+      </CardHeader>
+
+      <CardContent className="p-0">
+        <Tabs value={selectedAgent || "overview"} onValueChange={setSelectedAgent}>
+          <div className="flex">
+            <div className="w-80 border-r border-gray-200 dark:border-gray-800">
+              <TabsList className="w-full justify-start p-0 h-auto bg-transparent">
+                <div className="w-full">
+                  <TabsTrigger
+                    value="overview"
+                    className="w-full justify-start p-4 data-[state=active]:bg-blue-50 dark:data-[state=active]:bg-blue-950"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Activity className="h-4 w-4" />
+                      <span>Overview</span>
+                    </div>
+                  </TabsTrigger>
+                  <Separator />
+                  <ScrollArea className="h-[600px]">
+                    {agentGroups.map((group) => (
+                      <TabsTrigger
+                        key={group.agentId}
+                        value={group.agentId}
+                        className="w-full justify-start p-4 data-[state=active]:bg-blue-50 dark:data-[state=active]:bg-blue-950 border-b border-gray-100 dark:border-gray-800"
+                      >
+                        <div className="flex items-start gap-3 w-full">
+                          <Bot className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                          <div className="flex-1 min-w-0 text-left">
+                            <div className="font-medium truncate">{group.agentId}</div>
+                            <div className="text-xs text-muted-foreground mt-1">
+                              {group.totalLogs} logs • {group.successRate.toFixed(0)}% success
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {group.avgResponseTime > 0 && `${formatDuration(group.avgResponseTime)} avg`}
+                            </div>
+                          </div>
+                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                      </TabsTrigger>
+                    ))}
+                  </ScrollArea>
+                </div>
+              </TabsList>
+            </div>
+
+            <div className="flex-1">
+              <TabsContent value="overview" className="m-0">
+                <div className="p-6">
+                  <h3 className="text-lg font-semibold mb-4">Agent Activity Overview</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {agentGroups.slice(0, 6).map((group) => (
+                      <Card
+                        key={group.agentId}
+                        className="cursor-pointer hover:shadow-md transition-shadow"
+                        onClick={() => setSelectedAgent(group.agentId)}
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Bot className="h-4 w-4" />
+                            <span className="font-medium truncate">{group.agentId}</span>
+                          </div>
+                          <div className="space-y-2 text-sm text-muted-foreground">
+                            <div className="flex justify-between">
+                              <span>Total Logs:</span>
+                              <span>{group.totalLogs}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Success Rate:</span>
+                              <span>{group.successRate.toFixed(0)}%</span>
+                            </div>
+                            {group.avgResponseTime > 0 && (
+                              <div className="flex justify-between">
+                                <span>Avg Response:</span>
+                                <span>{formatDuration(group.avgResponseTime)}</span>
+                              </div>
+                            )}
+                            <div className="flex justify-between">
+                              <span>Last Activity:</span>
+                              <span>{new Date(group.lastActivity).toLocaleDateString()}</span>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              </TabsContent>
+
+              {agentGroups.map((group) => (
+                <TabsContent key={group.agentId} value={group.agentId} className="m-0">
+                  <div className="p-6">
+                    <div className="flex items-center justify-between mb-6">
+                      <div>
+                        <h3 className="text-lg font-semibold flex items-center gap-2">
+                          <Bot className="h-5 w-5" />
+                          {group.agentId}
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                          {group.totalLogs} logs • {group.successRate.toFixed(0)}% success rate
+                        </p>
+                      </div>
+                    </div>
+
+                    <ScrollArea className="h-[500px]">
+                      <div className="space-y-4">
+                        {group.logs.map((log) => (
+                          <Card key={log.id} className="border-l-4 border-l-blue-500">
+                            <CardContent className="p-4">
+                              <div className="flex items-start justify-between gap-4 mb-3">
+                                <div className="flex items-center gap-2">
+                                  <Badge className={cn("text-xs", getLevelColor(log.level))}>{log.level}</Badge>
+                                  <Badge className={cn("text-xs", getTypeColor(log.type))}>{log.type}</Badge>
+                                </div>
+                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                  <Clock className="h-3 w-3" />
+                                  {formatTimestamp(log.created_at)}
+                                </div>
+                              </div>
+
+                              {log.payload?.message && (
+                                <div className="mb-3">
+                                  <div className="text-sm font-medium mb-1">Message:</div>
+                                  <div className="text-sm text-muted-foreground">{log.payload.message}</div>
+                                </div>
+                              )}
+
+                              {log.payload?.prompt && (
+                                <div className="mb-3">
+                                  <div className="text-sm font-medium mb-1 flex items-center gap-1">
+                                    <MessageSquare className="h-3 w-3" />
+                                    Prompt:
+                                  </div>
+                                  <div className="text-sm text-muted-foreground bg-gray-50 dark:bg-gray-900 p-2 rounded">
+                                    {log.payload.prompt.length > 200
+                                      ? `${log.payload.prompt.substring(0, 200)}...`
+                                      : log.payload.prompt}
+                                  </div>
+                                </div>
+                              )}
+
+                              {log.payload?.response && (
+                                <div className="mb-3">
+                                  <div className="text-sm font-medium mb-1">Response:</div>
+                                  <div className="text-sm text-muted-foreground bg-gray-50 dark:bg-gray-900 p-2 rounded">
+                                    {log.payload.response.length > 200
+                                      ? `${log.payload.response.substring(0, 200)}...`
+                                      : log.payload.response}
+                                  </div>
+                                </div>
+                              )}
+
+                              <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                                {log.payload?.responseTime && (
+                                  <div className="flex items-center gap-1">
+                                    <Zap className="h-3 w-3" />
+                                    {formatDuration(log.payload.responseTime)}
+                                  </div>
+                                )}
+                                {log.payload?.tokenUsage?.total && <div>{log.payload.tokenUsage.total} tokens</div>}
+                                {log.payload?.status && (
+                                  <Badge
+                                    variant={log.payload.status === "success" ? "default" : "destructive"}
+                                    className="text-xs"
+                                  >
+                                    {log.payload.status}
+                                  </Badge>
+                                )}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </div>
+                </TabsContent>
+              ))}
+            </div>
+          </div>
+        </Tabs>
+      </CardContent>
+    </Card>
   )
 }

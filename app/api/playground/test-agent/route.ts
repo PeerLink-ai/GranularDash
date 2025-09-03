@@ -309,7 +309,7 @@ export async function POST(request: NextRequest) {
     console.log("[v0] Ensuring agent exists in connected_agents table...")
     await sql`
       INSERT INTO connected_agents (user_id, agent_id, name, provider, endpoint, api_key_encrypted, status, created_at, updated_at)
-      VALUES ('playground-user', ${agentId}, ${agent.name}, ${agent.provider}, ${agent.endpoint || ""}, ${agent.api_key_encrypted || agent.api_key || ""}, ${agent.status || "active"}, NOW(), NOW())
+      VALUES ('00000000-0000-0000-0000-000000000001', ${agentId}, ${agent.name}, ${agent.provider}, ${agent.endpoint || ""}, ${agent.api_key_encrypted || agent.api_key || ""}, ${agent.status || "active"}, NOW(), NOW())
       ON CONFLICT (agent_id) DO UPDATE SET
         name = EXCLUDED.name,
         provider = EXCLUDED.provider,
@@ -411,7 +411,7 @@ export async function POST(request: NextRequest) {
       const aiReasoning = generateAIReasoning(prompt, response, actualReasoning, agent, actualTokenUsage, responseTime)
 
       await addAuditLog({
-        userId: "playground-user", // In production, get from session
+        userId: "00000000-0000-0000-0000-000000000001", // In production, get from session
         organization: "default-org", // In production, get from user context
         action: "AGENT_PLAYGROUND_TEST",
         resourceType: "AI_AGENT",
@@ -425,11 +425,9 @@ export async function POST(request: NextRequest) {
           responseTime,
           lineageId,
           blockHash: auditBlock.hash,
-          cryptographicProof: {
-            signature: auditBlock.signature,
-            merkleRoot: auditBlock.merkleRoot,
-            chainValid: auditChain.validateChain(),
-          },
+          signature: auditBlock.signature,
+          merkleRoot: auditBlock.merkleRoot,
+          chainValid: auditChain.validateChain(),
           ai_reasoning: aiReasoning,
         },
         ipAddress: request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown",

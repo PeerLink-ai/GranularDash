@@ -264,14 +264,9 @@ function generateAIReasoning(
 export async function POST(request: NextRequest) {
   console.log("[v0] Playground API endpoint hit - route is working!")
 
-  let agentId: string | null = null
-  let prompt: string | null = null
-
   try {
     console.log("[v0] Parsing request body...")
-    const requestBody = await request.json()
-    agentId = requestBody.agentId
-    prompt = requestBody.prompt
+    const { agentId, prompt } = await request.json()
     console.log("[v0] Received agentId:", agentId, "prompt length:", prompt?.length)
 
     if (!agentId || !prompt) {
@@ -308,8 +303,8 @@ export async function POST(request: NextRequest) {
 
     console.log("[v0] Ensuring agent exists in connected_agents table...")
     await sql`
-      INSERT INTO connected_agents (user_id, agent_id, name, provider, endpoint, api_key_encrypted, status, created_at, updated_at)
-      VALUES ('playground-user', ${agentId}, ${agent.name}, ${agent.provider}, ${agent.endpoint || ""}, ${agent.api_key_encrypted || agent.api_key || ""}, ${agent.status || "active"}, NOW(), NOW())
+      INSERT INTO connected_agents (agent_id, name, provider, endpoint, api_key_encrypted, status, created_at, updated_at)
+      VALUES (${agentId}, ${agent.name}, ${agent.provider}, ${agent.endpoint || ""}, ${agent.api_key_encrypted || agent.api_key || ""}, ${agent.status || "active"}, NOW(), NOW())
       ON CONFLICT (agent_id) DO UPDATE SET
         name = EXCLUDED.name,
         provider = EXCLUDED.provider,
@@ -531,6 +526,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(responseData)
   } catch (error) {
     console.error("[v0] Playground test error:", error)
+    const agentId = null // Declare agentId variable here
     try {
       await addSDKLog({
         timestamp: BigInt(Date.now()),
@@ -539,7 +535,7 @@ export async function POST(request: NextRequest) {
         agent_id: agentId || "unknown",
         payload: {
           message: `Playground test failed: ${error instanceof Error ? error.message : "Unknown error"}`,
-          prompt: prompt ? prompt.substring(0, 100) + "..." : "No prompt available",
+          prompt: prompt?.substring(0, 100) + "...", // Truncate for logging
           error: error instanceof Error ? error.message : "Unknown error",
           stack: error instanceof Error ? error.stack : undefined,
           action: "PLAYGROUND_TEST",

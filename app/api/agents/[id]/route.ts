@@ -95,19 +95,45 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
 
     const { id } = params
 
-    // Get agent details before deletion
-    const [agent] = await sql`
+    // Try connected_agents first
+    const [connectedAgent] = await sql`
       SELECT * FROM connected_agents 
       WHERE id = ${id} AND user_id = ${user.id}
     `
 
-    if (!agent) {
+    if (connectedAgent) {
+      // Delete the connected agent
+      await sql`
+        DELETE FROM connected_agents 
+        WHERE id = ${id} AND user_id = ${user.id}
+      `
+
+      // Log the activity
+      await logActivity({
+        userId: user.id,
+        organization: user.organization,
+        action: `Disconnected ${connectedAgent.name} agent`,
+        resourceType: "agent",
+        resourceId: id,
+        description: `Removed ${connectedAgent.provider} ${connectedAgent.model} agent connection`,
+        status: "warning",
+      })
+
+      return NextResponse.json({ success: true, type: "connected" })
+    }
+
+    const [createdAgent] = await sql`
+      SELECT * FROM created_agents 
+      WHERE id = ${id} AND user_id = ${user.id}
+    `
+
+    if (!createdAgent) {
       return NextResponse.json({ error: "Agent not found" }, { status: 404 })
     }
 
-    // Delete the agent
+    // Delete the created agent (CASCADE will handle related records)
     await sql`
-      DELETE FROM connected_agents 
+      DELETE FROM created_agents 
       WHERE id = ${id} AND user_id = ${user.id}
     `
 
@@ -115,14 +141,14 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     await logActivity({
       userId: user.id,
       organization: user.organization,
-      action: `Disconnected ${agent.name} agent`,
-      resourceType: "agent",
+      action: `Deleted ${createdAgent.name} agent`,
+      resourceType: "created_agent",
       resourceId: id,
-      description: `Removed ${agent.provider} ${agent.model} agent connection`,
+      description: `Permanently deleted ${createdAgent.agent_type} agent and all related data`,
       status: "warning",
     })
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true, type: "created" })
   } catch (error) {
     console.error("Failed to delete agent:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

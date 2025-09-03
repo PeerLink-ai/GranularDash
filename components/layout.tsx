@@ -1,6 +1,8 @@
 "use client"
 
 import type React from "react"
+import { useRouter } from "next/navigation"
+import { useEffect } from "react"
 
 import { useAuth } from "@/contexts/auth-context"
 import { AppSidebar } from "./app-sidebar"
@@ -10,7 +12,26 @@ import MobileNav from "./mobile-nav"
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
 
 export default function Layout({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth()
+  const { user, loading } = useAuth()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (!loading && !user && typeof window !== "undefined") {
+      const currentPath = window.location.pathname
+      // Don't redirect if already on auth pages
+      if (!currentPath.startsWith("/auth/")) {
+        router.push("/auth/signin")
+      }
+    }
+  }, [user, loading, router])
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-muted-foreground">Loading...</div>
+      </div>
+    )
+  }
 
   if (!user) {
     return <div className="min-h-screen bg-background">{children}</div>

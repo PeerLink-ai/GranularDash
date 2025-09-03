@@ -692,36 +692,18 @@ type GraphApi = {
   zoomOut: () => void
 }
 
-function GraphCanvas({
-  nodes,
-  edges,
-  onNodeClick,
-}: {
+type GraphCanvasProps = {
   nodes: Node[]
   edges: Edge[]
   onNodeClick: (id: string) => void
-}) {
-  console.log("[v0] GraphCanvas received nodes:", nodes.length, "edges:", edges.length)
+}
 
+const GraphCanvas = ({ nodes, edges, onNodeClick }: GraphCanvasProps) => {
   const rf = useReactFlow()
-  const [styledNodes, setStyledNodes] = React.useState(nodes)
-
-  React.useEffect(() => {
-    setStyledNodes(nodes)
-  }, [nodes])
-
-  React.useEffect(() => {
-    if (nodes.length > 0) {
-      setTimeout(() => {
-        rf.fitView({ duration: 500, padding: 0.1 })
-      }, 200)
-    }
-  }, [nodes, rf])
-
   return (
     <div className="relative h-[600px] rounded-xl border-2 border-gray-200 overflow-hidden bg-gradient-to-br from-slate-50 to-blue-50">
       <ReactFlow
-        nodes={styledNodes}
+        nodes={nodes}
         edges={edges}
         onNodeClick={(_, n) => onNodeClick(n.id)}
         nodesDraggable={true}
@@ -825,9 +807,7 @@ export function DataModelLineage({
   }, [])
 
   React.useEffect(() => {
-    console.log("[v0] Frontend received server data:", serverData)
     if (serverData?.nodes && Array.isArray(serverData.nodes) && serverData.nodes.length > 0) {
-      console.log("[v0] Processing", serverData.nodes.length, "nodes and", serverData.edges?.length || 0, "edges")
       const ids = new Set(serverData.nodes.map((n) => n.id))
       const nextMap = new Map<string, string[]>()
 
@@ -845,8 +825,6 @@ export function DataModelLineage({
         path: Array.isArray(n.path) ? n.path : [],
         metadata: n.metadata || {},
       }))
-      console.log("[v0] Normalized nodes:", normalized.length)
-      console.log("[v0] Sample normalized nodes:", normalized.slice(0, 3))
       setRaw(normalized as LineageNode[])
       setSelected(normalized[0] || null)
     } else {
@@ -952,9 +930,7 @@ export function DataModelLineage({
   }, [raw, activeTypes, debouncedSearch])
 
   const rfNodesBase = React.useMemo(() => {
-    console.log("[v0] Creating ReactFlow nodes from filtered data:", filteredData.length)
     const layoutResult = layoutNodes(filteredData)
-    console.log("[v0] Layout result:", layoutResult.length)
     return layoutResult
   }, [filteredData])
 
@@ -962,7 +938,6 @@ export function DataModelLineage({
   const [edges, setEdges] = React.useState<Edge[]>([])
 
   React.useEffect(() => {
-    console.log("[v0] Updating nodes state with:", rfNodesBase.length, "nodes")
     setNodes(rfNodesBase)
   }, [rfNodesBase])
 
@@ -970,7 +945,6 @@ export function DataModelLineage({
     const validEdges = edgesRaw.filter(
       (e) => rfNodesBase.find((n) => n.id === e.source) && rfNodesBase.find((n) => n.id === e.target),
     )
-    console.log("[v0] Setting edges:", validEdges.length)
     setEdges(validEdges)
   }, [edgesRaw, rfNodesBase])
 
@@ -1009,8 +983,7 @@ export function DataModelLineage({
 
   const breadcrumbSegments = Array.isArray(selected?.path) ? selected.path : []
 
-  const loadLineage = async () => {
-    console.log("[v0] Starting to load lineage and agent actions from APIs...")
+  const loadLineage = React.useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
@@ -1021,24 +994,12 @@ export function DataModelLineage({
         fetch("/api/thought-process", { cache: "no-store" }),
       ])
 
-      console.log("[v0] API response statuses:", {
-        lineage: lineageRes.status,
-        governance: governanceRes.status,
-        activity: activityRes.status,
-        thought: thoughtRes.status,
-      })
-
       const [lineageData, governanceData, activityData, thoughtData] = await Promise.all([
         lineageRes.json().catch(() => ({ nodes: [], edges: [] })),
         governanceRes.json().catch(() => []),
         activityRes.json().catch(() => []),
         thoughtRes.json().catch(() => []),
       ])
-
-      console.log("[v0] Raw governance data:", governanceData)
-      console.log("[v0] Raw activity data:", activityData)
-      console.log("[v0] Raw thought data:", thoughtData)
-      console.log("[v0] Raw lineage mapping:", lineageData?.lineageMapping)
 
       // Combine lineage nodes with agent action nodes
       const lineageNodes = Array.isArray(lineageData?.nodes) ? lineageData.nodes : []
@@ -1051,8 +1012,6 @@ export function DataModelLineage({
       // Process governance logs
       if (Array.isArray(governanceData)) {
         governanceData.forEach((log: any, index: number) => {
-          console.log("[v0] Processing governance log for agent:", log.agent_id)
-
           const actionId = `gov_${log.id}`
           agentNodes.push({
             id: actionId,
@@ -1121,12 +1080,12 @@ export function DataModelLineage({
       }
 
       // Process thought process logs
-      if (Array.isArray(thoughtData)) {
-        thoughtData.forEach((thought: any, index: number) => {
+      if (Array.isArray(thoughtData) && thoughtData.length > 0) {
+        thoughtData.forEach((thought: any) => {
           const thoughtId = `thought_${thought.id}`
           agentNodes.push({
             id: thoughtId,
-            name: `${thought.thought_type || "Thought"} ${index + 1}`,
+            name: `${thought.thought_type || "Decision"} - ${thought.agent_id}`,
             type: "agent_evaluation",
             path: ["thoughts", thought.thought_type || "unknown", thought.agent_id || "unknown"],
             metadata: {
@@ -1192,9 +1151,6 @@ export function DataModelLineage({
       const allNodes = [...lineageNodes, ...agentNodes]
       const allEdges = [...lineageEdges, ...agentEdges]
 
-      console.log("[v0] Combined nodes:", allNodes.length, "edges:", allEdges.length)
-      console.log("[v0] Sample agent nodes:", agentNodes.slice(0, 3))
-
       setServerData({
         nodes: allNodes,
         edges: allEdges,
@@ -1206,7 +1162,7 @@ export function DataModelLineage({
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
   const debugInfo = React.useMemo(() => {
     return {

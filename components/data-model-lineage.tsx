@@ -1064,194 +1064,124 @@ export function DataModelLineage({
   const breadcrumbSegments = Array.isArray(selected?.path) ? selected.path : []
 
   const loadLineage = async () => {
-    console.log("[v0] Starting to load lineage and agent actions from APIs...")
+    console.log("[v0] Starting to load lineage from SDK logs...")
     setLoading(true)
     setError(null)
     try {
-      const [lineageRes, governanceRes, activityRes, thoughtRes] = await Promise.all([
-        fetch("/api/lineage", { cache: "no-store" }),
-        fetch("/api/agent-governance", { cache: "no-store" }),
-        fetch("/api/agent-activity", { cache: "no-store" }),
-        fetch("/api/thought-process", { cache: "no-store" }),
-      ])
+      const sdkLogsRes = await fetch("/api/sdk-logs?limit=100", { cache: "no-store" })
 
-      console.log("[v0] API response statuses:", {
-        lineage: lineageRes.status,
-        governance: governanceRes.status,
-        activity: activityRes.status,
-        thought: thoughtRes.status,
-      })
+      console.log("[v0] SDK logs API response status:", sdkLogsRes.status)
 
-      const [lineageData, governanceData, activityData, thoughtData] = await Promise.all([
-        lineageRes.json().catch(() => ({ nodes: [], edges: [] })),
-        governanceRes.json().catch(() => []),
-        activityRes.json().catch(() => []),
-        thoughtRes.json().catch(() => []),
-      ])
+      if (!sdkLogsRes.ok) {
+        throw new Error(`SDK logs API failed: ${sdkLogsRes.status}`)
+      }
 
-      console.log("[v0] Raw API responses:", { lineageData, governanceData, activityData, thoughtData })
+      const sdkLogsData = await sdkLogsRes.json()
+      console.log("[v0] SDK logs data:", sdkLogsData)
 
-      // Combine lineage nodes with agent action nodes
-      const lineageNodes = Array.isArray(lineageData?.nodes) ? lineageData.nodes : []
-      const lineageEdges = Array.isArray(lineageData?.edges) ? lineageData.edges : []
+      const nodes: LineageNode[] = []
+      const edges: { source: string; target: string }[] = []
 
-      // Transform agent data into lineage nodes
-      const agentNodes: LineageNode[] = []
-      const agentEdges: { source: string; target: string }[] = []
+      if (sdkLogsData.logs && Array.isArray(sdkLogsData.logs)) {
+        console.log("[v0] Processing", sdkLogsData.logs.length, "SDK logs")
 
-      // Process governance logs
-      if (Array.isArray(governanceData)) {
-        governanceData.forEach((log: any, index: number) => {
-          const actionId = `gov_${log.id}`
-          agentNodes.push({
-            id: actionId,
-            name: `${log.interaction_type || "Interaction"} ${index + 1}`,
-            type: "agent_action",
-            path: ["governance", "interactions", log.agent_id || "unknown"],
+        // Group logs by agent_id for better organization
+        const agentGroups = new Map<string, any[]>()
+
+        sdkLogsData.logs.forEach((log: any) => {
+          const agentId = log.agent_id || "unknown-agent"
+          if (!agentGroups.has(agentId)) {
+            agentGroups.set(agentId, [])
+          }
+          agentGroups.get(agentId)!.push(log)
+        })
+
+        // Create nodes for each agent and their logs
+        agentGroups.forEach((logs, agentId) => {
+          // Create agent node
+          const agentNodeId = `agent-${agentId}`
+          nodes.push({
+            id: agentNodeId,
+            name: agentId,
+            type: "agent",
+            path: ["agents", agentId],
             metadata: {
-              agentId: log.agent_id,
-              interactionType: log.interaction_type,
-              prompt: log.prompt,
-              response: log.response,
-              timestamp: log.created_at,
-              responseTime: log.response_time_ms,
-              tokenUsage: log.token_usage,
-              qualityScores: log.quality_scores,
-              evaluationFlags: log.evaluation_flags,
-              auditHash: log.audit_block_hash,
+              agentId: agentId,
+              logCount: logs.length,
+              description: `Agent with ${logs.length} log entries`,
+              status: "active",
             },
             nextNodes: [],
           })
 
-          // Create response node if response exists
-          if (log.response) {
-            const responseId = `gov_resp_${log.id}`
-            agentNodes.push({
-              id: responseId,
-              name: `Response ${index + 1}`,
-              type: "agent_response",
-              path: ["governance", "responses", log.agent_id || "unknown"],
+          // Create nodes for each log entry
+          logs.forEach((log, index) => {
+            const logNodeId = `log-${log.id}`
+            const logType = log.type || "unknown"
+            const level = log.level || "info"
+
+            nodes.push({
+              id: logNodeId,
+              name: `${logType} (${level})`,
+              type: logType.includes("request")
+                ? "agent_action"
+                : logType.includes("response")
+                  ? "agent_response"
+                  : logType.includes("security") || logType.includes("error")
+                    ? "agent_evaluation"
+                    : "agent_action",
+              path: ["agents", agentId, logType],
               metadata: {
-                agentId: log.agent_id,
-                response: log.response,
+                agentId: agentId,
+                logType: logType,
+                level: level,
                 timestamp: log.created_at,
-                tokenUsage: log.token_usage,
-                qualityScores: log.quality_scores,
-                parentActionId: actionId,
+                payload: log.payload,
+                description: `${logType} log entry`,
+                status: level === "error" ? "error" : level === "warn" ? "warning" : "success",
+                actionType: log.payload?.action,
+                duration: log.payload?.duration_ms,
+                responseTime: log.payload?.duration_ms,
               },
               nextNodes: [],
             })
-            agentEdges.push({ source: actionId, target: responseId })
-          }
-        })
-      }
 
-      // Process activity stream
-      if (Array.isArray(activityData)) {
-        activityData.forEach((activity: any, index: number) => {
-          const activityId = `activity_${activity.id}`
-          agentNodes.push({
-            id: activityId,
-            name: `${activity.activity_type || "Activity"} ${index + 1}`,
-            type: "agent_action",
-            path: ["activity", activity.activity_type || "unknown", activity.agent_id || "unknown"],
-            metadata: {
-              agentId: activity.agent_id,
-              activityType: activity.activity_type,
-              status: activity.status,
-              duration: activity.duration_ms,
-              timestamp: activity.timestamp,
-              lineageId: activity.lineage_id,
-              activityData: activity.activity_data,
-            },
-            nextNodes: [],
+            // Create edge from agent to log
+            edges.push({
+              source: agentNodeId,
+              target: logNodeId,
+            })
+
+            // Create sequential edges between logs of the same agent
+            if (index > 0) {
+              const prevLogId = `log-${logs[index - 1].id}`
+              edges.push({
+                source: prevLogId,
+                target: logNodeId,
+              })
+            }
           })
         })
+      } else {
+        console.log("[v0] No SDK logs found or invalid format")
       }
 
-      // Process thought process logs
-      if (Array.isArray(thoughtData)) {
-        thoughtData.forEach((thought: any, index: number) => {
-          const thoughtId = `thought_${thought.id}`
-          agentNodes.push({
-            id: thoughtId,
-            name: `${thought.thought_type || "Thought"} ${index + 1}`,
-            type: "agent_evaluation",
-            path: ["thoughts", thought.thought_type || "unknown", thought.agent_id || "unknown"],
-            metadata: {
-              agentId: thought.agent_id,
-              thoughtType: thought.thought_type,
-              thoughtContent: thought.thought_content,
-              prompt: thought.prompt,
-              timestamp: thought.created_at,
-              processingTime: thought.processing_time_ms,
-              tokensUsed: thought.tokens_used,
-              confidenceScore: thought.confidence_score,
-              modelUsed: thought.model_used,
-              temperature: thought.temperature,
-              reasoningSteps: thought.reasoning_steps,
-              decisionFactors: thought.decision_factors,
-              alternativesConsidered: thought.alternatives_considered,
-              outcomePrediction: thought.outcome_prediction,
-              actualOutcome: thought.actual_outcome,
-              sessionId: thought.session_id,
-              auditHash: thought.audit_block_hash,
-            },
-            nextNodes: [],
-          })
-        })
-      }
-
-      // Process lineage mapping for connections
-      if (Array.isArray(lineageData?.lineageMapping)) {
-        lineageData.lineageMapping.forEach((mapping: any, index: number) => {
-          const mappingId = `lineage_${mapping.id}`
-          agentNodes.push({
-            id: mappingId,
-            name: `${mapping.interaction_type || "Interaction"} ${index + 1}`,
-            type: "agent_action",
-            path: ["lineage", mapping.interaction_type || "unknown", mapping.agent_id || "unknown"],
-            metadata: {
-              agentId: mapping.agent_id,
-              interactionType: mapping.interaction_type,
-              prompt: mapping.prompt,
-              response: mapping.response,
-              timestamp: mapping.created_at,
-              responseTime: mapping.response_time,
-              tokenUsage: mapping.token_usage,
-              toolCalls: mapping.tool_calls,
-              decisions: mapping.decisions,
-              evaluationScores: mapping.evaluation_scores,
-              dbQueries: mapping.db_queries,
-              sessionId: mapping.session_id,
-              parentInteractionId: mapping.parent_interaction_id,
-            },
-            nextNodes: [],
-          })
-
-          // Create connections based on parent_interaction_id
-          if (mapping.parent_interaction_id) {
-            const parentId = `lineage_${mapping.parent_interaction_id}`
-            agentEdges.push({ source: parentId, target: mappingId })
-          }
-        })
-      }
-
-      // Combine all nodes and edges
-      const allNodes = [...lineageNodes, ...agentNodes]
-      const allEdges = [...lineageEdges, ...agentEdges]
-
-      console.log("[v0] Combined nodes:", allNodes.length, "edges:", allEdges.length)
-      console.log("[v0] Sample agent nodes:", agentNodes.slice(0, 3))
+      console.log("[v0] Created", nodes.length, "nodes and", edges.length, "edges from SDK logs")
+      console.log("[v0] Sample nodes:", nodes.slice(0, 3))
 
       setServerData({
-        nodes: allNodes,
-        edges: allEdges,
-        lineageMapping: lineageData?.lineageMapping || [],
+        nodes: nodes,
+        edges: edges,
+        lineageMapping: [],
       })
     } catch (error) {
-      console.error("[v0] Error loading lineage data:", error)
-      setError(error instanceof Error ? error.message : "Failed to load lineage data")
+      console.error("[v0] Error loading SDK logs:", error)
+      setError(error instanceof Error ? error.message : "Failed to load SDK logs")
+      setServerData({
+        nodes: [],
+        edges: [],
+        lineageMapping: [],
+      })
     } finally {
       setLoading(false)
     }

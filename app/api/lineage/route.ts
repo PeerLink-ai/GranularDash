@@ -21,46 +21,60 @@ export async function GET() {
       LIMIT 50
     `
 
+    console.log("[v0] Raw SDK logs fetched:", sdkLogs.length)
+
     const nodes = []
     const edges = []
 
     sdkLogs.forEach((log, index) => {
-      // Create prompt node
+      // Create agent action node for each log entry
+      const actionId = `sdk_action_${log.id}`
       nodes.push({
-        id: `prompt-${log.id}`,
-        type: "prompt",
-        data: {
-          label: "Prompt",
+        id: actionId,
+        name: `Agent ${log.agent_id} - Action ${index + 1}`,
+        type: "agent_action",
+        path: ["sdk_logs", "actions", log.agent_id || "unknown"],
+        metadata: {
           agentId: log.agent_id,
           prompt: log.prompt,
-          timestamp: log.created_at,
-          model: log.model,
-        },
-        position: { x: index * 300, y: 100 },
-      })
-
-      // Create response node
-      nodes.push({
-        id: `response-${log.id}`,
-        type: "response",
-        data: {
-          label: "Response",
-          agentId: log.agent_id,
           response: log.response,
-          tokensUsed: log.tokens_used,
+          model: log.model,
+          tokenUsage: log.tokens_used,
           responseTime: log.response_time_ms,
-          metadata: log.metadata,
+          timestamp: log.created_at,
+          rawMetadata: log.metadata,
+          actionType: "sdk_interaction",
+          interactionType: "sdk_call",
         },
-        position: { x: index * 300, y: 300 },
+        nextNodes: [],
       })
 
-      // Create edge connecting prompt to response
-      edges.push({
-        id: `edge-${log.id}`,
-        source: `prompt-${log.id}`,
-        target: `response-${log.id}`,
-        type: "smoothstep",
-      })
+      // Create response node if response exists
+      if (log.response) {
+        const responseId = `sdk_response_${log.id}`
+        nodes.push({
+          id: responseId,
+          name: `Response ${index + 1}`,
+          type: "agent_response",
+          path: ["sdk_logs", "responses", log.agent_id || "unknown"],
+          metadata: {
+            agentId: log.agent_id,
+            response: log.response,
+            tokenUsage: log.tokens_used,
+            responseTime: log.response_time_ms,
+            timestamp: log.created_at,
+            parentActionId: actionId,
+            model: log.model,
+          },
+          nextNodes: [],
+        })
+
+        // Create edge from action to response
+        edges.push({
+          source: actionId,
+          target: responseId,
+        })
+      }
     })
 
     console.log("[v0] SDK logs processed:", {

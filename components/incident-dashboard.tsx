@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
@@ -61,10 +61,24 @@ const initialIncidents = [
 
 export function IncidentDashboard() {
   const [incidents, setIncidents] = useState(initialIncidents)
+  const [auditIncidents, setAuditIncidents] = useState([])
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false)
   const [isResolveModalOpen, setIsResolveModalOpen] = useState(false)
   const [selectedIncident, setSelectedIncident] = useState(null)
   const [resolutionText, setResolutionText] = useState("")
+
+  useEffect(() => {
+    // Load incidents created from audit log errors
+    const storedIncidents = localStorage.getItem("audit_incidents")
+    if (storedIncidents) {
+      const parsed = JSON.parse(storedIncidents)
+      setAuditIncidents(parsed)
+
+      // Merge with existing incidents
+      const mergedIncidents = [...initialIncidents, ...parsed]
+      setIncidents(mergedIncidents)
+    }
+  }, [])
 
   const handleViewDetails = (incident) => {
     setSelectedIncident(incident)

@@ -417,15 +417,13 @@ function layoutNodes(data: LineageNode[], opts: { colGap?: number; rowGap?: numb
           targetPosition: Position.Left,
           data: {
             label: (
-              <div className="p-3 text-center">
-                <div className="text-sm font-semibold mb-1">{node.name}</div>
-                <div className="text-xs opacity-90">
-                  {node.metadata?.evaluationScore
-                    ? `Score: ${node.metadata.evaluationScore}/10`
-                    : node.metadata?.responseTime
-                      ? `${node.metadata.responseTime}ms`
-                      : node.type}
-                </div>
+              <div className="p-4 rounded-lg shadow-lg border-2 min-w-[160px]" style={currentStyle}>
+                <div className="font-semibold text-sm mb-1">{node.type.toUpperCase()}</div>
+                <div className="text-xs opacity-90 mb-2">{formatTimestamp(node.metadata?.timestamp)}</div>
+                <div className="text-xs font-medium">{node.name}</div>
+                {node.metadata?.level && (
+                  <div className="text-xs mt-1 px-2 py-1 bg-black/20 rounded">{node.metadata.level}</div>
+                )}
               </div>
             ),
             node,
@@ -464,7 +462,7 @@ function buildEdges(data: LineageNode[]): Edge[] {
       if (!nodeIds.has(nextId)) continue
 
       edges.push({
-        id: `${node.id}->${nextId}`,
+        id: `edge-${node.id}-${nextId}`,
         source: node.id,
         target: nextId,
         type: "smoothstep",
@@ -481,68 +479,6 @@ function buildEdges(data: LineageNode[]): Edge[] {
           height: 20,
         },
       })
-    }
-  }
-
-  // Add agent-to-conversation connections
-  const agentGroups = new Map<string, LineageNode[]>()
-  for (const node of data) {
-    const agentId = node.metadata?.agentId || "unknown"
-    if (!agentGroups.has(agentId)) agentGroups.set(agentId, [])
-    agentGroups.get(agentId)!.push(node)
-  }
-
-  for (const [agentId, agentNodes] of agentGroups) {
-    const conversations = new Map<string, LineageNode[]>()
-    for (const node of agentNodes) {
-      const sessionId = node.metadata?.sessionId || node.metadata?.parentInteractionId || "default"
-      if (!conversations.has(sessionId)) conversations.set(sessionId, [])
-      conversations.get(sessionId)!.push(node)
-    }
-
-    // Connect agent to conversations
-    for (const sessionId of conversations.keys()) {
-      edges.push({
-        id: `agent_${agentId}->conversation_${sessionId}`,
-        source: `agent_${agentId}`,
-        target: `conversation_${sessionId}`,
-        type: "smoothstep",
-        style: {
-          stroke: "#1e40af",
-          strokeWidth: 2,
-        },
-        markerEnd: {
-          type: "arrowclosed",
-          color: "#1e40af",
-        },
-      })
-
-      // Connect conversation to first action
-      const sessionNodes = conversations.get(sessionId)!
-      if (sessionNodes.length > 0) {
-        const firstNode = sessionNodes.sort((a, b) => {
-          const aTime = formatTimestamp(a.metadata?.timestamp || 0)
-          const bTime = formatTimestamp(b.metadata?.timestamp || 0)
-          const aDate = aTime === "Invalid Date" ? 0 : new Date(aTime).getTime()
-          const bDate = bTime === "Invalid Date" ? 0 : new Date(bTime).getTime()
-          return aDate - bDate
-        })[0]
-
-        edges.push({
-          id: `conversation_${sessionId}->${firstNode.id}`,
-          source: `conversation_${sessionId}`,
-          target: firstNode.id,
-          type: "smoothstep",
-          style: {
-            stroke: "#6b7280",
-            strokeWidth: 2,
-          },
-          markerEnd: {
-            type: "arrowclosed",
-            color: "#6b7280",
-          },
-        })
-      }
     }
   }
 
@@ -1315,18 +1251,39 @@ export function DataModelLineage({
               nextNodes: [],
             })
 
-            // Create edge from agent to log
             edges.push({
+              id: `edge-${agentNodeId}-${logNodeId}`,
               source: agentNodeId,
               target: logNodeId,
+              type: "smoothstep",
+              animated: true,
+              style: {
+                stroke: "#8b5cf6",
+                strokeWidth: 2,
+              },
+              markerEnd: {
+                type: "arrowclosed",
+                color: "#8b5cf6",
+              },
             })
 
             // Create sequential edges between logs of the same agent
             if (index > 0) {
               const prevLogId = `log-${sortedLogs[index - 1].id}`
               edges.push({
+                id: `edge-${prevLogId}-${logNodeId}`,
                 source: prevLogId,
                 target: logNodeId,
+                type: "smoothstep",
+                animated: true,
+                style: {
+                  stroke: "#10b981",
+                  strokeWidth: 2,
+                },
+                markerEnd: {
+                  type: "arrowclosed",
+                  color: "#10b981",
+                },
               })
             }
           })

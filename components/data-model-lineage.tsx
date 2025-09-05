@@ -61,6 +61,31 @@ import ReactFlow, {
   useReactFlow,
 } from "reactflow"
 
+function formatTimestamp(timestamp: string | number | undefined | null) {
+  try {
+    if (!timestamp) return "Invalid Date"
+
+    // Handle Unix timestamps (seconds or milliseconds)
+    let date: Date
+    if (typeof timestamp === "number" || /^\d+$/.test(timestamp.toString())) {
+      const num = Number(timestamp)
+      // If timestamp is in seconds (less than year 2100), convert to milliseconds
+      date = new Date(num < 4000000000 ? num * 1000 : num)
+    } else {
+      date = new Date(timestamp)
+    }
+
+    if (isNaN(date.getTime())) {
+      return "Invalid Date"
+    }
+
+    return date.toLocaleString()
+  } catch (error) {
+    console.error("[v0] Error formatting timestamp:", error, timestamp)
+    return "Invalid Date"
+  }
+}
+
 export interface DataModelLineageProps {
   onOpenDatasetVersioning: () => void
   onOpenTransformationSteps: () => void
@@ -317,9 +342,11 @@ function layoutNodes(data: LineageNode[], opts: { colGap?: number; rowGap?: numb
     for (const [sessionId, sessionNodes] of agentConversations) {
       // Sort by timestamp for proper flow
       sessionNodes.sort((a, b) => {
-        const aTime = new Date(a.metadata?.timestamp || 0).getTime()
-        const bTime = new Date(b.metadata?.timestamp || 0).getTime()
-        return aTime - bTime
+        const aTime = formatTimestamp(a.metadata?.timestamp || 0)
+        const bTime = formatTimestamp(b.metadata?.timestamp || 0)
+        const aDate = aTime === "Invalid Date" ? 0 : new Date(aTime).getTime()
+        const bDate = bTime === "Invalid Date" ? 0 : new Date(bTime).getTime()
+        return aDate - bDate
       })
 
       // Create conversation header
@@ -494,9 +521,11 @@ function buildEdges(data: LineageNode[]): Edge[] {
       const sessionNodes = conversations.get(sessionId)!
       if (sessionNodes.length > 0) {
         const firstNode = sessionNodes.sort((a, b) => {
-          const aTime = new Date(a.metadata?.timestamp || 0).getTime()
-          const bTime = new Date(b.metadata?.timestamp || 0).getTime()
-          return aTime - bTime
+          const aTime = formatTimestamp(a.metadata?.timestamp || 0)
+          const bTime = formatTimestamp(b.metadata?.timestamp || 0)
+          const aDate = aTime === "Invalid Date" ? 0 : new Date(aTime).getTime()
+          const bDate = bTime === "Invalid Date" ? 0 : new Date(bTime).getTime()
+          return aDate - bDate
         })[0]
 
         edges.push({
@@ -583,6 +612,7 @@ async function downloadPNG(filename: string, element: HTMLElement) {
   a.href = dataUrl
   a.download = filename
   a.click()
+  URL.revokeObjectURL(dataUrl)
 }
 
 function useDebounced<T>(value: T, delay = 250) {
@@ -887,7 +917,7 @@ function NodeDetailsPanel({ node }: { node: LineageNode | null }) {
           {node.metadata?.timestamp && (
             <div>
               <span className="font-medium">Timestamp:</span>
-              <div className="text-muted-foreground">{new Date(node.metadata.timestamp).toLocaleString()}</div>
+              <div className="text-muted-foreground">{formatTimestamp(node.metadata.timestamp)}</div>
             </div>
           )}
           {node.metadata?.duration && (
@@ -1230,7 +1260,21 @@ export function DataModelLineage({
           })
 
           // Sort logs by timestamp for proper sequencing
-          const sortedLogs = logs.sort((a, b) => a.timestamp - b.timestamp)
+          const sortedLogs = logs.sort((a, b) => {
+            const aTime =
+              typeof a.timestamp === "number"
+                ? a.timestamp
+                : typeof a.timestamp === "string" && /^\d+$/.test(a.timestamp)
+                  ? Number(a.timestamp)
+                  : 0
+            const bTime =
+              typeof b.timestamp === "number"
+                ? b.timestamp
+                : typeof b.timestamp === "string" && /^\d+$/.test(b.timestamp)
+                  ? Number(b.timestamp)
+                  : 0
+            return aTime - bTime
+          })
 
           // Create nodes for each log entry
           sortedLogs.forEach((log, index) => {
@@ -1254,7 +1298,7 @@ export function DataModelLineage({
                 agentId: agentId,
                 logType: logType,
                 level: level,
-                timestamp: new Date(log.timestamp).toISOString(),
+                timestamp: formatTimestamp(log.timestamp),
                 payload: log.payload,
                 description: `${logType} - ${level}`,
                 status: level === "error" ? "error" : level === "warning" ? "warning" : "success",

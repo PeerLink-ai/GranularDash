@@ -20,7 +20,7 @@ interface AuditLog {
   details: Record<string, any>
   ip_address?: string
   user_agent?: string
-  timestamp: string
+  timestamp: string | number
 }
 
 export function AuditLogTable() {
@@ -69,6 +69,31 @@ export function AuditLogTable() {
 
   const hasAIReasoning = (log: AuditLog) => {
     return log.details?.ai_reasoning || log.details?.reasoning_steps || log.details?.thought_process
+  }
+
+  const formatTimestamp = (timestamp: string | number) => {
+    try {
+      if (!timestamp) return "Invalid Date"
+
+      // Handle Unix timestamps (seconds or milliseconds)
+      let date: Date
+      if (typeof timestamp === "number" || /^\d+$/.test(timestamp.toString())) {
+        const num = Number(timestamp)
+        // If timestamp is in seconds (less than year 2100), convert to milliseconds
+        date = new Date(num < 4000000000 ? num * 1000 : num)
+      } else {
+        date = new Date(timestamp)
+      }
+
+      if (isNaN(date.getTime())) {
+        return "Invalid Date"
+      }
+
+      return date.toLocaleString()
+    } catch (error) {
+      console.error("[v0] Error formatting timestamp:", error, timestamp)
+      return "Invalid Date"
+    }
   }
 
   if (loading) {
@@ -132,7 +157,7 @@ export function AuditLogTable() {
               <TableBody>
                 {filteredLogs.map((log) => (
                   <TableRow key={log.id}>
-                    <TableCell>{new Date(log.timestamp).toLocaleString()}</TableCell>
+                    <TableCell>{formatTimestamp(log.timestamp)}</TableCell>
                     <TableCell className="font-medium">{log.action}</TableCell>
                     <TableCell>{log.resource_type}</TableCell>
                     <TableCell>{log.resource_id || "-"}</TableCell>

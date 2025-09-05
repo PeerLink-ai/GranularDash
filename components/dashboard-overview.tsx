@@ -203,26 +203,29 @@ export function DashboardOverview() {
   if (!user) return null
 
   return (
-    <div className="min-h-screen premium-gradient">
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
       <div className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-accent/5 via-transparent to-secondary/5" />
-        <div className="relative space-y-8 p-6">
-          <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0 space-y-4">
-              <div className="flex items-center gap-4">
-                <div className="relative">
-                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-accent via-secondary to-accent shadow-2xl animate-glow">
-                    <Crown className="h-8 w-8 text-white" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--accent)_0%,_transparent_50%)] opacity-5" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,_var(--secondary)_0%,_transparent_50%)] opacity-5" />
+
+        <div className="relative space-y-10 p-8 max-w-[1600px] mx-auto">
+          <div className="flex flex-col gap-8 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0 space-y-6">
+              <div className="flex items-center gap-6">
+                <div className="relative group">
+                  <div className="absolute -inset-1 bg-gradient-to-r from-accent to-secondary rounded-3xl blur opacity-25 group-hover:opacity-40 transition duration-1000 group-hover:duration-200"></div>
+                  <div className="relative flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-accent via-secondary to-accent shadow-2xl ring-1 ring-white/10">
+                    <Crown className="h-10 w-10 text-white drop-shadow-lg" />
                   </div>
-                  <div className="absolute -top-1 -right-1 h-6 w-6 rounded-full bg-gradient-to-r from-yellow-400 to-orange-500 flex items-center justify-center animate-float">
-                    <Star className="h-3 w-3 text-white" />
+                  <div className="absolute -top-2 -right-2 h-7 w-7 rounded-full bg-gradient-to-r from-yellow-400 to-orange-500 flex items-center justify-center shadow-lg ring-2 ring-background">
+                    <Star className="h-4 w-4 text-white" />
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-foreground via-accent to-secondary bg-clip-text text-transparent">
+                <div className="space-y-3">
+                  <h1 className="text-5xl font-bold tracking-tight bg-gradient-to-r from-foreground via-accent to-secondary bg-clip-text text-transparent leading-tight">
                     Welcome back, {firstName}
                   </h1>
-                  <p className="text-lg text-muted-foreground font-medium max-w-2xl text-balance">
+                  <p className="text-xl text-muted-foreground font-medium max-w-3xl leading-relaxed">
                     {getWelcomeMessage()}
                   </p>
                 </div>
@@ -230,18 +233,18 @@ export function DashboardOverview() {
             </div>
             <div className="flex flex-wrap items-center gap-4">
               <Badge
-                className={`px-4 py-2 text-sm font-semibold shadow-lg ${getRoleBadge(role)} hover:scale-105 transition-transform`}
+                className={`px-6 py-3 text-sm font-semibold shadow-xl backdrop-blur-sm ${getRoleBadge(role)} hover:scale-105 transition-all duration-300 ring-1 ring-white/10`}
               >
                 <Crown className="h-4 w-4 mr-2" />
                 {role.charAt(0).toUpperCase() + role.slice(1)}
               </Badge>
-              <Badge className="px-4 py-2 text-sm font-semibold bg-gradient-to-r from-muted to-muted/80 text-muted-foreground border border-border/50 shadow-lg hover:scale-105 transition-transform">
+              <Badge className="px-6 py-3 text-sm font-semibold bg-gradient-to-r from-muted to-muted/80 text-muted-foreground border border-border/50 shadow-xl hover:scale-105 transition-all duration-300 backdrop-blur-sm ring-1 ring-white/5">
                 {organization}
               </Badge>
             </div>
           </div>
 
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4" data-onboarding="stats-cards">
+          <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4" data-onboarding="stats-cards">
             <StatCard
               title="Connected Agents"
               subtitle={hasConnectedAgents ? "Active and monitored" : "No agents connected"}
@@ -249,7 +252,7 @@ export function DashboardOverview() {
               icon={<Bot className="h-5 w-5" />}
               series={series.connected}
               delta={hasConnectedAgents ? { label: "Stable", positive: true } : undefined}
-              className="premium-card border-l-4 border-l-accent/80 bg-gradient-to-br from-card via-card/95 to-accent/5"
+              className="group hover:scale-[1.02] transition-all duration-300 border-l-4 border-l-accent/80 bg-gradient-to-br from-card via-card/95 to-accent/5 shadow-xl hover:shadow-2xl ring-1 ring-white/5 backdrop-blur-sm"
               loading={metricsLoading}
             />
             <StatCard
@@ -257,7 +260,7 @@ export function DashboardOverview() {
               subtitle="Resource optimization"
               value={`${advancedMetrics.efficiency.value}%`}
               icon={<Zap className="h-5 w-5" />}
-              className="premium-card border-l-4 border-l-yellow-500/80 bg-gradient-to-br from-card via-card/95 to-yellow-500/5"
+              className="group hover:scale-[1.02] transition-all duration-300 border-l-4 border-l-yellow-500/80 bg-gradient-to-br from-card via-card/95 to-yellow-500/5 shadow-xl hover:shadow-2xl ring-1 ring-white/5 backdrop-blur-sm"
               delta={{
                 label: `${advancedMetrics.efficiency.trend === "up" ? "+" : advancedMetrics.efficiency.trend === "down" ? "-" : ""}${Math.abs(Math.random() * 5).toFixed(1)}%`,
                 positive: advancedMetrics.efficiency.trend === "up",
@@ -269,7 +272,7 @@ export function DashboardOverview() {
               subtitle="Response & throughput"
               value={advancedMetrics.performance.value}
               icon={<Target className="h-5 w-5" />}
-              className="premium-card border-l-4 border-l-blue-500/80 bg-gradient-to-br from-card via-card/95 to-blue-500/5"
+              className="group hover:scale-[1.02] transition-all duration-300 border-l-4 border-l-blue-500/80 bg-gradient-to-br from-card via-card/95 to-blue-500/5 shadow-xl hover:shadow-2xl ring-1 ring-white/5 backdrop-blur-sm"
               delta={{
                 label: `${advancedMetrics.performance.trend === "up" ? "+" : advancedMetrics.performance.trend === "down" ? "-" : ""}${Math.abs(Math.random() * 3).toFixed(0)} pts`,
                 positive: advancedMetrics.performance.trend === "up",
@@ -281,39 +284,42 @@ export function DashboardOverview() {
               subtitle="Model accuracy"
               value={`${advancedMetrics.reliability.value}%`}
               icon={<Brain className="h-5 w-5" />}
-              className="premium-card border-l-4 border-l-emerald-500/80 bg-gradient-to-br from-card via-card/95 to-emerald-500/5"
+              className="group hover:scale-[1.02] transition-all duration-300 border-l-4 border-l-emerald-500/80 bg-gradient-to-br from-card via-card/95 to-emerald-500/5 shadow-xl hover:shadow-2xl ring-1 ring-white/5 backdrop-blur-sm"
               delta={{ label: "Excellent", positive: true }}
               loading={metricsLoading}
             />
           </div>
 
           <Card
-            className="premium-card luxury-shadow bg-gradient-to-br from-card via-card/95 to-accent/5"
+            className="group hover:scale-[1.005] transition-all duration-500 shadow-2xl hover:shadow-3xl bg-gradient-to-br from-card via-card/95 to-accent/5 ring-1 ring-white/5 backdrop-blur-sm"
             data-onboarding="real-time-monitor"
           >
-            <CardHeader className="pb-6">
+            <CardHeader className="pb-8">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-accent/20 to-secondary/20 ring-2 ring-accent/30">
-                    <Activity className="h-6 w-6 text-accent" />
+                <div className="flex items-center gap-6">
+                  <div className="relative">
+                    <div className="absolute -inset-1 bg-gradient-to-r from-accent/50 to-secondary/50 rounded-2xl blur opacity-25"></div>
+                    <div className="relative flex h-16 w-16 items-center justify-center rounded-xl bg-gradient-to-br from-accent/20 to-secondary/20 ring-2 ring-accent/30 shadow-lg">
+                      <Activity className="h-8 w-8 text-accent" />
+                    </div>
                   </div>
-                  <div>
-                    <CardTitle className="text-2xl font-bold bg-gradient-to-r from-foreground to-accent bg-clip-text text-transparent">
+                  <div className="space-y-2">
+                    <CardTitle className="text-3xl font-bold bg-gradient-to-r from-foreground to-accent bg-clip-text text-transparent">
                       Real-Time System Monitor
                     </CardTitle>
-                    <p className="text-muted-foreground font-medium">
+                    <p className="text-lg text-muted-foreground font-medium">
                       Live performance metrics and resource utilization
                     </p>
                   </div>
                 </div>
-                <Badge className="bg-gradient-to-r from-emerald-500/10 to-emerald-600/10 text-emerald-700 border-emerald-200/50 dark:text-emerald-300 px-4 py-2 shadow-lg">
-                  <div className="w-2 h-2 bg-emerald-500 rounded-full mr-2 animate-pulse" />
+                <Badge className="bg-gradient-to-r from-emerald-500/10 to-emerald-600/10 text-emerald-700 border-emerald-200/50 dark:text-emerald-300 px-6 py-3 shadow-lg ring-1 ring-emerald-200/20">
+                  <div className="w-3 h-3 bg-emerald-500 rounded-full mr-3 animate-pulse shadow-lg shadow-emerald-500/50" />
                   Live
                 </Badge>
               </div>
             </CardHeader>
-            <CardContent className="space-y-8">
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            <CardContent className="space-y-10">
+              <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
                 {[
                   { label: "CPU Usage", value: realTimeData.cpuUsage, color: "from-blue-500 to-cyan-500" },
                   { label: "Memory Usage", value: realTimeData.memoryUsage, color: "from-purple-500 to-pink-500" },
@@ -323,17 +329,17 @@ export function DashboardOverview() {
                     color: "from-green-500 to-emerald-500",
                   },
                 ].map((metric, i) => (
-                  <div key={i} className="space-y-4">
+                  <div key={i} className="space-y-5">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-semibold text-muted-foreground">{metric.label}</span>
-                      <span className="text-lg font-bold bg-gradient-to-r from-foreground to-accent bg-clip-text text-transparent">
+                      <span className="text-sm font-semibold text-muted-foreground tracking-wide">{metric.label}</span>
+                      <span className="text-2xl font-bold bg-gradient-to-r from-foreground to-accent bg-clip-text text-transparent">
                         {metric.value.toFixed(1)}%
                       </span>
                     </div>
                     <div className="relative">
-                      <Progress value={metric.value} className="h-3 bg-muted/50" />
+                      <Progress value={metric.value} className="h-4 bg-muted/50 shadow-inner" />
                       <div
-                        className={`absolute inset-0 h-3 rounded-full bg-gradient-to-r ${metric.color} opacity-80`}
+                        className={`absolute inset-0 h-4 rounded-full bg-gradient-to-r ${metric.color} opacity-90 shadow-lg`}
                         style={{ width: `${metric.value}%` }}
                       />
                     </div>
@@ -341,7 +347,7 @@ export function DashboardOverview() {
                 ))}
               </div>
 
-              <div className="grid gap-6 md:grid-cols-3">
+              <div className="grid gap-8 md:grid-cols-3">
                 {[
                   {
                     icon: Users,
@@ -365,17 +371,20 @@ export function DashboardOverview() {
                     trend: "up",
                   },
                 ].map((metric, i) => (
-                  <div key={i} className="premium-card p-6 bg-gradient-to-br from-muted/30 to-transparent">
+                  <div
+                    key={i}
+                    className="group hover:scale-105 transition-all duration-300 p-8 bg-gradient-to-br from-muted/30 to-transparent rounded-2xl shadow-lg hover:shadow-xl ring-1 ring-white/5 backdrop-blur-sm"
+                  >
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <metric.icon className={`h-6 w-6 ${metric.color}`} />
+                      <div className="flex items-center gap-4">
+                        <metric.icon className={`h-8 w-8 ${metric.color} drop-shadow-sm`} />
                         <div>
-                          <p className="text-sm font-semibold text-muted-foreground">{metric.label}</p>
+                          <p className="text-sm font-semibold text-muted-foreground tracking-wide">{metric.label}</p>
                           <p className="text-xs text-muted-foreground/70">Current sessions</p>
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-xl font-bold bg-gradient-to-r from-foreground to-accent bg-clip-text text-transparent">
+                        <p className="text-2xl font-bold bg-gradient-to-r from-foreground to-accent bg-clip-text text-transparent">
                           {metric.value}
                         </p>
                         {getTrendIcon(metric.trend)}
@@ -388,25 +397,30 @@ export function DashboardOverview() {
           </Card>
 
           <Card
-            className="premium-card luxury-shadow bg-gradient-to-br from-card via-card/95 to-secondary/5"
+            className="group hover:scale-[1.005] transition-all duration-500 shadow-2xl hover:shadow-3xl bg-gradient-to-br from-card via-card/95 to-secondary/5 ring-1 ring-white/5 backdrop-blur-sm"
             data-onboarding="analytics-tabs"
           >
-            <CardHeader className="pb-6">
-              <div className="flex items-center gap-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-secondary/20 to-accent/20 ring-2 ring-secondary/30">
-                  <BarChart3 className="h-6 w-6 text-secondary" />
+            <CardHeader className="pb-8">
+              <div className="flex items-center gap-6">
+                <div className="relative">
+                  <div className="absolute -inset-1 bg-gradient-to-r from-secondary/50 to-accent/50 rounded-2xl blur opacity-25"></div>
+                  <div className="relative flex h-16 w-16 items-center justify-center rounded-xl bg-gradient-to-br from-secondary/20 to-accent/20 ring-2 ring-secondary/30 shadow-lg">
+                    <BarChart3 className="h-8 w-8 text-secondary" />
+                  </div>
                 </div>
-                <div>
-                  <CardTitle className="text-2xl font-bold bg-gradient-to-r from-foreground to-secondary bg-clip-text text-transparent">
+                <div className="space-y-2">
+                  <CardTitle className="text-3xl font-bold bg-gradient-to-r from-foreground to-secondary bg-clip-text text-transparent">
                     Advanced Analytics
                   </CardTitle>
-                  <p className="text-muted-foreground font-medium">Comprehensive insights and performance trends</p>
+                  <p className="text-lg text-muted-foreground font-medium">
+                    Comprehensive insights and performance trends
+                  </p>
                 </div>
               </div>
             </CardHeader>
             <CardContent>
               <Tabs defaultValue="overview" className="w-full">
-                <TabsList className="grid w-full grid-cols-4 bg-muted/50 p-1 rounded-xl">
+                <TabsList className="grid w-full grid-cols-4 bg-muted/50 p-2 rounded-2xl shadow-inner ring-1 ring-white/5">
                   {[
                     { value: "overview", icon: PieChart, label: "Overview" },
                     { value: "performance", icon: LineChart, label: "Performance" },
@@ -416,16 +430,16 @@ export function DashboardOverview() {
                     <TabsTrigger
                       key={tab.value}
                       value={tab.value}
-                      className="flex items-center gap-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-accent data-[state=active]:to-secondary data-[state=active]:text-white rounded-lg transition-all duration-300"
+                      className="flex items-center gap-3 py-3 px-4 data-[state=active]:bg-gradient-to-r data-[state=active]:from-accent data-[state=active]:to-secondary data-[state=active]:text-white data-[state=active]:shadow-lg rounded-xl transition-all duration-300 font-medium"
                     >
-                      <tab.icon className="h-4 w-4" />
+                      <tab.icon className="h-5 w-5" />
                       {tab.label}
                     </TabsTrigger>
                   ))}
                 </TabsList>
 
-                <TabsContent value="overview" className="space-y-6 mt-8">
-                  <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+                <TabsContent value="overview" className="space-y-8 mt-10">
+                  <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-4">
                     {[
                       {
                         label: "Total Requests",
@@ -454,15 +468,15 @@ export function DashboardOverview() {
                     ].map((metric, i) => (
                       <div
                         key={i}
-                        className="premium-card p-6 bg-gradient-to-br from-muted/30 to-transparent hover:from-accent/5 hover:to-secondary/5"
+                        className="group hover:scale-105 transition-all duration-300 p-8 bg-gradient-to-br from-muted/30 to-transparent hover:from-accent/5 hover:to-secondary/5 rounded-2xl shadow-lg hover:shadow-xl ring-1 ring-white/5 backdrop-blur-sm"
                       >
-                        <p className="text-sm font-semibold text-muted-foreground mb-3">{metric.label}</p>
+                        <p className="text-sm font-semibold text-muted-foreground mb-4 tracking-wide">{metric.label}</p>
                         <div className="flex items-center justify-between">
-                          <p className="text-2xl font-bold bg-gradient-to-r from-foreground to-accent bg-clip-text text-transparent">
+                          <p className="text-3xl font-bold bg-gradient-to-r from-foreground to-accent bg-clip-text text-transparent">
                             {metricsLoading ? "..." : metric.value}
                           </p>
                           <span
-                            className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                            className={`text-sm font-semibold px-3 py-2 rounded-full shadow-sm ${
                               metric.positive
                                 ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
                                 : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300"
@@ -503,20 +517,23 @@ export function DashboardOverview() {
             </CardContent>
           </Card>
 
-          <div className="grid gap-8 lg:grid-cols-2">
-            <div className="premium-card">
+          <div className="grid gap-10 lg:grid-cols-2">
+            <div className="group hover:scale-[1.005] transition-all duration-500 shadow-xl hover:shadow-2xl rounded-2xl ring-1 ring-white/5 backdrop-blur-sm">
               <ConnectedAgentsOverview />
             </div>
-            <div className="premium-card" data-onboarding="quick-actions">
+            <div
+              className="group hover:scale-[1.005] transition-all duration-500 shadow-xl hover:shadow-2xl rounded-2xl ring-1 ring-white/5 backdrop-blur-sm"
+              data-onboarding="quick-actions"
+            >
               <QuickActions />
             </div>
           </div>
 
-          <div className="grid gap-8 lg:grid-cols-2">
-            <div className="premium-card">
+          <div className="grid gap-10 lg:grid-cols-2">
+            <div className="group hover:scale-[1.005] transition-all duration-500 shadow-xl hover:shadow-2xl rounded-2xl ring-1 ring-white/5 backdrop-blur-sm">
               <RecentActivity />
             </div>
-            <div className="premium-card">
+            <div className="group hover:scale-[1.005] transition-all duration-500 shadow-xl hover:shadow-2xl rounded-2xl ring-1 ring-white/5 backdrop-blur-sm">
               <SystemHealth />
             </div>
           </div>

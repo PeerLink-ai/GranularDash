@@ -10,78 +10,76 @@
 
 @layer base {
   :root {
+    /* Updated to premium enterprise color palette */
     --background: 0 0% 100%;
-    --foreground: 215 25% 27%;
+    --foreground: 220 13% 18%;
     --card: 0 0% 100%;
-    --card-foreground: 215 20% 25%;
+    --card-foreground: 215 25% 27%;
     --popover: 0 0% 100%;
     --popover-foreground: 215 25% 27%;
-    /* Updated to neutral grey primary color */
     --primary: 215 25% 27%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 220 13% 91%;
-    --secondary-foreground: 215 25% 27%;
-    --muted: 220 13% 97%;
-    --muted-foreground: 215 16% 47%;
-    --accent: 220 13% 91%;
-    --accent-foreground: 215 25% 27%;
-    /* Updated destructive colors to grey instead of red */
-    --destructive: 0 0% 45%;
-    --destructive-foreground: 0 0% 98%;
+    --secondary: 244 58% 64%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 220 14% 97%;
+    --muted-foreground: 220 13% 18%;
+    --accent: 244 58% 64%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 346 87% 43%;
+    --destructive-foreground: 0 0% 100%;
     --border: 220 13% 91%;
-    --input: 220 13% 97%;
-    --ring: 215 25% 27%;
-    --chart-1: 45 93% 47%;
-    --chart-2: 199 89% 48%;
-    --chart-3: 142 76% 36%;
-    --chart-4: 348 83% 47%;
-    --chart-5: 231 48% 48%;
-    --radius: 0.5rem;
-    --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 215 25% 27%;
-    --sidebar-primary: 220 13% 97%;
-    --sidebar-primary-foreground: 215 20% 25%;
-    --sidebar-accent: 220 13% 91%;
-    --sidebar-accent-foreground: 215 25% 27%;
+    --input: 220 14% 97%;
+    --ring: 244 58% 64% / 0.5;
+    --chart-1: 244 58% 64%;
+    --chart-2: 142 76% 36%;
+    --chart-3: 328 86% 70%;
+    --chart-4: 43 96% 56%;
+    --chart-5: 346 87% 43%;
+    --radius: 0.75rem;
+    --sidebar-background: 215 25% 27%;
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-primary: 244 58% 64%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 328 86% 70%;
+    --sidebar-accent-foreground: 0 0% 100%;
     --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 215 25% 27%;
+    --sidebar-ring: 244 58% 64% / 0.5;
   }
   .dark {
+    /* Enhanced dark mode for premium feel */
     --background: 222 84% 5%;
     --foreground: 210 40% 98%;
-    --card: 222 84% 5%;
+    --card: 215 28% 8%;
     --card-foreground: 210 40% 98%;
-    --popover: 222 84% 5%;
+    --popover: 215 28% 8%;
     --popover-foreground: 210 40% 98%;
-    /* Updated dark mode colors to neutral grey */
     --primary: 210 40% 98%;
     --primary-foreground: 222 84% 5%;
-    --secondary: 217 33% 17%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 244 58% 64%;
+    --secondary-foreground: 0 0% 100%;
     --muted: 217 33% 17%;
     --muted-foreground: 215 20% 65%;
-    --accent: 217 33% 17%;
-    --accent-foreground: 210 40% 98%;
-    /* Updated dark mode destructive to grey */
-    --destructive: 0 0% 45%;
+    --accent: 244 58% 64%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 346 87% 43%;
     --destructive-foreground: 210 40% 98%;
     --border: 217 33% 17%;
     --input: 217 33% 17%;
-    --ring: 210 40% 98%;
-    --chart-1: 45 93% 47%;
-    --chart-2: 199 89% 48%;
-    --chart-3: 142 76% 36%;
-    --chart-4: 348 83% 47%;
-    --chart-5: 231 48% 48%;
-    --radius: 0.5rem;
-    --sidebar-background: 222 84% 5%;
+    --ring: 244 58% 64% / 0.5;
+    --chart-1: 244 58% 64%;
+    --chart-2: 142 76% 36%;
+    --chart-3: 328 86% 70%;
+    --chart-4: 43 96% 56%;
+    --chart-5: 346 87% 43%;
+    --radius: 0.75rem;
+    --sidebar-background: 215 25% 27%;
     --sidebar-foreground: 210 40% 98%;
-    --sidebar-primary: 217 33% 17%;
-    --sidebar-primary-foreground: 210 40% 98%;
-    --sidebar-accent: 217 33% 17%;
-    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-primary: 244 58% 64%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 328 86% 70%;
+    --sidebar-accent-foreground: 0 0% 100%;
     --sidebar-border: 217 33% 17%;
-    --sidebar-ring: 210 40% 98%;
+    --sidebar-ring: 244 58% 64% / 0.5;
   }
 }
 
@@ -97,9 +95,58 @@
   }
 }
 
-/* Global modern scrollbar styles */
+/* Added premium animations and effects */
+@layer components {
+  .premium-card {
+    @apply relative overflow-hidden rounded-xl border bg-card/50 backdrop-blur-sm shadow-lg transition-all duration-300 hover:shadow-xl hover:scale-[1.02];
+  }
 
-/* WebKit: Chrome, Edge, Safari */
+  .premium-card::before {
+    content: "";
+    @apply absolute inset-0 bg-gradient-to-br from-white/10 to-transparent pointer-events-none;
+  }
+
+  .premium-gradient {
+    @apply bg-gradient-to-br from-background via-muted/30 to-background;
+  }
+
+  .glass-effect {
+    @apply bg-white/10 backdrop-blur-md border border-white/20;
+  }
+
+  .luxury-shadow {
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  }
+
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  @keyframes float {
+    0%,
+    100% {
+      transform: translateY(0px);
+    }
+    50% {
+      transform: translateY(-10px);
+    }
+  }
+
+  .animate-glow {
+    animation: glow 2s ease-in-out infinite alternate;
+  }
+
+  @keyframes glow {
+    from {
+      box-shadow: 0 0 20px hsl(var(--accent) / 0.3);
+    }
+    to {
+      box-shadow: 0 0 30px hsl(var(--accent) / 0.6);
+    }
+  }
+}
+
+/* Global modern scrollbar styles */
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -112,42 +159,25 @@
 
 ::-webkit-scrollbar-thumb {
   border-radius: 999px;
-  background: linear-gradient(180deg, hsl(0 0% 70% / 0.35), hsl(0 0% 45% / 0.35));
-  border: 2px solid transparent; /* creates padding effect */
+  background: linear-gradient(180deg, hsl(var(--accent) / 0.35), hsl(var(--primary) / 0.35));
+  border: 2px solid transparent;
   background-clip: padding-box;
   transition: background 200ms ease, transform 200ms ease, opacity 200ms ease;
-  opacity: 0; /* hidden by default */
+  opacity: 0;
 }
 
-/* Reveal on hover of scrollable area */
 *:hover::-webkit-scrollbar-thumb {
   opacity: 1;
 }
 
-/* Hover state: slightly darker and a bit thicker illusion */
 ::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, hsl(0 0% 60% / 0.55), hsl(0 0% 35% / 0.55));
+  background: linear-gradient(180deg, hsl(var(--accent) / 0.55), hsl(var(--primary) / 0.55));
 }
 
-/* Active/grabbed */
 ::-webkit-scrollbar-thumb:active {
-  background: linear-gradient(180deg, hsl(0 0% 50% / 0.65), hsl(0 0% 25% / 0.65));
+  background: linear-gradient(180deg, hsl(var(--accent) / 0.65), hsl(var(--primary) / 0.65));
 }
 
-/* Dark mode adjustments */
-:where(.dark) ::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, hsl(0 0% 35% / 0.45), hsl(0 0% 20% / 0.45));
-}
-
-:where(.dark) ::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, hsl(0 0% 45% / 0.6), hsl(0 0% 25% / 0.6));
-}
-
-:where(.dark) ::-webkit-scrollbar-thumb:active {
-  background: linear-gradient(180deg, hsl(0 0% 50% / 0.7), hsl(0 0% 30% / 0.7));
-}
-
-/* Optional: reduce layout shift when scrollbars appear */
 html {
   scrollbar-gutter: stable both-edges;
 }

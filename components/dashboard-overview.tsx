@@ -14,7 +14,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Bot,
   Shield,
-  Sparkles,
   TrendingUp,
   Activity,
   Zap,
@@ -28,6 +27,8 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Minus,
+  Crown,
+  Star,
 } from "lucide-react"
 
 function alignSeriesToLast(base: number[], target: number) {
@@ -202,279 +203,324 @@ export function DashboardOverview() {
   if (!user) return null
 
   return (
-    <div className="space-y-8 p-1">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0 space-y-2">
-          <div className="flex items-center gap-3">
-            <div
-              className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary/10 to-primary/20 ring-1 ring-primary/20"
-              data-onboarding="welcome-card"
-            >
-              <Sparkles className="h-6 w-6 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight text-foreground font-sans">Welcome back, {firstName}</h1>
-              <p className="text-base text-muted-foreground font-medium">{getWelcomeMessage()}</p>
-            </div>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <span className={`rounded-lg px-3 py-2 text-sm font-semibold shadow-sm ${getRoleBadge(role)}`}>
-            {role.charAt(0).toUpperCase() + role.slice(1)}
-          </span>
-          <span className="rounded-lg bg-gradient-to-r from-muted to-muted/80 px-3 py-2 text-sm font-semibold text-muted-foreground border border-border/50 shadow-sm">
-            {organization}
-          </span>
-        </div>
-      </div>
-
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4" data-onboarding="stats-cards">
-        <StatCard
-          title="Connected Agents"
-          subtitle={hasConnectedAgents ? "Active and monitored" : "No agents connected"}
-          value={connectedCount}
-          icon={<Bot className="h-5 w-5" />}
-          series={series.connected}
-          delta={hasConnectedAgents ? { label: "Stable", positive: true } : undefined}
-          className="min-w-0 border-l-4 border-l-primary/60 hover:shadow-lg transition-all duration-300 hover:scale-[1.02]"
-          loading={metricsLoading}
-        />
-        <StatCard
-          title="System Efficiency"
-          subtitle="Resource optimization"
-          value={`${advancedMetrics.efficiency.value}%`}
-          icon={<Zap className="h-5 w-5" />}
-          className="min-w-0 border-l-4 border-l-amber-500/60 hover:shadow-lg transition-all duration-300 hover:scale-[1.02]"
-          delta={{
-            label: `${advancedMetrics.efficiency.trend === "up" ? "+" : advancedMetrics.efficiency.trend === "down" ? "-" : ""}${Math.abs(Math.random() * 5).toFixed(1)}%`,
-            positive: advancedMetrics.efficiency.trend === "up",
-          }}
-          loading={metricsLoading}
-        />
-        <StatCard
-          title="Performance Score"
-          subtitle="Response & throughput"
-          value={advancedMetrics.performance.value}
-          icon={<Target className="h-5 w-5" />}
-          className="min-w-0 border-l-4 border-l-blue-500/60 hover:shadow-lg transition-all duration-300 hover:scale-[1.02]"
-          delta={{
-            label: `${advancedMetrics.performance.trend === "up" ? "+" : advancedMetrics.performance.trend === "down" ? "-" : ""}${Math.abs(Math.random() * 3).toFixed(0)} pts`,
-            positive: advancedMetrics.performance.trend === "up",
-          }}
-          loading={metricsLoading}
-        />
-        <StatCard
-          title="AI Reliability"
-          subtitle="Model accuracy"
-          value={`${advancedMetrics.reliability.value}%`}
-          icon={<Brain className="h-5 w-5" />}
-          className="min-w-0 border-l-4 border-l-emerald-500/60 hover:shadow-lg transition-all duration-300 hover:scale-[1.02]"
-          delta={{ label: "Excellent", positive: true }}
-          loading={metricsLoading}
-        />
-      </div>
-
-      <Card
-        className="border-0 shadow-lg bg-gradient-to-br from-background to-muted/20"
-        data-onboarding="real-time-monitor"
-      >
-        <CardHeader className="pb-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-primary/10 to-primary/20">
-                <Activity className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <CardTitle className="text-xl font-semibold">Real-Time System Monitor</CardTitle>
-                <p className="text-sm text-muted-foreground">Live performance metrics and resource utilization</p>
-              </div>
-            </div>
-            <Badge
-              variant="outline"
-              className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300"
-            >
-              <div className="w-2 h-2 bg-emerald-500 rounded-full mr-2 animate-pulse" />
-              Live
-            </Badge>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-muted-foreground">CPU Usage</span>
-                <span className="text-sm font-semibold">{realTimeData.cpuUsage.toFixed(1)}%</span>
-              </div>
-              <Progress value={realTimeData.cpuUsage} className="h-2" />
-            </div>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-muted-foreground">Memory Usage</span>
-                <span className="text-sm font-semibold">{realTimeData.memoryUsage.toFixed(1)}%</span>
-              </div>
-              <Progress value={realTimeData.memoryUsage} className="h-2" />
-            </div>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-muted-foreground">Network Activity</span>
-                <span className="text-sm font-semibold">{realTimeData.networkActivity.toFixed(1)}%</span>
-              </div>
-              <Progress value={realTimeData.networkActivity} className="h-2" />
-            </div>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50 border">
-              <div className="flex items-center gap-3">
-                <Users className="h-5 w-5 text-blue-500" />
-                <div>
-                  <p className="text-sm font-medium">Active Connections</p>
-                  <p className="text-xs text-muted-foreground">Current sessions</p>
+    <div className="min-h-screen premium-gradient">
+      <div className="relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-accent/5 via-transparent to-secondary/5" />
+        <div className="relative space-y-8 p-6">
+          <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0 space-y-4">
+              <div className="flex items-center gap-4">
+                <div className="relative">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-accent via-secondary to-accent shadow-2xl animate-glow">
+                    <Crown className="h-8 w-8 text-white" />
+                  </div>
+                  <div className="absolute -top-1 -right-1 h-6 w-6 rounded-full bg-gradient-to-r from-yellow-400 to-orange-500 flex items-center justify-center animate-float">
+                    <Star className="h-3 w-3 text-white" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-foreground via-accent to-secondary bg-clip-text text-transparent">
+                    Welcome back, {firstName}
+                  </h1>
+                  <p className="text-lg text-muted-foreground font-medium max-w-2xl text-balance">
+                    {getWelcomeMessage()}
+                  </p>
                 </div>
               </div>
-              <div className="text-right">
-                <p className="text-lg font-bold">{realTimeData.activeConnections}</p>
-                {getTrendIcon(advancedMetrics.efficiency.trend)}
-              </div>
             </div>
-
-            <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50 border">
-              <div className="flex items-center gap-3">
-                <Clock className="h-5 w-5 text-amber-500" />
-                <div>
-                  <p className="text-sm font-medium">Response Time</p>
-                  <p className="text-xs text-muted-foreground">Average latency</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <p className="text-lg font-bold">{realTimeData.responseTime.toFixed(0)}ms</p>
-                {getTrendIcon(advancedMetrics.performance.trend)}
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50 border">
-              <div className="flex items-center gap-3">
-                <TrendingUp className="h-5 w-5 text-emerald-500" />
-                <div>
-                  <p className="text-sm font-medium">Throughput</p>
-                  <p className="text-xs text-muted-foreground">Requests/min</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <p className="text-lg font-bold">{realTimeData.throughput.toFixed(0)}</p>
-                {getTrendIcon("up")}
-              </div>
+            <div className="flex flex-wrap items-center gap-4">
+              <Badge
+                className={`px-4 py-2 text-sm font-semibold shadow-lg ${getRoleBadge(role)} hover:scale-105 transition-transform`}
+              >
+                <Crown className="h-4 w-4 mr-2" />
+                {role.charAt(0).toUpperCase() + role.slice(1)}
+              </Badge>
+              <Badge className="px-4 py-2 text-sm font-semibold bg-gradient-to-r from-muted to-muted/80 text-muted-foreground border border-border/50 shadow-lg hover:scale-105 transition-transform">
+                {organization}
+              </Badge>
             </div>
           </div>
-        </CardContent>
-      </Card>
 
-      <Card className="border-0 shadow-lg" data-onboarding="analytics-tabs">
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500/10 to-blue-500/20">
-              <BarChart3 className="h-5 w-5 text-blue-500" />
-            </div>
-            <div>
-              <CardTitle className="text-xl font-semibold">Advanced Analytics</CardTitle>
-              <p className="text-sm text-muted-foreground">Comprehensive insights and performance trends</p>
-            </div>
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4" data-onboarding="stats-cards">
+            <StatCard
+              title="Connected Agents"
+              subtitle={hasConnectedAgents ? "Active and monitored" : "No agents connected"}
+              value={connectedCount}
+              icon={<Bot className="h-5 w-5" />}
+              series={series.connected}
+              delta={hasConnectedAgents ? { label: "Stable", positive: true } : undefined}
+              className="premium-card border-l-4 border-l-accent/80 bg-gradient-to-br from-card via-card/95 to-accent/5"
+              loading={metricsLoading}
+            />
+            <StatCard
+              title="System Efficiency"
+              subtitle="Resource optimization"
+              value={`${advancedMetrics.efficiency.value}%`}
+              icon={<Zap className="h-5 w-5" />}
+              className="premium-card border-l-4 border-l-yellow-500/80 bg-gradient-to-br from-card via-card/95 to-yellow-500/5"
+              delta={{
+                label: `${advancedMetrics.efficiency.trend === "up" ? "+" : advancedMetrics.efficiency.trend === "down" ? "-" : ""}${Math.abs(Math.random() * 5).toFixed(1)}%`,
+                positive: advancedMetrics.efficiency.trend === "up",
+              }}
+              loading={metricsLoading}
+            />
+            <StatCard
+              title="Performance Score"
+              subtitle="Response & throughput"
+              value={advancedMetrics.performance.value}
+              icon={<Target className="h-5 w-5" />}
+              className="premium-card border-l-4 border-l-blue-500/80 bg-gradient-to-br from-card via-card/95 to-blue-500/5"
+              delta={{
+                label: `${advancedMetrics.performance.trend === "up" ? "+" : advancedMetrics.performance.trend === "down" ? "-" : ""}${Math.abs(Math.random() * 3).toFixed(0)} pts`,
+                positive: advancedMetrics.performance.trend === "up",
+              }}
+              loading={metricsLoading}
+            />
+            <StatCard
+              title="AI Reliability"
+              subtitle="Model accuracy"
+              value={`${advancedMetrics.reliability.value}%`}
+              icon={<Brain className="h-5 w-5" />}
+              className="premium-card border-l-4 border-l-emerald-500/80 bg-gradient-to-br from-card via-card/95 to-emerald-500/5"
+              delta={{ label: "Excellent", positive: true }}
+              loading={metricsLoading}
+            />
           </div>
-        </CardHeader>
-        <CardContent>
-          <Tabs defaultValue="overview" className="w-full">
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="overview" className="flex items-center gap-2">
-                <PieChart className="h-4 w-4" />
-                Overview
-              </TabsTrigger>
-              <TabsTrigger value="performance" className="flex items-center gap-2">
-                <LineChart className="h-4 w-4" />
-                Performance
-              </TabsTrigger>
-              <TabsTrigger value="agents" className="flex items-center gap-2">
-                <Bot className="h-4 w-4" />
-                Agents
-              </TabsTrigger>
-              <TabsTrigger value="security" className="flex items-center gap-2">
-                <Shield className="h-4 w-4" />
-                Security
-              </TabsTrigger>
-            </TabsList>
 
-            <TabsContent value="overview" className="space-y-4 mt-6">
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <Card
+            className="premium-card luxury-shadow bg-gradient-to-br from-card via-card/95 to-accent/5"
+            data-onboarding="real-time-monitor"
+          >
+            <CardHeader className="pb-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-accent/20 to-secondary/20 ring-2 ring-accent/30">
+                    <Activity className="h-6 w-6 text-accent" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-2xl font-bold bg-gradient-to-r from-foreground to-accent bg-clip-text text-transparent">
+                      Real-Time System Monitor
+                    </CardTitle>
+                    <p className="text-muted-foreground font-medium">
+                      Live performance metrics and resource utilization
+                    </p>
+                  </div>
+                </div>
+                <Badge className="bg-gradient-to-r from-emerald-500/10 to-emerald-600/10 text-emerald-700 border-emerald-200/50 dark:text-emerald-300 px-4 py-2 shadow-lg">
+                  <div className="w-2 h-2 bg-emerald-500 rounded-full mr-2 animate-pulse" />
+                  Live
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-8">
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {[
+                  { label: "CPU Usage", value: realTimeData.cpuUsage, color: "from-blue-500 to-cyan-500" },
+                  { label: "Memory Usage", value: realTimeData.memoryUsage, color: "from-purple-500 to-pink-500" },
                   {
-                    label: "Total Requests",
-                    value: dashboardMetrics.totalRequests.toLocaleString(),
-                    change: "+12.5%",
-                    positive: true,
+                    label: "Network Activity",
+                    value: realTimeData.networkActivity,
+                    color: "from-green-500 to-emerald-500",
                   },
-                  {
-                    label: "Success Rate",
-                    value: `${dashboardMetrics.successRate.toFixed(1)}%`,
-                    change: "+0.3%",
-                    positive: true,
-                  },
-                  {
-                    label: "Error Rate",
-                    value: `${dashboardMetrics.errorRate.toFixed(1)}%`,
-                    change: "-0.2%",
-                    positive: true,
-                  },
-                  { label: "Avg Response", value: `${dashboardMetrics.avgResponse}ms`, change: "-8ms", positive: true },
                 ].map((metric, i) => (
-                  <div key={i} className="p-4 rounded-lg border bg-card hover:shadow-md transition-shadow">
-                    <p className="text-sm font-medium text-muted-foreground">{metric.label}</p>
-                    <div className="flex items-center justify-between mt-2">
-                      <p className="text-2xl font-bold">{metricsLoading ? "..." : metric.value}</p>
-                      <span className={`text-xs font-medium ${metric.positive ? "text-emerald-600" : "text-red-600"}`}>
-                        {metric.change}
+                  <div key={i} className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold text-muted-foreground">{metric.label}</span>
+                      <span className="text-lg font-bold bg-gradient-to-r from-foreground to-accent bg-clip-text text-transparent">
+                        {metric.value.toFixed(1)}%
                       </span>
+                    </div>
+                    <div className="relative">
+                      <Progress value={metric.value} className="h-3 bg-muted/50" />
+                      <div
+                        className={`absolute inset-0 h-3 rounded-full bg-gradient-to-r ${metric.color} opacity-80`}
+                        style={{ width: `${metric.value}%` }}
+                      />
                     </div>
                   </div>
                 ))}
               </div>
-            </TabsContent>
 
-            <TabsContent value="performance" className="mt-6">
-              <div className="text-center py-8 text-muted-foreground">
-                <LineChart className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>Performance analytics visualization would be rendered here</p>
-                <p className="text-sm">Real-time charts and performance metrics</p>
+              <div className="grid gap-6 md:grid-cols-3">
+                {[
+                  {
+                    icon: Users,
+                    label: "Active Connections",
+                    value: realTimeData.activeConnections,
+                    color: "text-blue-500",
+                    trend: advancedMetrics.efficiency.trend,
+                  },
+                  {
+                    icon: Clock,
+                    label: "Response Time",
+                    value: `${realTimeData.responseTime.toFixed(0)}ms`,
+                    color: "text-amber-500",
+                    trend: advancedMetrics.performance.trend,
+                  },
+                  {
+                    icon: TrendingUp,
+                    label: "Throughput",
+                    value: realTimeData.throughput.toFixed(0),
+                    color: "text-emerald-500",
+                    trend: "up",
+                  },
+                ].map((metric, i) => (
+                  <div key={i} className="premium-card p-6 bg-gradient-to-br from-muted/30 to-transparent">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <metric.icon className={`h-6 w-6 ${metric.color}`} />
+                        <div>
+                          <p className="text-sm font-semibold text-muted-foreground">{metric.label}</p>
+                          <p className="text-xs text-muted-foreground/70">Current sessions</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xl font-bold bg-gradient-to-r from-foreground to-accent bg-clip-text text-transparent">
+                          {metric.value}
+                        </p>
+                        {getTrendIcon(metric.trend)}
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
-            </TabsContent>
+            </CardContent>
+          </Card>
 
-            <TabsContent value="agents" className="mt-6">
-              <div className="text-center py-8 text-muted-foreground">
-                <Bot className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>Agent-specific analytics and insights</p>
-                <p className="text-sm">Individual agent performance and usage patterns</p>
+          <Card
+            className="premium-card luxury-shadow bg-gradient-to-br from-card via-card/95 to-secondary/5"
+            data-onboarding="analytics-tabs"
+          >
+            <CardHeader className="pb-6">
+              <div className="flex items-center gap-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-secondary/20 to-accent/20 ring-2 ring-secondary/30">
+                  <BarChart3 className="h-6 w-6 text-secondary" />
+                </div>
+                <div>
+                  <CardTitle className="text-2xl font-bold bg-gradient-to-r from-foreground to-secondary bg-clip-text text-transparent">
+                    Advanced Analytics
+                  </CardTitle>
+                  <p className="text-muted-foreground font-medium">Comprehensive insights and performance trends</p>
+                </div>
               </div>
-            </TabsContent>
+            </CardHeader>
+            <CardContent>
+              <Tabs defaultValue="overview" className="w-full">
+                <TabsList className="grid w-full grid-cols-4 bg-muted/50 p-1 rounded-xl">
+                  {[
+                    { value: "overview", icon: PieChart, label: "Overview" },
+                    { value: "performance", icon: LineChart, label: "Performance" },
+                    { value: "agents", icon: Bot, label: "Agents" },
+                    { value: "security", icon: Shield, label: "Security" },
+                  ].map((tab) => (
+                    <TabsTrigger
+                      key={tab.value}
+                      value={tab.value}
+                      className="flex items-center gap-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-accent data-[state=active]:to-secondary data-[state=active]:text-white rounded-lg transition-all duration-300"
+                    >
+                      <tab.icon className="h-4 w-4" />
+                      {tab.label}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
 
-            <TabsContent value="security" className="mt-6">
-              <div className="text-center py-8 text-muted-foreground">
-                <Shield className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>Security monitoring and threat analysis</p>
-                <p className="text-sm">Real-time security alerts and compliance status</p>
-              </div>
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
+                <TabsContent value="overview" className="space-y-6 mt-8">
+                  <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+                    {[
+                      {
+                        label: "Total Requests",
+                        value: dashboardMetrics.totalRequests.toLocaleString(),
+                        change: "+12.5%",
+                        positive: true,
+                      },
+                      {
+                        label: "Success Rate",
+                        value: `${dashboardMetrics.successRate.toFixed(1)}%`,
+                        change: "+0.3%",
+                        positive: true,
+                      },
+                      {
+                        label: "Error Rate",
+                        value: `${dashboardMetrics.errorRate.toFixed(1)}%`,
+                        change: "-0.2%",
+                        positive: true,
+                      },
+                      {
+                        label: "Avg Response",
+                        value: `${dashboardMetrics.avgResponse}ms`,
+                        change: "-8ms",
+                        positive: true,
+                      },
+                    ].map((metric, i) => (
+                      <div
+                        key={i}
+                        className="premium-card p-6 bg-gradient-to-br from-muted/30 to-transparent hover:from-accent/5 hover:to-secondary/5"
+                      >
+                        <p className="text-sm font-semibold text-muted-foreground mb-3">{metric.label}</p>
+                        <div className="flex items-center justify-between">
+                          <p className="text-2xl font-bold bg-gradient-to-r from-foreground to-accent bg-clip-text text-transparent">
+                            {metricsLoading ? "..." : metric.value}
+                          </p>
+                          <span
+                            className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                              metric.positive
+                                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+                                : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300"
+                            }`}
+                          >
+                            {metric.change}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </TabsContent>
 
-      <div className="grid gap-8 lg:grid-cols-2">
-        <ConnectedAgentsOverview />
-        <div data-onboarding="quick-actions">
-          <QuickActions />
+                <TabsContent value="performance" className="mt-6">
+                  <div className="text-center py-8 text-muted-foreground">
+                    <LineChart className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>Performance analytics visualization would be rendered here</p>
+                    <p className="text-sm">Real-time charts and performance metrics</p>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="agents" className="mt-6">
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Bot className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>Agent-specific analytics and insights</p>
+                    <p className="text-sm">Individual agent performance and usage patterns</p>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="security" className="mt-6">
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Shield className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>Security monitoring and threat analysis</p>
+                    <p className="text-sm">Real-time security alerts and compliance status</p>
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+          </Card>
+
+          <div className="grid gap-8 lg:grid-cols-2">
+            <div className="premium-card">
+              <ConnectedAgentsOverview />
+            </div>
+            <div className="premium-card" data-onboarding="quick-actions">
+              <QuickActions />
+            </div>
+          </div>
+
+          <div className="grid gap-8 lg:grid-cols-2">
+            <div className="premium-card">
+              <RecentActivity />
+            </div>
+            <div className="premium-card">
+              <SystemHealth />
+            </div>
+          </div>
         </div>
-      </div>
-
-      <div className="grid gap-8 lg:grid-cols-2">
-        <RecentActivity />
-        <SystemHealth />
       </div>
     </div>
   )

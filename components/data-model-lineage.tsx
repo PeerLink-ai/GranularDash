@@ -109,7 +109,7 @@ export interface LineageNode {
     model?: string
     temperature?: number
     maxTokens?: number
-    interactionType?: string
+    interactionType?: number
     responseTime?: number
     qualityScores?: any
     evaluationFlags?: any
@@ -133,6 +133,7 @@ export interface LineageNode {
     alternativesConsidered?: any
     outcomePrediction?: string
     actualOutcome?: string
+    rawLog?: any
   }
   nextNodes?: string[]
 }
@@ -848,6 +849,105 @@ function GraphCanvas({
   )
 }
 
+function NodeDetailsPanel({ node }: { node: LineageNode | null }) {
+  if (!node) return null
+
+  const rawLog = node.metadata?.rawLog
+  const hasDetailedPayload = rawLog?.payload && typeof rawLog.payload === "object"
+
+  return (
+    <Card className="w-full">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          {React.createElement(TYPE_THEME[node.type].icon, { className: "h-5 w-5" })}
+          {node.name}
+          <Badge
+            variant={
+              node.metadata?.level === "error"
+                ? "destructive"
+                : node.metadata?.level === "warning"
+                  ? "secondary"
+                  : "default"
+            }
+          >
+            {node.metadata?.level || node.type}
+          </Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 gap-4 text-sm">
+          <div>
+            <span className="font-medium">Type:</span>
+            <div className="text-muted-foreground">{node.type}</div>
+          </div>
+          <div>
+            <span className="font-medium">Agent ID:</span>
+            <div className="text-muted-foreground">{node.metadata?.agentId || "N/A"}</div>
+          </div>
+          {node.metadata?.timestamp && (
+            <div>
+              <span className="font-medium">Timestamp:</span>
+              <div className="text-muted-foreground">{new Date(node.metadata.timestamp).toLocaleString()}</div>
+            </div>
+          )}
+          {node.metadata?.duration && (
+            <div>
+              <span className="font-medium">Duration:</span>
+              <div className="text-muted-foreground">{node.metadata.duration}ms</div>
+            </div>
+          )}
+          {node.metadata?.tokenUsage && (
+            <div>
+              <span className="font-medium">Tokens:</span>
+              <div className="text-muted-foreground">
+                {typeof node.metadata.tokenUsage === "object"
+                  ? node.metadata.tokenUsage.total || "N/A"
+                  : node.metadata.tokenUsage}
+              </div>
+            </div>
+          )}
+          {node.metadata?.model && (
+            <div>
+              <span className="font-medium">Model:</span>
+              <div className="text-muted-foreground">{node.metadata.model}</div>
+            </div>
+          )}
+        </div>
+
+        {hasDetailedPayload && (
+          <div className="space-y-2">
+            <span className="font-medium text-sm">Payload Details:</span>
+            <div className="bg-muted p-3 rounded-md max-h-60 overflow-y-auto">
+              <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(rawLog.payload, null, 2)}</pre>
+            </div>
+          </div>
+        )}
+
+        {node.metadata?.prompt && (
+          <div className="space-y-2">
+            <span className="font-medium text-sm">Prompt:</span>
+            <div className="bg-muted p-3 rounded-md text-sm">{node.metadata.prompt}</div>
+          </div>
+        )}
+
+        {node.metadata?.response && (
+          <div className="space-y-2">
+            <span className="font-medium text-sm">Response:</span>
+            <div className="bg-muted p-3 rounded-md text-sm">{node.metadata.response}</div>
+          </div>
+        )}
+
+        <div className="pt-2">
+          <span className="font-medium text-sm">Path:</span>
+          <div className="text-muted-foreground text-sm">
+            {Array.isArray(node.path) ? node.path.join(" → ") : "N/A"}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 export function DataModelLineage({
   onOpenDatasetVersioning,
   onOpenTransformationSteps,
@@ -1068,33 +1168,47 @@ export function DataModelLineage({
     setLoading(true)
     setError(null)
     try {
-      const sdkLogsRes = await fetch("/api/sdk-logs?limit=100", { cache: "no-store" })
+      const sdkLogsRes = await fetch("/api/sdk/log?limit=1000", { cache: "no-store" })
 
       console.log("[v0] SDK logs API response status:", sdkLogsRes.status)
 
       if (!sdkLogsRes.ok) {
-        throw new Error(`SDK logs API failed: ${sdkLogsRes.status}`)
+        const errorData = await sdkLogsRes.json().catch(() => ({}))
+        throw new Error(errorData.details || errorData.error || `HTTP ${sdkLogsRes.status}: ${sdkLogsRes.statusText}`)
+      }
+
+      const contentType = sdkLogsRes.headers.get("content-type")
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error("API did not return JSON")
       }
 
       const sdkLogsData = await sdkLogsRes.json()
       console.log("[v0] SDK logs data:", sdkLogsData)
 
+      if (!sdkLogsData.success) {
+        throw new Error(sdkLogsData.error || "API returned unsuccessful response")
+      }
+
       const nodes: LineageNode[] = []
       const edges: { source: string; target: string }[] = []
 
-      if (sdkLogsData.logs && Array.isArray(sdkLogsData.logs)) {
-        console.log("[v0] Processing", sdkLogsData.logs.length, "SDK logs")
+      const logs = Array.isArray(sdkLogsData.data) ? sdkLogsData.data : []
+
+      if (logs.length > 0) {
+        console.log("[v0] Processing", logs.length, "SDK logs")
 
         // Group logs by agent_id for better organization
         const agentGroups = new Map<string, any[]>()
 
-        sdkLogsData.logs.forEach((log: any) => {
-          const agentId = log.agent_id || "unknown-agent"
+        logs.forEach((log: any) => {
+          const agentId = log.agentId || "unknown-agent"
           if (!agentGroups.has(agentId)) {
             agentGroups.set(agentId, [])
           }
           agentGroups.get(agentId)!.push(log)
         })
+
+        console.log("[v0] Found", agentGroups.size, "unique agents")
 
         // Create nodes for each agent and their logs
         agentGroups.forEach((logs, agentId) => {
@@ -1102,7 +1216,7 @@ export function DataModelLineage({
           const agentNodeId = `agent-${agentId}`
           nodes.push({
             id: agentNodeId,
-            name: agentId,
+            name: `Agent: ${agentId}`,
             type: "agent",
             path: ["agents", agentId],
             metadata: {
@@ -1110,38 +1224,49 @@ export function DataModelLineage({
               logCount: logs.length,
               description: `Agent with ${logs.length} log entries`,
               status: "active",
+              creationDate: new Date().toISOString(),
             },
             nextNodes: [],
           })
 
+          // Sort logs by timestamp for proper sequencing
+          const sortedLogs = logs.sort((a, b) => a.timestamp - b.timestamp)
+
           // Create nodes for each log entry
-          logs.forEach((log, index) => {
+          sortedLogs.forEach((log, index) => {
             const logNodeId = `log-${log.id}`
             const logType = log.type || "unknown"
             const level = log.level || "info"
 
             nodes.push({
               id: logNodeId,
-              name: `${logType} (${level})`,
-              type: logType.includes("request")
-                ? "agent_action"
-                : logType.includes("response")
-                  ? "agent_response"
-                  : logType.includes("security") || logType.includes("error")
-                    ? "agent_evaluation"
-                    : "agent_action",
+              name: `${logType}`,
+              type:
+                logType.includes("request") || logType.includes("action")
+                  ? "agent_action"
+                  : logType.includes("response") || logType.includes("completion")
+                    ? "agent_response"
+                    : logType.includes("security") || logType.includes("error") || logType.includes("evaluation")
+                      ? "agent_evaluation"
+                      : "agent_action",
               path: ["agents", agentId, logType],
               metadata: {
                 agentId: agentId,
                 logType: logType,
                 level: level,
-                timestamp: log.created_at,
+                timestamp: new Date(log.timestamp).toISOString(),
                 payload: log.payload,
-                description: `${logType} log entry`,
-                status: level === "error" ? "error" : level === "warn" ? "warning" : "success",
-                actionType: log.payload?.action,
+                description: `${logType} - ${level}`,
+                status: level === "error" ? "error" : level === "warning" ? "warning" : "success",
+                actionType: log.payload?.action || logType,
                 duration: log.payload?.duration_ms,
                 responseTime: log.payload?.duration_ms,
+                tokenUsage: log.payload?.tokens || log.payload?.token_usage,
+                model: log.payload?.model,
+                prompt: log.payload?.prompt,
+                response: log.payload?.response,
+                evaluationScore: log.payload?.score,
+                rawLog: log, // Include full log for detailed inspection
               },
               nextNodes: [],
             })
@@ -1154,7 +1279,7 @@ export function DataModelLineage({
 
             // Create sequential edges between logs of the same agent
             if (index > 0) {
-              const prevLogId = `log-${logs[index - 1].id}`
+              const prevLogId = `log-${sortedLogs[index - 1].id}`
               edges.push({
                 source: prevLogId,
                 target: logNodeId,
@@ -1163,7 +1288,8 @@ export function DataModelLineage({
           })
         })
       } else {
-        console.log("[v0] No SDK logs found or invalid format")
+        console.log("[v0] No SDK logs found")
+        setError("No SDK logs found. Generate some test data using the audit logs page or run agent activities.")
       }
 
       console.log("[v0] Created", nodes.length, "nodes and", edges.length, "edges from SDK logs")
@@ -1176,7 +1302,8 @@ export function DataModelLineage({
       })
     } catch (error) {
       console.error("[v0] Error loading SDK logs:", error)
-      setError(error instanceof Error ? error.message : "Failed to load SDK logs")
+      const errorMessage = error instanceof Error ? error.message : "Failed to load SDK logs"
+      setError(errorMessage)
       setServerData({
         nodes: [],
         edges: [],

@@ -45,6 +45,8 @@ import {
   Activity,
   User,
   Building,
+  AlertTriangle,
+  Copy,
 } from "lucide-react"
 
 import "reactflow/dist/style.css"
@@ -60,6 +62,7 @@ import ReactFlow, {
   type Node,
   useReactFlow,
 } from "reactflow"
+import { useEffect } from "react"
 
 function formatTimestamp(timestamp: string | number | undefined | null) {
   try {
@@ -258,36 +261,34 @@ type FocusMode = "all" | "upstream" | "downstream"
 function layoutNodes(data: LineageNode[], opts: { colGap?: number; rowGap?: number } = {}): Node[] {
   if (!Array.isArray(data)) return []
 
-  const colGap = opts.colGap ?? 500
-  const rowGap = opts.rowGap ?? 180
+  const colGap = opts.colGap ?? 400
+  const rowGap = opts.rowGap ?? 150
 
-  // Group nodes by agent and create conversation flows
+  // Group nodes by agent for better organization
   const agentGroups = new Map<string, LineageNode[]>()
-  const conversationChains = new Map<string, LineageNode[]>()
 
   for (const n of data) {
     const agentId = n.metadata?.agentId || "unknown"
     if (!agentGroups.has(agentId)) agentGroups.set(agentId, [])
     agentGroups.get(agentId)!.push(n)
-
-    const sessionId = n.metadata?.sessionId || n.metadata?.parentInteractionId || n.id
-    if (!conversationChains.has(sessionId)) conversationChains.set(sessionId, [])
-    conversationChains.get(sessionId)!.push(n)
   }
 
   const nodes: Node[] = []
   let xOffset = 100
 
   for (const [agentId, agentNodes] of agentGroups) {
-    // Create sophisticated agent summary node
-    const totalTokens = agentNodes.reduce(
-      (acc, n) =>
-        acc +
-        (typeof n.metadata?.tokenUsage === "object" ? n.metadata.tokenUsage.total || 0 : n.metadata?.tokenUsage || 0),
-      0,
-    )
+    // Sort nodes by timestamp
+    agentNodes.sort((a, b) => {
+      const aTime = formatTimestamp(a.metadata?.timestamp || 0)
+      const bTime = formatTimestamp(b.metadata?.timestamp || 0)
+      const aDate = aTime === "Invalid Date" ? 0 : new Date(aTime).getTime()
+      const bDate = bTime === "Invalid Date" ? 0 : new Date(bTime).getTime()
+      return aDate - bDate
+    })
 
-    const avgScore = agentNodes.reduce((acc, n) => acc + (n.metadata?.evaluationScore || 0), 0) / agentNodes.length
+    // Create agent summary node
+    const errorCount = agentNodes.filter((n) => n.metadata?.level === "error").length
+    const warningCount = agentNodes.filter((n) => n.metadata?.level === "warning").length
 
     const agentSummary = {
       id: `agent_${agentId}`,
@@ -297,12 +298,12 @@ function layoutNodes(data: LineageNode[], opts: { colGap?: number; rowGap?: numb
       targetPosition: Position.Top,
       data: {
         label: (
-          <div className="p-4 text-center">
-            <div className="text-lg font-bold text-white mb-2">Agent {agentId}</div>
-            <div className="text-sm text-blue-100 space-y-1">
+          <div className="p-3 text-center">
+            <div className="text-sm font-bold text-white mb-1">Agent {agentId}</div>
+            <div className="text-xs text-blue-100 space-y-1">
               <div>{agentNodes.length} Actions</div>
-              <div>{totalTokens.toLocaleString()} Tokens</div>
-              <div>Score: {avgScore.toFixed(1)}/10</div>
+              {errorCount > 0 && <div className="text-red-200">{errorCount} Errors</div>}
+              {warningCount > 0 && <div className="text-yellow-200">{warningCount} Warnings</div>}
             </div>
           </div>
         ),
@@ -311,138 +312,78 @@ function layoutNodes(data: LineageNode[], opts: { colGap?: number; rowGap?: numb
           name: `Agent ${agentId}`,
           type: "agent" as const,
           path: ["agents", agentId],
-          metadata: { agentId, totalActions: agentNodes.length, avgScore, totalTokens },
+          metadata: {
+            agentId,
+            totalActions: agentNodes.length,
+            errorCount,
+            warningCount,
+            logs: agentNodes,
+          },
           nextNodes: [],
         },
       },
       style: {
-        width: 200,
-        height: 120,
-        borderRadius: 16,
-        border: "3px solid #1e40af",
-        background: "linear-gradient(135deg, #1e40af 0%, #3b82f6 100%)",
-        boxShadow: "0 8px 32px rgba(30, 64, 175, 0.3)",
+        width: 160,
+        height: 80,
+        borderRadius: 12,
+        border: errorCount > 0 ? "3px solid #dc2626" : "3px solid #1e40af",
+        background:
+          errorCount > 0
+            ? "linear-gradient(135deg, #dc2626 0%, #ef4444 100%)"
+            : "linear-gradient(135deg, #1e40af 0%, #3b82f6 100%)",
+        boxShadow: "0 6px 20px rgba(30, 64, 175, 0.3)",
         color: "white",
       },
       draggable: true,
     }
     nodes.push(agentSummary)
 
-    // Create conversation flows with better organization
-    const agentConversations = new Map<string, LineageNode[]>()
-    for (const node of agentNodes) {
-      const sessionId = node.metadata?.sessionId || node.metadata?.parentInteractionId || "default"
-      if (!agentConversations.has(sessionId)) agentConversations.set(sessionId, [])
-      agentConversations.get(sessionId)!.push(node)
-    }
+    // Create individual action nodes in a vertical flow
+    agentNodes.forEach((node, index) => {
+      const yPos = 200 + index * 120
 
-    let yOffset = 250
-    let conversationIndex = 0
+      const nodeStyle = {
+        background:
+          node.metadata?.level === "error"
+            ? "linear-gradient(135deg, #dc2626 0%, #ef4444 100%)"
+            : node.metadata?.level === "warning"
+              ? "linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)"
+              : node.type === "agent_response"
+                ? "linear-gradient(135deg, #10b981 0%, #34d399 100%)"
+                : "linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%)",
+        border: "2px solid rgba(255,255,255,0.2)",
+        color: "white",
+      }
 
-    for (const [sessionId, sessionNodes] of agentConversations) {
-      // Sort by timestamp for proper flow
-      sessionNodes.sort((a, b) => {
-        const aTime = formatTimestamp(a.metadata?.timestamp || 0)
-        const bTime = formatTimestamp(b.metadata?.timestamp || 0)
-        const aDate = aTime === "Invalid Date" ? 0 : new Date(aTime).getTime()
-        const bDate = bTime === "Invalid Date" ? 0 : new Date(bTime).getTime()
-        return aDate - bDate
-      })
-
-      // Create conversation header
-      const conversationHeader = {
-        id: `conversation_${sessionId}`,
+      nodes.push({
+        id: node.id,
         type: "default",
-        position: { x: xOffset + 50, y: yOffset },
+        position: { x: xOffset, y: yPos },
         sourcePosition: Position.Right,
         targetPosition: Position.Left,
         data: {
           label: (
-            <div className="p-2 text-center">
-              <div className="text-sm font-semibold text-gray-700">Conversation {conversationIndex + 1}</div>
-              <div className="text-xs text-gray-500">{sessionNodes.length} steps</div>
+            <div className="p-3 rounded-lg min-w-[140px]" style={nodeStyle}>
+              <div className="font-semibold text-xs mb-1">{node.type.replace("agent_", "").toUpperCase()}</div>
+              <div className="text-xs opacity-90 mb-1">{formatTimestamp(node.metadata?.timestamp)}</div>
+              <div className="text-xs">{node.name}</div>
+              {node.metadata?.level && (
+                <div className="text-xs mt-1 px-1 py-0.5 bg-black/20 rounded text-center">{node.metadata.level}</div>
+              )}
             </div>
           ),
-          node: {
-            id: `conversation_${sessionId}`,
-            name: `Conversation ${conversationIndex + 1}`,
-            type: "conversation" as const,
-            path: ["conversations", sessionId],
-            metadata: { sessionId, stepCount: sessionNodes.length },
-            nextNodes: [],
-          },
+          node,
         },
         style: {
           width: 140,
-          height: 60,
-          borderRadius: 12,
-          border: "2px solid #e5e7eb",
-          background: "linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)",
-          boxShadow: "0 4px 16px rgba(0, 0, 0, 0.1)",
+          height: 70,
+          borderRadius: 8,
+          ...nodeStyle,
+          boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
         },
         draggable: true,
-      }
-      nodes.push(conversationHeader)
-
-      // Create action nodes in a flowing pattern
-      sessionNodes.forEach((node, index) => {
-        const nodeStyle = {
-          action: {
-            background: "linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)",
-            border: "2px solid #1e40af",
-            color: "white",
-          },
-          response: {
-            background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
-            border: "2px solid #047857",
-            color: "white",
-          },
-          evaluation: {
-            background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
-            border: "2px solid #b45309",
-            color: "white",
-          },
-        }
-
-        const currentStyle = nodeStyle[node.type as keyof typeof nodeStyle] || nodeStyle.action
-
-        nodes.push({
-          id: node.id,
-          type: "default",
-          position: {
-            x: xOffset + 220 + index * 180,
-            y: yOffset + (index % 2 === 0 ? 0 : 40), // Stagger for visual flow
-          },
-          sourcePosition: Position.Right,
-          targetPosition: Position.Left,
-          data: {
-            label: (
-              <div className="p-4 rounded-lg shadow-lg border-2 min-w-[160px]" style={currentStyle}>
-                <div className="font-semibold text-sm mb-1">{node.type.toUpperCase()}</div>
-                <div className="text-xs opacity-90 mb-2">{formatTimestamp(node.metadata?.timestamp)}</div>
-                <div className="text-xs font-medium">{node.name}</div>
-                {node.metadata?.level && (
-                  <div className="text-xs mt-1 px-2 py-1 bg-black/20 rounded">{node.metadata.level}</div>
-                )}
-              </div>
-            ),
-            node,
-          },
-          style: {
-            width: 160,
-            height: 80,
-            borderRadius: 12,
-            ...currentStyle,
-            boxShadow: "0 6px 24px rgba(0, 0, 0, 0.15)",
-            transition: "all 0.3s ease",
-          },
-          draggable: true,
-        })
       })
-
-      yOffset += 180
-      conversationIndex++
-    }
+    })
 
     xOffset += colGap
   }
@@ -816,99 +757,235 @@ function GraphCanvas({
 }
 
 function NodeDetailsPanel({ node }: { node: LineageNode | null }) {
-  if (!node) return null
+  if (!node) {
+    return (
+      <Card className="w-full">
+        <CardContent className="p-6 text-center text-muted-foreground">
+          <div className="mb-2">Select a node to view details</div>
+          <div className="text-sm">Click on any agent or action node to explore its data</div>
+        </CardContent>
+      </Card>
+    )
+  }
 
   const rawLog = node.metadata?.rawLog
   const hasDetailedPayload = rawLog?.payload && typeof rawLog.payload === "object"
+  const isAgent = node.type === "agent"
+  const isError = node.metadata?.level === "error"
+  const isWarning = node.metadata?.level === "warning"
+
+  const exportNodeData = () => {
+    const exportData = {
+      nodeId: node.id,
+      nodeName: node.name,
+      nodeType: node.type,
+      timestamp: node.metadata?.timestamp,
+      agentId: node.metadata?.agentId,
+      payload: rawLog?.payload,
+      metadata: node.metadata,
+      exportedAt: new Date().toISOString(),
+    }
+
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `lineage-${node.id}-${Date.now()}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text)
+  }
 
   return (
     <Card className="w-full">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          {React.createElement(TYPE_THEME[node.type].icon, { className: "h-5 w-5" })}
-          {node.name}
-          <Badge
-            variant={
-              node.metadata?.level === "error"
-                ? "destructive"
-                : node.metadata?.level === "warning"
-                  ? "secondary"
-                  : "default"
-            }
-          >
-            {node.metadata?.level || node.type}
-          </Badge>
-        </CardTitle>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            {React.createElement(TYPE_THEME[node.type].icon, { className: "h-5 w-5" })}
+            {node.name}
+            {(isError || isWarning) && (
+              <Badge variant={isError ? "destructive" : "secondary"}>{node.metadata?.level}</Badge>
+            )}
+          </CardTitle>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={exportNodeData}>
+              <Download className="h-4 w-4" />
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => copyToClipboard(JSON.stringify(node, null, 2))}>
+              <Copy className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          <div>
-            <span className="font-medium">Type:</span>
-            <div className="text-muted-foreground">{node.type}</div>
-          </div>
-          <div>
-            <span className="font-medium">Agent ID:</span>
-            <div className="text-muted-foreground">{node.metadata?.agentId || "N/A"}</div>
-          </div>
-          {node.metadata?.timestamp && (
-            <div>
-              <span className="font-medium">Timestamp:</span>
-              <div className="text-muted-foreground">{formatTimestamp(node.metadata.timestamp)}</div>
-            </div>
-          )}
-          {node.metadata?.duration && (
-            <div>
-              <span className="font-medium">Duration:</span>
-              <div className="text-muted-foreground">{node.metadata.duration}ms</div>
-            </div>
-          )}
-          {node.metadata?.tokenUsage && (
-            <div>
-              <span className="font-medium">Tokens:</span>
-              <div className="text-muted-foreground">
-                {typeof node.metadata.tokenUsage === "object"
-                  ? node.metadata.tokenUsage.total || "N/A"
-                  : node.metadata.tokenUsage}
+        {isAgent && node.metadata?.logs && (
+          <div className="space-y-3">
+            <div className="text-sm font-medium">Agent Performance Summary</div>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="p-3 bg-muted rounded-lg">
+                <div className="font-medium">Total Actions</div>
+                <div className="text-2xl font-bold text-blue-600">{node.metadata.totalActions}</div>
+              </div>
+              <div className="p-3 bg-muted rounded-lg">
+                <div className="font-medium">Error Rate</div>
+                <div className="text-2xl font-bold text-red-600">
+                  {node.metadata.errorCount || 0}/{node.metadata.totalActions}
+                </div>
               </div>
             </div>
-          )}
-          {node.metadata?.model && (
-            <div>
-              <span className="font-medium">Model:</span>
-              <div className="text-muted-foreground">{node.metadata.model}</div>
+
+            <div className="space-y-2">
+              <div className="text-sm font-medium">Recent Activity</div>
+              <div className="max-h-40 overflow-y-auto space-y-1">
+                {(node.metadata.logs as LineageNode[]).slice(-5).map((log, i) => (
+                  <div key={i} className="flex items-center gap-2 text-xs p-2 bg-muted rounded">
+                    <div
+                      className={`w-2 h-2 rounded-full ${
+                        log.metadata?.level === "error"
+                          ? "bg-red-500"
+                          : log.metadata?.level === "warning"
+                            ? "bg-yellow-500"
+                            : "bg-green-500"
+                      }`}
+                    />
+                    <div className="flex-1">{log.name}</div>
+                    <div className="text-muted-foreground">{formatTimestamp(log.metadata?.timestamp)}</div>
+                  </div>
+                ))}
+              </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
+
+        {!isAgent && (
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <span className="font-medium">Type:</span>
+              <div className="text-muted-foreground">{node.type}</div>
+            </div>
+            <div>
+              <span className="font-medium">Agent ID:</span>
+              <div className="text-muted-foreground font-mono">{node.metadata?.agentId || "N/A"}</div>
+            </div>
+            {node.metadata?.timestamp && (
+              <div>
+                <span className="font-medium">Timestamp:</span>
+                <div className="text-muted-foreground">{formatTimestamp(node.metadata.timestamp)}</div>
+              </div>
+            )}
+            {node.metadata?.duration && (
+              <div>
+                <span className="font-medium">Duration:</span>
+                <div
+                  className={`font-mono ${node.metadata.duration > 5000 ? "text-red-600" : "text-muted-foreground"}`}
+                >
+                  {node.metadata.duration}ms
+                </div>
+              </div>
+            )}
+            {node.metadata?.tokenUsage && (
+              <div>
+                <span className="font-medium">Tokens:</span>
+                <div className="text-muted-foreground font-mono">
+                  {typeof node.metadata.tokenUsage === "object"
+                    ? node.metadata.tokenUsage.total || "N/A"
+                    : node.metadata.tokenUsage}
+                </div>
+              </div>
+            )}
+            {node.metadata?.model && (
+              <div>
+                <span className="font-medium">Model:</span>
+                <div className="text-muted-foreground">{node.metadata.model}</div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {(isError || isWarning) && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-red-500" />
+              <span className="font-medium text-sm">Issue Analysis</span>
+            </div>
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm">
+              <div className="font-medium text-red-800 mb-1">{isError ? "Error Detected" : "Warning Detected"}</div>
+              <div className="text-red-700">
+                {rawLog?.payload?.error || rawLog?.payload?.message || "No specific error message available"}
+              </div>
+              {rawLog?.payload?.stack && (
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-red-600 hover:text-red-800">Stack Trace</summary>
+                  <pre className="mt-1 text-xs bg-red-100 p-2 rounded overflow-x-auto">{rawLog.payload.stack}</pre>
+                </details>
+              )}
+            </div>
+          </div>
+        )}
 
         {hasDetailedPayload && (
           <div className="space-y-2">
-            <span className="font-medium text-sm">Payload Details:</span>
+            <div className="flex items-center justify-between">
+              <span className="font-medium text-sm">Payload Explorer</span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => copyToClipboard(JSON.stringify(rawLog.payload, null, 2))}
+              >
+                Copy JSON
+              </Button>
+            </div>
             <div className="bg-muted p-3 rounded-md max-h-60 overflow-y-auto">
-              <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(rawLog.payload, null, 2)}</pre>
+              <pre className="text-xs whitespace-pre-wrap font-mono">{JSON.stringify(rawLog.payload, null, 2)}</pre>
             </div>
           </div>
         )}
 
         {node.metadata?.prompt && (
           <div className="space-y-2">
-            <span className="font-medium text-sm">Prompt:</span>
-            <div className="bg-muted p-3 rounded-md text-sm">{node.metadata.prompt}</div>
+            <div className="flex items-center justify-between">
+              <span className="font-medium text-sm">Input Prompt</span>
+              <Button size="sm" variant="outline" onClick={() => copyToClipboard(node.metadata?.prompt || "")}>
+                Copy
+              </Button>
+            </div>
+            <div className="bg-blue-50 border border-blue-200 p-3 rounded-md text-sm max-h-32 overflow-y-auto">
+              {node.metadata.prompt}
+            </div>
           </div>
         )}
 
         {node.metadata?.response && (
           <div className="space-y-2">
-            <span className="font-medium text-sm">Response:</span>
-            <div className="bg-muted p-3 rounded-md text-sm">{node.metadata.response}</div>
+            <div className="flex items-center justify-between">
+              <span className="font-medium text-sm">Response Output</span>
+              <Button size="sm" variant="outline" onClick={() => copyToClipboard(node.metadata?.response || "")}>
+                Copy
+              </Button>
+            </div>
+            <div className="bg-green-50 border border-green-200 p-3 rounded-md text-sm max-h-32 overflow-y-auto">
+              {node.metadata.response}
+            </div>
           </div>
         )}
 
-        <div className="pt-2">
-          <span className="font-medium text-sm">Path:</span>
-          <div className="text-muted-foreground text-sm">
-            {Array.isArray(node.path) ? node.path.join(" → ") : "N/A"}
+        {node.metadata?.evaluationScore && (
+          <div className="space-y-2">
+            <span className="font-medium text-sm">Performance Score</span>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 bg-gray-200 rounded-full h-2">
+                <div
+                  className="bg-blue-600 h-2 rounded-full"
+                  style={{ width: `${(node.metadata.evaluationScore / 10) * 100}%` }}
+                />
+              </div>
+              <span className="text-sm font-mono">{node.metadata.evaluationScore}/10</span>
+            </div>
           </div>
-        </div>
+        )}
       </CardContent>
     </Card>
   )
@@ -945,6 +1022,10 @@ export function DataModelLineage({
     user: false,
     organization: false,
   })
+
+  const loadLineage = React.useCallback(() => {
+    // This function will be defined later to fetch and process lineage data
+  }, [])
 
   React.useEffect(() => {
     loadLineage()
@@ -1129,191 +1210,115 @@ export function DataModelLineage({
 
   const breadcrumbSegments = Array.isArray(selected?.path) ? selected.path : []
 
-  const loadLineage = async () => {
-    console.log("[v0] Starting to load lineage from SDK logs...")
-    setLoading(true)
-    setError(null)
-    try {
-      const sdkLogsRes = await fetch("/api/sdk/log?limit=1000", { cache: "no-store" })
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true)
+        setError(null)
+        console.log("[v0] Fetching SDK logs...")
 
-      console.log("[v0] SDK logs API response status:", sdkLogsRes.status)
+        const response = await fetch("/api/sdk/log")
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
 
-      if (!sdkLogsRes.ok) {
-        const errorData = await sdkLogsRes.json().catch(() => ({}))
-        throw new Error(errorData.details || errorData.error || `HTTP ${sdkLogsRes.status}: ${sdkLogsRes.statusText}`)
-      }
+        const data = await response.json()
+        console.log("[v0] SDK logs response:", data)
 
-      const contentType = sdkLogsRes.headers.get("content-type")
-      if (!contentType || !contentType.includes("application/json")) {
-        throw new Error("API did not return JSON")
-      }
+        if (data.success && Array.isArray(data.data) && data.data.length > 0) {
+          const nodes: LineageNode[] = []
+          const edges: Edge[] = []
 
-      const sdkLogsData = await sdkLogsRes.json()
-      console.log("[v0] SDK logs data:", sdkLogsData)
-
-      if (!sdkLogsData.success) {
-        throw new Error(sdkLogsData.error || "API returned unsuccessful response")
-      }
-
-      const nodes: LineageNode[] = []
-      const edges: { source: string; target: string }[] = []
-
-      const logs = Array.isArray(sdkLogsData.data) ? sdkLogsData.data : []
-
-      if (logs.length > 0) {
-        console.log("[v0] Processing", logs.length, "SDK logs")
-
-        // Group logs by agent_id for better organization
-        const agentGroups = new Map<string, any[]>()
-
-        logs.forEach((log: any) => {
-          const agentId = log.agentId || "unknown-agent"
-          if (!agentGroups.has(agentId)) {
-            agentGroups.set(agentId, [])
-          }
-          agentGroups.get(agentId)!.push(log)
-        })
-
-        console.log("[v0] Found", agentGroups.size, "unique agents")
-
-        // Create nodes for each agent and their logs
-        agentGroups.forEach((logs, agentId) => {
-          // Create agent node
-          const agentNodeId = `agent-${agentId}`
-          nodes.push({
-            id: agentNodeId,
-            name: `Agent: ${agentId}`,
-            type: "agent",
-            path: ["agents", agentId],
-            metadata: {
-              agentId: agentId,
-              logCount: logs.length,
-              description: `Agent with ${logs.length} log entries`,
-              status: "active",
-              creationDate: new Date().toISOString(),
-            },
-            nextNodes: [],
-          })
-
-          // Sort logs by timestamp for proper sequencing
-          const sortedLogs = logs.sort((a, b) => {
-            const aTime =
-              typeof a.timestamp === "number"
-                ? a.timestamp
-                : typeof a.timestamp === "string" && /^\d+$/.test(a.timestamp)
-                  ? Number(a.timestamp)
-                  : 0
-            const bTime =
-              typeof b.timestamp === "number"
-                ? b.timestamp
-                : typeof b.timestamp === "string" && /^\d+$/.test(b.timestamp)
-                  ? Number(b.timestamp)
-                  : 0
-            return aTime - bTime
-          })
-
-          // Create nodes for each log entry
-          sortedLogs.forEach((log, index) => {
-            const logNodeId = `log-${log.id}`
-            const logType = log.type || "unknown"
-            const level = log.level || "info"
-
-            nodes.push({
-              id: logNodeId,
-              name: `${logType}`,
-              type:
-                logType.includes("request") || logType.includes("action")
-                  ? "agent_action"
-                  : logType.includes("response") || logType.includes("completion")
-                    ? "agent_response"
-                    : logType.includes("security") || logType.includes("error") || logType.includes("evaluation")
-                      ? "agent_evaluation"
-                      : "agent_action",
-              path: ["agents", agentId, logType],
-              metadata: {
-                agentId: agentId,
-                logType: logType,
-                level: level,
-                timestamp: formatTimestamp(log.timestamp),
-                payload: log.payload,
-                description: `${logType} - ${level}`,
-                status: level === "error" ? "error" : level === "warning" ? "warning" : "success",
-                actionType: log.payload?.action || logType,
-                duration: log.payload?.duration_ms,
-                responseTime: log.payload?.duration_ms,
-                tokenUsage: log.payload?.tokens || log.payload?.token_usage,
-                model: log.payload?.model,
-                prompt: log.payload?.prompt,
-                response: log.payload?.response,
-                evaluationScore: log.payload?.score,
-                rawLog: log, // Include full log for detailed inspection
-              },
-              nextNodes: [],
-            })
-
-            edges.push({
-              id: `edge-${agentNodeId}-${logNodeId}`,
-              source: agentNodeId,
-              target: logNodeId,
-              type: "smoothstep",
-              animated: true,
-              style: {
-                stroke: "#8b5cf6",
-                strokeWidth: 2,
-              },
-              markerEnd: {
-                type: "arrowclosed",
-                color: "#8b5cf6",
-              },
-            })
-
-            // Create sequential edges between logs of the same agent
-            if (index > 0) {
-              const prevLogId = `log-${sortedLogs[index - 1].id}`
-              edges.push({
-                id: `edge-${prevLogId}-${logNodeId}`,
-                source: prevLogId,
-                target: logNodeId,
-                type: "smoothstep",
-                animated: true,
-                style: {
-                  stroke: "#10b981",
-                  strokeWidth: 2,
-                },
-                markerEnd: {
-                  type: "arrowclosed",
-                  color: "#10b981",
-                },
-              })
+          // Group logs by agent
+          const agentGroups = new Map<string, any[]>()
+          data.data.forEach((log: any) => {
+            const agentId = log.agentId || log.agent_id || "unknown-agent"
+            if (!agentGroups.has(agentId)) {
+              agentGroups.set(agentId, [])
             }
+            agentGroups.get(agentId)!.push(log)
           })
-        })
-      } else {
-        console.log("[v0] No SDK logs found")
-        setError("No SDK logs found. Generate some test data using the audit logs page or run agent activities.")
+
+          console.log("[v0] Found", agentGroups.size, "unique agents")
+
+          // Create nodes for each agent and their logs
+          agentGroups.forEach((logs, agentId) => {
+            // Sort logs by timestamp
+            const sortedLogs = logs.sort((a, b) => {
+              const aTime = typeof a.timestamp === "number" ? a.timestamp : 0
+              const bTime = typeof b.timestamp === "number" ? b.timestamp : 0
+              return aTime - bTime
+            })
+
+            // Create individual log nodes (no agent summary duplication)
+            sortedLogs.forEach((log, index) => {
+              const logNodeId = `log-${log.id}`
+              const logType = log.type || "unknown"
+              const level = log.level || "info"
+
+              nodes.push({
+                id: logNodeId,
+                name: `${logType}`,
+                type:
+                  logType.includes("request") || logType.includes("action")
+                    ? "agent_action"
+                    : logType.includes("response") || logType.includes("completion")
+                      ? "agent_response"
+                      : "agent_evaluation",
+                path: ["agents", agentId, logType],
+                metadata: {
+                  agentId: agentId,
+                  logType: logType,
+                  level: level,
+                  timestamp: log.timestamp,
+                  payload: log.payload,
+                  duration: log.payload?.duration_ms,
+                  tokenUsage: log.payload?.tokens || log.payload?.token_usage,
+                  model: log.payload?.model,
+                  prompt: log.payload?.prompt,
+                  response: log.payload?.response,
+                  evaluationScore: log.payload?.score,
+                  rawLog: log,
+                },
+                nextNodes: [],
+              })
+
+              // Create sequential edges between logs of the same agent
+              if (index > 0) {
+                const prevLogId = `log-${sortedLogs[index - 1].id}`
+                edges.push({
+                  id: `edge-${prevLogId}-${logNodeId}`,
+                  source: prevLogId,
+                  target: logNodeId,
+                  type: "smoothstep",
+                  animated: level === "error",
+                  style: {
+                    stroke: level === "error" ? "#dc2626" : level === "warning" ? "#f59e0b" : "#10b981",
+                    strokeWidth: 2,
+                  },
+                  markerEnd: {
+                    type: "arrowclosed",
+                    color: level === "error" ? "#dc2626" : level === "warning" ? "#f59e0b" : "#10b981",
+                  },
+                })
+              }
+            })
+          })
+
+          console.log("[v0] Created", nodes.length, "nodes and", edges.length)
+          setServerData({ nodes, edges })
+        } else {
+          console.log("[v0] No SDK logs found")
+          setError("No SDK logs found. Generate some test data or run agent activities.")
+        }
+      } catch (err) {
+        console.error("[v0] Error loading SDK logs:", err)
+        setError(`Failed to load SDK logs: ${err instanceof Error ? err.message : "Unknown error"}`)
+      } finally {
+        setLoading(false)
       }
-
-      console.log("[v0] Created", nodes.length, "nodes and", edges.length, "edges from SDK logs")
-      console.log("[v0] Sample nodes:", nodes.slice(0, 3))
-
-      setServerData({
-        nodes: nodes,
-        edges: edges,
-        lineageMapping: [],
-      })
-    } catch (error) {
-      console.error("[v0] Error loading SDK logs:", error)
-      const errorMessage = error instanceof Error ? error.message : "Failed to load SDK logs"
-      setError(errorMessage)
-      setServerData({
-        nodes: [],
-        edges: [],
-        lineageMapping: [],
-      })
-    } finally {
-      setLoading(false)
     }
-  }
+
+    fetchData()
+  }, [loadLineage])
 
   const debugInfo = React.useMemo(() => {
     return {

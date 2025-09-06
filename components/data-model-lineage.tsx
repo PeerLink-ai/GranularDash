@@ -22,7 +22,6 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import {
   Download,
@@ -31,7 +30,6 @@ import {
   Focus,
   GitBranch,
   ImageIcon,
-  Info,
   RotateCcw,
   Search,
   ZoomIn,
@@ -57,10 +55,11 @@ import ReactFlow, {
   ReactFlowProvider,
   useEdgesState,
   useNodesState,
-  Position,
   type Edge,
   type Node,
   useReactFlow,
+  type OnNodesChange,
+  type OnEdgesChange,
 } from "reactflow"
 import { useEffect } from "react"
 
@@ -261,131 +260,119 @@ type FocusMode = "all" | "upstream" | "downstream"
 function layoutNodes(data: LineageNode[], opts: { colGap?: number; rowGap?: number } = {}): Node[] {
   if (!Array.isArray(data)) return []
 
-  const colGap = opts.colGap ?? 400
+  const colGap = opts.colGap ?? 350
   const rowGap = opts.rowGap ?? 150
 
-  // Group nodes by agent for better organization
   const agentGroups = new Map<string, LineageNode[]>()
 
   for (const n of data) {
-    const agentId = n.metadata?.agentId || "unknown"
+    // Extract agent name from multiple possible locations in the log data
+    const payload = n.metadata?.payload || {}
+    const agentId =
+      payload.agent_name ||
+      payload.agentName ||
+      payload.agent_id ||
+      payload.agent ||
+      n.metadata?.agentId ||
+      n.metadata?.agent_id ||
+      n.metadata?.agent ||
+      payload.model?.split("/").pop() ||
+      payload.provider ||
+      "unknown-agent"
+
     if (!agentGroups.has(agentId)) agentGroups.set(agentId, [])
     agentGroups.get(agentId)!.push(n)
   }
 
   const nodes: Node[] = []
   let xOffset = 100
+  const maxNodesPerColumn = 6 // Reduced for better spacing
 
   for (const [agentId, agentNodes] of agentGroups) {
-    // Sort nodes by timestamp
-    agentNodes.sort((a, b) => {
-      const aTime = formatTimestamp(a.metadata?.timestamp || 0)
-      const bTime = formatTimestamp(b.metadata?.timestamp || 0)
-      const aDate = aTime === "Invalid Date" ? 0 : new Date(aTime).getTime()
-      const bDate = bTime === "Invalid Date" ? 0 : new Date(bTime).getTime()
-      return aDate - bDate
-    })
-
-    // Create agent summary node
-    const errorCount = agentNodes.filter((n) => n.metadata?.level === "error").length
-    const warningCount = agentNodes.filter((n) => n.metadata?.level === "warning").length
-
-    const agentSummary = {
-      id: `agent_${agentId}`,
+    nodes.push({
+      id: `agent-${agentId}`,
       type: "default",
-      position: { x: xOffset, y: 50 },
-      sourcePosition: Position.Bottom,
-      targetPosition: Position.Top,
+      position: { x: xOffset, y: 20 },
       data: {
         label: (
-          <div className="p-3 text-center">
-            <div className="text-sm font-bold text-white mb-1">Agent {agentId}</div>
-            <div className="text-xs text-blue-100 space-y-1">
-              <div>{agentNodes.length} Actions</div>
-              {errorCount > 0 && <div className="text-red-200">{errorCount} Errors</div>}
-              {warningCount > 0 && <div className="text-yellow-200">{warningCount} Warnings</div>}
-            </div>
+          <div className="p-3 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold text-center min-w-[200px]">
+            🤖 {agentId}
           </div>
         ),
-        node: {
-          id: `agent_${agentId}`,
-          name: `Agent ${agentId}`,
-          type: "agent" as const,
-          path: ["agents", agentId],
-          metadata: {
-            agentId,
-            totalActions: agentNodes.length,
-            errorCount,
-            warningCount,
-            logs: agentNodes,
-          },
-          nextNodes: [],
-        },
       },
       style: {
-        width: 160,
-        height: 80,
-        borderRadius: 12,
-        border: errorCount > 0 ? "3px solid #dc2626" : "3px solid #1e40af",
-        background:
-          errorCount > 0
-            ? "linear-gradient(135deg, #dc2626 0%, #ef4444 100%)"
-            : "linear-gradient(135deg, #1e40af 0%, #3b82f6 100%)",
-        boxShadow: "0 6px 20px rgba(30, 64, 175, 0.3)",
-        color: "white",
+        width: 200,
+        height: 50,
+        borderRadius: 8,
+        boxShadow: "0 4px 12px rgba(0, 0, 0, 0.2)",
       },
       draggable: true,
-    }
-    nodes.push(agentSummary)
+    })
 
-    // Create individual action nodes in a vertical flow
-    agentNodes.forEach((node, index) => {
-      const yPos = 200 + index * 120
+    agentNodes.forEach((node, idx) => {
+      const col = Math.floor(idx / maxNodesPerColumn)
+      const row = idx % maxNodesPerColumn
+      const yPos = 100 + row * rowGap
+      const xPos = xOffset + col * 220
+
+      const isError = node.metadata?.level === "error"
+      const isWarning = node.metadata?.level === "warning"
+      const isResponse = node.type === "agent_response"
 
       const nodeStyle = {
-        background:
-          node.metadata?.level === "error"
-            ? "linear-gradient(135deg, #dc2626 0%, #ef4444 100%)"
-            : node.metadata?.level === "warning"
-              ? "linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)"
-              : node.type === "agent_response"
-                ? "linear-gradient(135deg, #10b981 0%, #34d399 100%)"
-                : "linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%)",
-        border: "2px solid rgba(255,255,255,0.2)",
+        background: isError
+          ? "linear-gradient(135deg, #dc2626 0%, #ef4444 100%)"
+          : isWarning
+            ? "linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)"
+            : isResponse
+              ? "linear-gradient(135deg, #10b981 0%, #34d399 100%)"
+              : "linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%)",
+        border: "2px solid rgba(255,255,255,0.3)",
         color: "white",
       }
 
       nodes.push({
         id: node.id,
         type: "default",
-        position: { x: xOffset, y: yPos },
-        sourcePosition: Position.Right,
-        targetPosition: Position.Left,
+        position: { x: xPos, y: yPos },
         data: {
           label: (
-            <div className="p-3 rounded-lg min-w-[140px]" style={nodeStyle}>
-              <div className="font-semibold text-xs mb-1">{node.type.replace("agent_", "").toUpperCase()}</div>
+            <div className="p-3 rounded-lg min-w-[180px]" style={nodeStyle}>
+              <div className="font-semibold text-sm mb-1">
+                {node.type?.replace("agent_", "").toUpperCase() || "ACTION"}
+              </div>
               <div className="text-xs opacity-90 mb-1">{formatTimestamp(node.metadata?.timestamp)}</div>
-              <div className="text-xs">{node.name}</div>
-              {node.metadata?.level && (
-                <div className="text-xs mt-1 px-1 py-0.5 bg-black/20 rounded text-center">{node.metadata.level}</div>
+              <div className="text-xs truncate">
+                {node.metadata?.payload?.prompt?.substring(0, 40) ||
+                  node.metadata?.payload?.message?.substring(0, 40) ||
+                  node.name}
+                ...
+              </div>
+              {(isError || isWarning) && (
+                <div
+                  className={`text-xs mt-1 px-2 py-1 rounded text-center font-bold ${
+                    isError ? "bg-red-900/70" : "bg-yellow-900/70"
+                  }`}
+                >
+                  {node.metadata?.level?.toUpperCase()}
+                </div>
               )}
             </div>
           ),
           node,
         },
         style: {
-          width: 140,
-          height: 70,
+          width: 180,
+          height: 100,
           borderRadius: 8,
           ...nodeStyle,
-          boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
+          boxShadow: "0 6px 20px rgba(0, 0, 0, 0.15)",
         },
         draggable: true,
       })
     })
 
-    xOffset += colGap
+    xOffset += Math.max(400, Math.ceil(agentNodes.length / maxNodesPerColumn) * 220 + 150)
   }
 
   return nodes
@@ -664,10 +651,14 @@ function GraphCanvas({
   nodes,
   edges,
   onNodeClick,
+  onNodesChange,
+  onEdgesChange,
 }: {
   nodes: Node[]
   edges: Edge[]
   onNodeClick: (id: string) => void
+  onNodesChange: OnNodesChange
+  onEdgesChange: OnEdgesChange
 }) {
   console.log("[v0] GraphCanvas received nodes:", nodes.length, "edges:", edges.length)
 
@@ -692,13 +683,16 @@ function GraphCanvas({
         nodes={styledNodes}
         edges={edges}
         onNodeClick={(_, n) => onNodeClick(n.id)}
-        nodesDraggable={true}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        nodesDraggable={true} // Ensure dragging is enabled
         nodesConnectable={false}
         elementsSelectable={true}
-        fitView
-        fitViewOptions={{ duration: 500, padding: 0.1 }}
+        panOnDrag={[1, 2]} // Allow panning with middle/right mouse button
+        selectionOnDrag={false}
+        fitView={false} // Don't auto-fit to allow manual positioning
         proOptions={{ hideAttribution: true }}
-        defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
+        defaultViewport={{ x: 0, y: 0, zoom: 0.6 }}
         minZoom={0.2}
         maxZoom={2}
       >
@@ -1166,7 +1160,7 @@ export function DataModelLineage({
   }, [filteredData])
 
   const [nodes, setNodes, onNodesChange] = useNodesState(rfNodesBase)
-  const [edges, , onEdgesChange] = useEdgesState(
+  const [edges, setEdges, onEdgesChange] = useEdgesState(
     edgesRaw.filter((e) => rfNodesBase.find((n) => n.id === e.source) && rfNodesBase.find((n) => n.id === e.target)),
   )
 
@@ -1331,6 +1325,12 @@ export function DataModelLineage({
     }
   }, [serverData, raw, filteredData, nodes, edges])
 
+  const [selectedNodeData, setSelectedNodeData] = React.useState<LineageNode | null>(null)
+
+  React.useEffect(() => {
+    setSelectedNodeData(selected)
+  }, [selected])
+
   return (
     <ReactFlowProvider>
       <Card className="shadow-sm border-gray-200 dark:border-gray-800">
@@ -1473,6 +1473,8 @@ export function DataModelLineage({
                   const n = raw.find((x) => x.id === id)
                   if (n) setSelected(n)
                 }}
+                onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
               />
 
               <p className="text-xs text-muted-foreground">
@@ -1482,151 +1484,84 @@ export function DataModelLineage({
             </div>
 
             <div className="lg:col-span-1">
-              <Card className="h-full">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg">Node Details</CardTitle>
-                  <CardDescription>Inspect metadata and agent action details.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {selected ? (
-                    <div className="space-y-4">
-                      <div className="space-y-1">
-                        <div className="text-sm text-muted-foreground">Name</div>
-                        <div className="font-medium">{selected.name}</div>
-                      </div>
-                      <div className="space-y-1">
-                        <div className="text-sm text-muted-foreground">Type</div>
-                        <div className="capitalize">{selected.type}</div>
-                      </div>
+              <div className="w-80 bg-white border-l border-gray-200 flex flex-col">
+                <div className="p-4 border-b border-gray-200">
+                  <h3 className="text-lg font-semibold text-gray-900">Agent Analytics</h3>
+                </div>
 
-                      <Tabs defaultValue="details" className="w-full">
-                        <TabsList className="grid grid-cols-3">
-                          <TabsTrigger value="details" className="gap-2">
-                            <Info className="h-4 w-4" />
-                            Details
-                          </TabsTrigger>
-                          <TabsTrigger value="path" className="gap-2">
-                            <GitBranch className="h-4 w-4" />
-                            Path
-                          </TabsTrigger>
-                          {selected.type.startsWith("agent") && selected.metadata.agentId && (
-                            <TabsTrigger value="agent" className="gap-2">
-                              <Bot className="h-4 w-4" />
-                              Agent
-                            </TabsTrigger>
-                          )}
-                        </TabsList>
-                        <TabsContent value="details" className="mt-3">
-                          <div className="space-y-2 text-sm">
-                            {Object.entries(selected.metadata).map(([key, value]) =>
-                              value ? (
-                                <div key={key}>
-                                  <div className="text-muted-foreground">
-                                    {key.replace(/([A-Z])/g, " $1").replace(/^./, (s) => s.toUpperCase())}
-                                  </div>
-                                  <div className="font-medium break-words">
-                                    {key === "prompt" || key === "response"
-                                      ? String(value).length > 100
-                                        ? `${String(value).substring(0, 100)}...`
-                                        : String(value)
-                                      : String(value)}
-                                  </div>
-                                </div>
-                              ) : null,
-                            )}
-                          </div>
-                        </TabsContent>
-                        <TabsContent value="path" className="mt-3">
-                          <ol className="list-decimal ml-4 space-y-1 text-sm">
-                            {selected.path.map((p, i) => (
-                              <li key={`${p}-${i}`} className="break-words">
-                                {p}
-                              </li>
-                            ))}
-                          </ol>
-                        </TabsContent>
-                        {selected.type.startsWith("agent") && selected.metadata.agentId && (
-                          <TabsContent value="agent" className="mt-3">
-                            <div className="space-y-3 text-sm">
-                              <div className="flex items-center gap-2">
-                                <Bot className="h-4 w-4 text-blue-500" />
-                                <span className="font-medium">Agent ID:</span>
-                                <code className="text-xs bg-muted px-1 rounded">{selected.metadata.agentId}</code>
-                              </div>
-
-                              {selected.metadata.prompt && (
-                                <div>
-                                  <div className="text-muted-foreground mb-1">Prompt:</div>
-                                  <div className="bg-muted/50 p-2 rounded text-xs max-h-32 overflow-y-auto">
-                                    {selected.metadata.prompt}
-                                  </div>
-                                </div>
-                              )}
-
-                              {selected.metadata.response && (
-                                <div>
-                                  <div className="text-muted-foreground mb-1">Response:</div>
-                                  <div className="bg-muted/50 p-2 rounded text-xs max-h-32 overflow-y-auto">
-                                    {selected.metadata.response}
-                                  </div>
-                                </div>
-                              )}
-
-                              <div className="flex flex-wrap gap-2">
-                                {selected.metadata.tokenUsage && (
-                                  <Badge variant="outline">
-                                    {typeof selected.metadata.tokenUsage === "object"
-                                      ? `${selected.metadata.tokenUsage.total || selected.metadata.tokenUsage.prompt + selected.metadata.tokenUsage.completion || "N/A"} tokens`
-                                      : `${selected.metadata.tokenUsage} tokens`}
-                                  </Badge>
-                                )}
-                                {selected.metadata.evaluationScore && (
-                                  <Badge variant="outline">Score: {String(selected.metadata.evaluationScore)}</Badge>
-                                )}
-                                {selected.metadata.duration && (
-                                  <Badge variant="outline">{String(selected.metadata.duration)}ms</Badge>
-                                )}
-                              </div>
+                <div className="space-y-4">
+                  {selectedNodeData && (
+                    <>
+                      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg border">
+                        <h4 className="font-semibold text-gray-900 mb-3">🤖 Agent Performance</h4>
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+                          <div>
+                            <span className="text-gray-600">Agent:</span>
+                            <div className="font-medium text-gray-900">
+                              {selectedNodeData.metadata?.payload?.agent_name ||
+                                selectedNodeData.metadata?.payload?.agentName ||
+                                selectedNodeData.metadata?.agent_id ||
+                                "Unknown"}
                             </div>
-                          </TabsContent>
-                        )}
-                      </Tabs>
-
-                      <Separator />
-
-                      <div className="flex flex-wrap gap-2">
-                        <Button variant="outline" size="sm" onClick={() => setFocusMode("upstream")}>
-                          View Upstream
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => setFocusMode("downstream")}>
-                          View Downstream
-                        </Button>
-                        {(selected.type === "dataset" ||
-                          selected.type === "transformation" ||
-                          selected.type === "model") && (
-                          <Button
-                            variant="default"
-                            size="sm"
-                            onClick={() => {
-                              if (selected.type === "dataset") onOpenDatasetVersioning()
-                              else if (selected.type === "transformation") onOpenTransformationSteps()
-                              else if (selected.type === "model") onOpenModelVersionTracking()
-                            }}
-                            className="gap-2"
-                          >
-                            <BadgeCheck className="h-4 w-4" />
-                            View More Details
-                          </Button>
-                        )}
+                          </div>
+                          <div>
+                            <span className="text-gray-600">Status:</span>
+                            <div
+                              className={`font-medium ${
+                                selectedNodeData.metadata?.level === "error"
+                                  ? "text-red-600"
+                                  : selectedNodeData.metadata?.level === "warning"
+                                    ? "text-yellow-600"
+                                    : "text-green-600"
+                              }`}
+                            >
+                              {selectedNodeData.metadata?.level?.toUpperCase() || "SUCCESS"}
+                            </div>
+                          </div>
+                          <div>
+                            <span className="text-gray-600">Response Time:</span>
+                            <div className="font-medium text-gray-900">
+                              {selectedNodeData.metadata?.payload?.duration ||
+                                selectedNodeData.metadata?.payload?.response_time ||
+                                "N/A"}
+                              ms
+                            </div>
+                          </div>
+                          <div>
+                            <span className="text-gray-600">Tokens:</span>
+                            <div className="font-medium text-gray-900">
+                              {selectedNodeData.metadata?.payload?.usage?.total_tokens ||
+                                selectedNodeData.metadata?.payload?.tokens ||
+                                "N/A"}
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  ) : (
-                    <div className="text-muted-foreground text-sm">
-                      Select a node from the graph to view its details and agent actions.
-                    </div>
+
+                      {selectedNodeData.metadata?.level === "error" && (
+                        <div className="bg-red-50 border border-red-200 p-4 rounded-lg">
+                          <h4 className="font-semibold text-red-900 mb-2">🚨 Error Analysis</h4>
+                          <div className="text-sm text-red-800">
+                            <div className="mb-2">
+                              <span className="font-medium">Error Type:</span>{" "}
+                              {selectedNodeData.metadata?.payload?.error_type || "Unknown"}
+                            </div>
+                            <div className="mb-2">
+                              <span className="font-medium">Message:</span>{" "}
+                              {selectedNodeData.metadata?.payload?.error_message ||
+                                selectedNodeData.metadata?.payload?.message ||
+                                "No details"}
+                            </div>
+                            <div>
+                              <span className="font-medium">Impact:</span> High - Agent execution failed
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </>
                   )}
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             </div>
           </div>
         </CardContent>

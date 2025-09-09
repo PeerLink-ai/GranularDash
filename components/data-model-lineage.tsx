@@ -43,6 +43,7 @@ import {
   Activity,
   User,
   Building,
+  AlertTriangle,
   Copy,
 } from "lucide-react"
 
@@ -326,10 +327,8 @@ function layoutNodes(data: LineageNode[], opts: { colGap?: number; rowGap?: numb
             : isResponse
               ? "linear-gradient(135deg, #10b981 0%, #34d399 100%)"
               : "linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%)",
-        border: "2px solid rgba(255,255,255,0.4)",
-        borderRadius: "12px",
+        border: "2px solid rgba(255,255,255,0.3)",
         color: "white",
-        boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
       }
 
       nodes.push({
@@ -338,25 +337,36 @@ function layoutNodes(data: LineageNode[], opts: { colGap?: number; rowGap?: numb
         position: { x: xPos, y: yPos },
         data: {
           label: (
-            <div className="p-4 rounded-xl min-w-[200px]" style={nodeStyle}>
-              <div className="font-semibold text-sm mb-2 flex items-center justify-between">
-                <span>{node.type?.replace("agent_", "").toUpperCase() || "ACTION"}</span>
-                {node.metadata?.confidenceScore && (
-                  <span className="text-xs bg-white/20 px-2 py-1 rounded-full">
-                    {Math.round(node.metadata.confidenceScore * 100)}%
-                  </span>
-                )}
+            <div className="p-3 rounded-lg min-w-[180px]" style={nodeStyle}>
+              <div className="font-semibold text-sm mb-1">
+                {node.type?.replace("agent_", "").toUpperCase() || "ACTION"}
               </div>
-              <div className="text-xs opacity-90 mb-2">{formatTimestamp(node.metadata?.timestamp)}</div>
-              <div className="text-xs">
-                {node.metadata?.payload?.prompt?.substring(0, 50) ||
-                  node.metadata?.payload?.message?.substring(0, 50) ||
+              <div className="text-xs opacity-90 mb-1">{formatTimestamp(node.metadata?.timestamp)}</div>
+              <div className="text-xs truncate">
+                {node.metadata?.payload?.prompt?.substring(0, 40) ||
+                  node.metadata?.payload?.message?.substring(0, 40) ||
                   node.name}
-                {(node.metadata?.payload?.prompt?.length > 50 || node.metadata?.payload?.message?.length > 50) && "..."}
+                ...
               </div>
-              {node.metadata?.duration && <div className="text-xs opacity-75 mt-1">{node.metadata.duration}ms</div>}
+              {(isError || isWarning) && (
+                <div
+                  className={`text-xs mt-1 px-2 py-1 rounded text-center font-bold ${
+                    isError ? "bg-red-900/70" : "bg-yellow-900/70"
+                  }`}
+                >
+                  {node.metadata?.level?.toUpperCase()}
+                </div>
+              )}
             </div>
           ),
+          node,
+        },
+        style: {
+          width: 180,
+          height: 100,
+          borderRadius: 8,
+          ...nodeStyle,
+          boxShadow: "0 6px 20px rgba(0, 0, 0, 0.15)",
         },
         draggable: true,
       })
@@ -379,23 +389,20 @@ function buildEdges(data: LineageNode[]): Edge[] {
     for (const nextId of node.nextNodes ?? []) {
       if (!nodeIds.has(nextId)) continue
 
-      const isError = node.metadata?.level === "error"
-      const isWarning = node.metadata?.level === "warning"
-
       edges.push({
         id: `edge-${node.id}-${nextId}`,
         source: node.id,
         target: nextId,
         type: "smoothstep",
-        animated: isError || isWarning,
+        animated: true,
         style: {
-          stroke: isError ? "#dc2626" : isWarning ? "#f59e0b" : "#3b82f6",
+          stroke: "#3b82f6",
           strokeWidth: 3,
-          strokeDasharray: isError ? "8,4" : isWarning ? "6,3" : "none",
+          strokeDasharray: "8,4",
         },
         markerEnd: {
           type: "arrowclosed",
-          color: isError ? "#dc2626" : isWarning ? "#f59e0b" : "#3b82f6",
+          color: "#3b82f6",
           width: 20,
           height: 20,
         },
@@ -761,14 +768,6 @@ function NodeDetailsPanel({ node }: { node: LineageNode | null }) {
   const isError = node.metadata?.level === "error"
   const isWarning = node.metadata?.level === "warning"
 
-  const confidence =
-    node.metadata?.confidenceScore || rawLog?.payload?.confidence || rawLog?.payload?.response?.confidence
-  const responseData = rawLog?.payload?.response || rawLog?.payload?.result
-  const promptData = rawLog?.payload?.prompt || rawLog?.payload?.input
-  const modelUsed = rawLog?.payload?.model || rawLog?.payload?.response?.model
-  const tokenUsage = rawLog?.payload?.usage || rawLog?.payload?.response?.usage || node.metadata?.tokenUsage
-  const responseTime = rawLog?.payload?.responseTime || rawLog?.payload?.duration || node.metadata?.duration
-
   const exportNodeData = () => {
     const exportData = {
       nodeId: node.id,
@@ -776,9 +775,6 @@ function NodeDetailsPanel({ node }: { node: LineageNode | null }) {
       nodeType: node.type,
       timestamp: node.metadata?.timestamp,
       agentId: node.metadata?.agentId,
-      confidence: confidence,
-      responseData: responseData,
-      promptData: promptData,
       payload: rawLog?.payload,
       metadata: node.metadata,
       exportedAt: new Date().toISOString(),
@@ -807,11 +803,6 @@ function NodeDetailsPanel({ node }: { node: LineageNode | null }) {
             {(isError || isWarning) && (
               <Badge variant={isError ? "destructive" : "secondary"}>{node.metadata?.level}</Badge>
             )}
-            {confidence && (
-              <Badge variant={confidence > 0.8 ? "default" : confidence > 0.6 ? "secondary" : "destructive"}>
-                {Math.round(confidence * 100)}% confidence
-              </Badge>
-            )}
           </CardTitle>
           <div className="flex gap-2">
             <Button size="sm" variant="outline" onClick={exportNodeData}>
@@ -824,6 +815,45 @@ function NodeDetailsPanel({ node }: { node: LineageNode | null }) {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {isAgent && node.metadata?.logs && (
+          <div className="space-y-3">
+            <div className="text-sm font-medium">Agent Performance Summary</div>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="p-3 bg-muted rounded-lg">
+                <div className="font-medium">Total Actions</div>
+                <div className="text-2xl font-bold text-blue-600">{node.metadata.totalActions}</div>
+              </div>
+              <div className="p-3 bg-muted rounded-lg">
+                <div className="font-medium">Error Rate</div>
+                <div className="text-2xl font-bold text-red-600">
+                  {node.metadata.errorCount || 0}/{node.metadata.totalActions}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="text-sm font-medium">Recent Activity</div>
+              <div className="max-h-40 overflow-y-auto space-y-1">
+                {(node.metadata.logs as LineageNode[]).slice(-5).map((log, i) => (
+                  <div key={i} className="flex items-center gap-2 text-xs p-2 bg-muted rounded">
+                    <div
+                      className={`w-2 h-2 rounded-full ${
+                        log.metadata?.level === "error"
+                          ? "bg-red-500"
+                          : log.metadata?.level === "warning"
+                            ? "bg-yellow-500"
+                            : "bg-green-500"
+                      }`}
+                    />
+                    <div className="flex-1">{log.name}</div>
+                    <div className="text-muted-foreground">{formatTimestamp(log.metadata?.timestamp)}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {!isAgent && (
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
@@ -840,95 +870,113 @@ function NodeDetailsPanel({ node }: { node: LineageNode | null }) {
                 <div className="text-muted-foreground">{formatTimestamp(node.metadata.timestamp)}</div>
               </div>
             )}
-            {responseTime && (
+            {node.metadata?.duration && (
               <div>
-                <span className="font-medium">Response Time:</span>
+                <span className="font-medium">Duration:</span>
                 <div
-                  className={`font-mono ${responseTime > 5000 ? "text-red-600" : responseTime > 2000 ? "text-yellow-600" : "text-green-600"}`}
+                  className={`font-mono ${node.metadata.duration > 5000 ? "text-red-600" : "text-muted-foreground"}`}
                 >
-                  {responseTime}ms
+                  {node.metadata.duration}ms
                 </div>
               </div>
             )}
-            {tokenUsage && (
+            {node.metadata?.tokenUsage && (
               <div>
-                <span className="font-medium">Token Usage:</span>
+                <span className="font-medium">Tokens:</span>
                 <div className="text-muted-foreground font-mono">
-                  {typeof tokenUsage === "object"
-                    ? `${tokenUsage.prompt_tokens || 0}+${tokenUsage.completion_tokens || 0}=${tokenUsage.total_tokens || tokenUsage.total || "N/A"}`
-                    : tokenUsage}
+                  {typeof node.metadata.tokenUsage === "object"
+                    ? node.metadata.tokenUsage.total || "N/A"
+                    : node.metadata.tokenUsage}
                 </div>
               </div>
             )}
-            {modelUsed && (
+            {node.metadata?.model && (
               <div>
                 <span className="font-medium">Model:</span>
-                <div className="text-muted-foreground">{modelUsed}</div>
+                <div className="text-muted-foreground">{node.metadata.model}</div>
               </div>
             )}
           </div>
         )}
 
-        {confidence && (
+        {(isError || isWarning) && (
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <div className="text-sm font-medium">Confidence Analysis</div>
+              <AlertTriangle className="h-4 w-4 text-red-500" />
+              <span className="font-medium text-sm">Issue Analysis</span>
             </div>
-            <div className="p-3 bg-muted rounded-lg">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm">Confidence Score</span>
-                <span
-                  className={`font-bold ${confidence > 0.8 ? "text-green-600" : confidence > 0.6 ? "text-yellow-600" : "text-red-600"}`}
-                >
-                  {Math.round(confidence * 100)}%
-                </span>
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm">
+              <div className="font-medium text-red-800 mb-1">{isError ? "Error Detected" : "Warning Detected"}</div>
+              <div className="text-red-700">
+                {rawLog?.payload?.error || rawLog?.payload?.message || "No specific error message available"}
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div
-                  className={`h-2 rounded-full ${confidence > 0.8 ? "bg-green-500" : confidence > 0.6 ? "bg-yellow-500" : "bg-red-500"}`}
-                  style={{ width: `${confidence * 100}%` }}
-                />
-              </div>
-              <div className="text-xs text-muted-foreground mt-1">
-                {confidence > 0.8
-                  ? "High confidence response"
-                  : confidence > 0.6
-                    ? "Moderate confidence"
-                    : "Low confidence - review recommended"}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {promptData && (
-          <div className="space-y-2">
-            <div className="text-sm font-medium">Input/Prompt</div>
-            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm">
-              <pre className="whitespace-pre-wrap text-xs overflow-x-auto">
-                {typeof promptData === "string" ? promptData : JSON.stringify(promptData, null, 2)}
-              </pre>
-            </div>
-          </div>
-        )}
-
-        {responseData && (
-          <div className="space-y-2">
-            <div className="text-sm font-medium">Response/Output</div>
-            <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-sm">
-              <pre className="whitespace-pre-wrap text-xs overflow-x-auto max-h-40">
-                {typeof responseData === "string" ? responseData : JSON.stringify(responseData, null, 2)}
-              </pre>
+              {rawLog?.payload?.stack && (
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-red-600 hover:text-red-800">Stack Trace</summary>
+                  <pre className="mt-1 text-xs bg-red-100 p-2 rounded overflow-x-auto">{rawLog.payload.stack}</pre>
+                </details>
+              )}
             </div>
           </div>
         )}
 
         {hasDetailedPayload && (
           <div className="space-y-2">
-            <div className="text-sm font-medium">Full Payload Data</div>
-            <div className="max-h-60 overflow-y-auto">
-              <pre className="text-xs bg-muted p-3 rounded-lg overflow-x-auto">
-                {JSON.stringify(rawLog.payload, null, 2)}
-              </pre>
+            <div className="flex items-center justify-between">
+              <span className="font-medium text-sm">Payload Explorer</span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => copyToClipboard(JSON.stringify(rawLog.payload, null, 2))}
+              >
+                Copy JSON
+              </Button>
+            </div>
+            <div className="bg-muted p-3 rounded-md max-h-60 overflow-y-auto">
+              <pre className="text-xs whitespace-pre-wrap font-mono">{JSON.stringify(rawLog.payload, null, 2)}</pre>
+            </div>
+          </div>
+        )}
+
+        {node.metadata?.prompt && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="font-medium text-sm">Input Prompt</span>
+              <Button size="sm" variant="outline" onClick={() => copyToClipboard(node.metadata?.prompt || "")}>
+                Copy
+              </Button>
+            </div>
+            <div className="bg-blue-50 border border-blue-200 p-3 rounded-md text-sm max-h-32 overflow-y-auto">
+              {node.metadata.prompt}
+            </div>
+          </div>
+        )}
+
+        {node.metadata?.response && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="font-medium text-sm">Response Output</span>
+              <Button size="sm" variant="outline" onClick={() => copyToClipboard(node.metadata?.response || "")}>
+                Copy
+              </Button>
+            </div>
+            <div className="bg-green-50 border border-green-200 p-3 rounded-md text-sm max-h-32 overflow-y-auto">
+              {node.metadata.response}
+            </div>
+          </div>
+        )}
+
+        {node.metadata?.evaluationScore && (
+          <div className="space-y-2">
+            <span className="font-medium text-sm">Performance Score</span>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 bg-gray-200 rounded-full h-2">
+                <div
+                  className="bg-blue-600 h-2 rounded-full"
+                  style={{ width: `${(node.metadata.evaluationScore / 10) * 100}%` }}
+                />
+              </div>
+              <span className="text-sm font-mono">{node.metadata.evaluationScore}/10</span>
             </div>
           </div>
         )}

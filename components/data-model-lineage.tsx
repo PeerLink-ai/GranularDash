@@ -1277,7 +1277,18 @@ export function DataModelLineage({
           // Group logs by agent
           const agentGroups = new Map<string, any[]>()
           data.data.forEach((log: any) => {
-            const agentId = log.agentId || log.agent_id || "unknown-agent"
+            const payload = log.payload || {}
+            const agentId =
+              payload.agent_name ||
+              payload.agentName ||
+              payload.agent_id ||
+              payload.agent ||
+              log.agent_id ||
+              log.agentId ||
+              payload.model?.split("/").pop() ||
+              payload.provider ||
+              "unknown-agent"
+
             if (!agentGroups.has(agentId)) {
               agentGroups.set(agentId, [])
             }
@@ -1317,6 +1328,7 @@ export function DataModelLineage({
                   level: level,
                   timestamp: log.timestamp,
                   payload: log.payload,
+                  fullLogData: log,
                   duration: log.payload?.duration_ms,
                   tokenUsage: log.payload?.tokens || log.payload?.token_usage,
                   model: log.payload?.model,
@@ -1553,7 +1565,7 @@ export function DataModelLineage({
                             <div className="font-medium text-gray-900">
                               {selectedNodeData.metadata?.payload?.agent_name ||
                                 selectedNodeData.metadata?.payload?.agentName ||
-                                selectedNodeData.metadata?.agent_id ||
+                                selectedNodeData.metadata?.agentId ||
                                 "Unknown Agent"}
                             </div>
                           </div>
@@ -1577,6 +1589,20 @@ export function DataModelLineage({
                               {selectedNodeData.metadata?.level?.toUpperCase() || "SUCCESS"}
                             </div>
                           </div>
+
+                          <div className="mt-4 pt-4 border-t">
+                            <span className="text-gray-600 font-medium">Complete SDK Log Data:</span>
+                            <div className="mt-2 bg-gray-50 rounded p-3 max-h-96 overflow-y-auto">
+                              <pre className="text-xs font-mono whitespace-pre-wrap">
+                                {JSON.stringify(
+                                  selectedNodeData.metadata?.fullLogData || selectedNodeData.metadata?.payload,
+                                  null,
+                                  2,
+                                )}
+                              </pre>
+                            </div>
+                          </div>
+
                           {selectedNodeData.metadata?.payload?.confidence && (
                             <div>
                               <span className="text-gray-600">Confidence:</span>

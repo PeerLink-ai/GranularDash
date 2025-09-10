@@ -337,12 +337,12 @@ function layoutNodes(data: LineageNode[], opts: { colGap?: number; rowGap?: numb
         position: { x: xPos, y: yPos },
         data: {
           label: (
-            <div className="p-3 rounded-lg min-w-[180px]" style={nodeStyle}>
-              <div className="font-semibold text-sm mb-1">
+            <div className="p-3 min-w-[180px]">
+              <div className="font-semibold text-sm mb-1 text-white">
                 {node.type?.replace("agent_", "").toUpperCase() || "ACTION"}
               </div>
-              <div className="text-xs opacity-90 mb-1">{formatTimestamp(node.metadata?.timestamp)}</div>
-              <div className="text-xs truncate">
+              <div className="text-xs opacity-90 mb-1 text-white">{formatTimestamp(node.metadata?.timestamp)}</div>
+              <div className="text-xs truncate text-white">
                 {node.metadata?.payload?.prompt?.substring(0, 40) ||
                   node.metadata?.payload?.message?.substring(0, 40) ||
                   node.name}
@@ -362,11 +362,18 @@ function layoutNodes(data: LineageNode[], opts: { colGap?: number; rowGap?: numb
           node,
         },
         style: {
+          background: isError
+            ? "linear-gradient(135deg, #dc2626 0%, #ef4444 100%)"
+            : isWarning
+              ? "linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)"
+              : isResponse
+                ? "linear-gradient(135deg, #10b981 0%, #34d399 100%)"
+                : "linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%)",
+          border: "1px solid rgba(255,255,255,0.2)",
+          borderRadius: "8px",
           width: 180,
           height: 100,
-          borderRadius: 8,
-          ...nodeStyle,
-          boxShadow: "0 6px 20px rgba(0, 0, 0, 0.15)",
+          boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
         },
         draggable: true,
       })
@@ -384,7 +391,48 @@ function buildEdges(data: LineageNode[]): Edge[] {
   const edges: Edge[] = []
   const nodeIds = new Set(data.map((n) => n.id))
 
-  // Create edges from nextNodes relationships
+  // Group nodes by agent for sequential connections
+  const agentGroups = new Map<string, LineageNode[]>()
+
+  for (const node of data) {
+    const agentId = node.metadata?.agent_id || node.metadata?.agentId || "unknown"
+    if (!agentGroups.has(agentId)) {
+      agentGroups.set(agentId, [])
+    }
+    agentGroups.get(agentId)!.push(node)
+  }
+
+  // Create sequential connections within each agent group
+  for (const [agentId, nodes] of agentGroups) {
+    const sortedNodes = nodes.sort((a, b) => {
+      const timeA = a.metadata?.timestamp || 0
+      const timeB = b.metadata?.timestamp || 0
+      return timeA - timeB
+    })
+
+    for (let i = 0; i < sortedNodes.length - 1; i++) {
+      const sourceNode = sortedNodes[i]
+      const targetNode = sortedNodes[i + 1]
+
+      edges.push({
+        id: `edge-${sourceNode.id}-${targetNode.id}`,
+        source: sourceNode.id,
+        target: targetNode.id,
+        type: "smoothstep",
+        animated: true,
+        style: {
+          stroke: sourceNode.metadata?.level === "error" ? "#dc2626" : "#3b82f6",
+          strokeWidth: 2,
+        },
+        markerEnd: {
+          type: "arrowclosed",
+          color: sourceNode.metadata?.level === "error" ? "#dc2626" : "#3b82f6",
+        },
+      })
+    }
+  }
+
+  // Create edges from nextNodes relationships (existing logic)
   for (const node of data) {
     for (const nextId of node.nextNodes ?? []) {
       if (!nodeIds.has(nextId)) continue
@@ -396,15 +444,13 @@ function buildEdges(data: LineageNode[]): Edge[] {
         type: "smoothstep",
         animated: true,
         style: {
-          stroke: "#3b82f6",
-          strokeWidth: 3,
-          strokeDasharray: "8,4",
+          stroke: "#10b981",
+          strokeWidth: 2,
+          strokeDasharray: "5,5",
         },
         markerEnd: {
           type: "arrowclosed",
-          color: "#3b82f6",
-          width: 20,
-          height: 20,
+          color: "#10b981",
         },
       })
     }
@@ -1493,15 +1539,21 @@ export function DataModelLineage({
                   {selectedNodeData && (
                     <>
                       <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg border">
-                        <h4 className="font-semibold text-gray-900 mb-3">🤖 Agent Performance</h4>
-                        <div className="grid grid-cols-2 gap-3 text-sm">
+                        <h4 className="font-semibold text-gray-900 mb-3">🤖 Agent Details</h4>
+                        <div className="space-y-3 text-sm">
                           <div>
-                            <span className="text-gray-600">Agent:</span>
+                            <span className="text-gray-600">Agent Name:</span>
                             <div className="font-medium text-gray-900">
                               {selectedNodeData.metadata?.payload?.agent_name ||
                                 selectedNodeData.metadata?.payload?.agentName ||
                                 selectedNodeData.metadata?.agent_id ||
-                                "Unknown"}
+                                "Unknown Agent"}
+                            </div>
+                          </div>
+                          <div>
+                            <span className="text-gray-600">Action Type:</span>
+                            <div className="font-medium text-gray-900">
+                              {selectedNodeData.type?.replace("agent_", "").toUpperCase() || "ACTION"}
                             </div>
                           </div>
                           <div>
@@ -1518,46 +1570,62 @@ export function DataModelLineage({
                               {selectedNodeData.metadata?.level?.toUpperCase() || "SUCCESS"}
                             </div>
                           </div>
-                          <div>
-                            <span className="text-gray-600">Response Time:</span>
-                            <div className="font-medium text-gray-900">
-                              {selectedNodeData.metadata?.payload?.duration ||
-                                selectedNodeData.metadata?.payload?.response_time ||
-                                "N/A"}
-                              ms
+                          {selectedNodeData.metadata?.payload?.confidence && (
+                            <div>
+                              <span className="text-gray-600">Confidence:</span>
+                              <div className="font-medium text-gray-900">
+                                {(selectedNodeData.metadata.payload.confidence * 100).toFixed(1)}%
+                              </div>
                             </div>
-                          </div>
-                          <div>
-                            <span className="text-gray-600">Tokens:</span>
-                            <div className="font-medium text-gray-900">
-                              {selectedNodeData.metadata?.payload?.usage?.total_tokens ||
-                                selectedNodeData.metadata?.payload?.tokens ||
-                                "N/A"}
+                          )}
+                          {selectedNodeData.metadata?.payload?.response_time && (
+                            <div>
+                              <span className="text-gray-600">Response Time:</span>
+                              <div className="font-medium text-gray-900">
+                                {selectedNodeData.metadata.payload.response_time}ms
+                              </div>
                             </div>
-                          </div>
+                          )}
+                          {selectedNodeData.metadata?.payload?.tokens_used && (
+                            <div>
+                              <span className="text-gray-600">Tokens Used:</span>
+                              <div className="font-medium text-gray-900">
+                                {selectedNodeData.metadata.payload.tokens_used}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
 
-                      {selectedNodeData.metadata?.level === "error" && (
-                        <div className="bg-red-50 border border-red-200 p-4 rounded-lg">
-                          <h4 className="font-semibold text-red-900 mb-2">🚨 Error Analysis</h4>
-                          <div className="text-sm text-red-800">
-                            <div className="mb-2">
-                              <span className="font-medium">Error Type:</span>{" "}
-                              {selectedNodeData.metadata?.payload?.error_type || "Unknown"}
-                            </div>
-                            <div className="mb-2">
-                              <span className="font-medium">Message:</span>{" "}
-                              {selectedNodeData.metadata?.payload?.error_message ||
-                                selectedNodeData.metadata?.payload?.message ||
-                                "No details"}
-                            </div>
+                      <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-4 rounded-lg border">
+                        <h4 className="font-semibold text-gray-900 mb-3">📋 Action Details</h4>
+                        <div className="space-y-3 text-sm">
+                          {selectedNodeData.metadata?.payload?.prompt && (
                             <div>
-                              <span className="font-medium">Impact:</span> High - Agent execution failed
+                              <span className="text-gray-600">Prompt:</span>
+                              <div className="font-mono text-xs bg-gray-100 p-2 rounded mt-1 max-h-20 overflow-y-auto">
+                                {selectedNodeData.metadata.payload.prompt}
+                              </div>
                             </div>
-                          </div>
+                          )}
+                          {selectedNodeData.metadata?.payload?.response && (
+                            <div>
+                              <span className="text-gray-600">Response:</span>
+                              <div className="font-mono text-xs bg-gray-100 p-2 rounded mt-1 max-h-20 overflow-y-auto">
+                                {selectedNodeData.metadata.payload.response}
+                              </div>
+                            </div>
+                          )}
+                          {selectedNodeData.metadata?.payload?.error && (
+                            <div>
+                              <span className="text-red-600">Error:</span>
+                              <div className="font-mono text-xs bg-red-50 p-2 rounded mt-1 text-red-800">
+                                {selectedNodeData.metadata.payload.error}
+                              </div>
+                            </div>
+                          )}
                         </div>
-                      )}
+                      </div>
                     </>
                   )}
                 </div>

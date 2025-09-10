@@ -337,21 +337,26 @@ function layoutNodes(data: LineageNode[], opts: { colGap?: number; rowGap?: numb
         position: { x: xPos, y: yPos },
         data: {
           label: (
-            <div className="p-3 min-w-[180px]">
-              <div className="font-semibold text-sm mb-1 text-white">
-                {node.type?.replace("agent_", "").toUpperCase() || "ACTION"}
+            <div className="p-3 min-w-[200px] max-w-[200px]">
+              <div className="font-semibold text-sm mb-1 flex items-center justify-between">
+                <span>{node.type?.replace("agent_", "").toUpperCase() || "ACTION"}</span>
+                {node.metadata?.payload?.confidence_score && (
+                  <span className="text-xs bg-white/20 px-1 rounded">
+                    {Math.round(node.metadata.payload.confidence_score * 100)}%
+                  </span>
+                )}
               </div>
-              <div className="text-xs opacity-90 mb-1 text-white">{formatTimestamp(node.metadata?.timestamp)}</div>
-              <div className="text-xs truncate text-white">
-                {node.metadata?.payload?.prompt?.substring(0, 40) ||
-                  node.metadata?.payload?.message?.substring(0, 40) ||
+              <div className="text-xs opacity-90 mb-2">{formatTimestamp(node.metadata?.timestamp)}</div>
+              <div className="text-xs mb-2 line-clamp-2">
+                {node.metadata?.payload?.prompt?.substring(0, 60) ||
+                  node.metadata?.payload?.message?.substring(0, 60) ||
                   node.name}
-                ...
+                {(node.metadata?.payload?.prompt?.length > 60 || node.metadata?.payload?.message?.length > 60) && "..."}
               </div>
               {(isError || isWarning) && (
                 <div
-                  className={`text-xs mt-1 px-2 py-1 rounded text-center font-bold ${
-                    isError ? "bg-red-900/70" : "bg-yellow-900/70"
+                  className={`text-xs px-2 py-1 rounded text-center font-bold w-full ${
+                    isError ? "bg-red-900/80 text-red-100" : "bg-yellow-900/80 text-yellow-100"
                   }`}
                 >
                   {node.metadata?.level?.toUpperCase()}
@@ -369,11 +374,13 @@ function layoutNodes(data: LineageNode[], opts: { colGap?: number; rowGap?: numb
               : isResponse
                 ? "linear-gradient(135deg, #10b981 0%, #34d399 100%)"
                 : "linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%)",
-          border: "1px solid rgba(255,255,255,0.2)",
-          borderRadius: "8px",
-          width: 180,
-          height: 100,
-          boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
+          border: "2px solid rgba(255,255,255,0.4)",
+          borderRadius: "12px",
+          width: 200,
+          height: "auto",
+          minHeight: 120,
+          boxShadow: "0 8px 25px rgba(0, 0, 0, 0.2)",
+          color: "white",
         },
         draggable: true,
       })

@@ -771,7 +771,7 @@ function GraphCanvas({
         <Background variant="dots" gap={20} size={1.5} color="#cbd5e1" style={{ opacity: 0.4 }} />
         <Controls
           position="bottom-right"
-          className="!bg-white/90 !border-2 !border-gray-200 !rounded-xl !shadow-xl !backdrop-blur-sm"
+          className="!bg-white/90 !rounded-xl !shadow-xl !backdrop-blur-sm"
           showFitView={true}
           showZoom={true}
           showInteractive={true}
@@ -1565,7 +1565,11 @@ export function DataModelLineage({
                             <div className="font-medium text-gray-900">
                               {selectedNodeData.metadata?.payload?.agent_name ||
                                 selectedNodeData.metadata?.payload?.agentName ||
+                                selectedNodeData.metadata?.payload?.name ||
                                 selectedNodeData.metadata?.agentId ||
+                                selectedNodeData.metadata?.agent_id ||
+                                selectedNodeData.metadata?.name ||
+                                selectedNodeData.name ||
                                 "Unknown Agent"}
                             </div>
                           </div>

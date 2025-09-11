@@ -45,10 +45,6 @@ import {
   Building,
   AlertTriangle,
   Copy,
-  Code,
-  MessageCircle,
-  MessageSquare,
-  BarChart3,
 } from "lucide-react"
 
 import "reactflow/dist/style.css"
@@ -167,8 +163,6 @@ export interface LineageNode {
     rawLog?: any
   }
   nextNodes?: string[]
-  agent_id?: string
-  level?: string
 }
 
 const TYPE_THEME: Record<
@@ -325,40 +319,6 @@ function layoutNodes(data: LineageNode[], opts: { colGap?: number; rowGap?: numb
       const isWarning = node.metadata?.level === "warning"
       const isResponse = node.type === "agent_response"
 
-      const extractAgentName = (log: any): string => {
-        const payload = log.metadata?.payload || {}
-
-        // First try to get the actual agent name from various payload locations
-        const agentName =
-          payload.agent_name ||
-          payload.agentName ||
-          payload.name ||
-          payload.model_name ||
-          payload.agent?.name ||
-          log.metadata?.agent_name ||
-          log.metadata?.name
-
-        if (agentName && agentName !== log.agent_id) {
-          return agentName
-        }
-
-        // If we have an agent_id, try to create a readable name from it
-        if (log.agent_id) {
-          // Convert agent_1756879815720_r310hems8 to "Agent 1756879815720"
-          const match = log.agent_id.match(/agent_(\d+)/)
-          if (match) {
-            return `Agent ${match[1]}`
-          }
-
-          // If it's already a readable name, use it
-          if (!log.agent_id.includes("_") || log.agent_id.length < 20) {
-            return log.agent_id
-          }
-        }
-
-        return "Unknown Agent"
-      }
-
       const nodeStyle = {
         background: isError
           ? "linear-gradient(135deg, #dc2626 0%, #ef4444 100%)"
@@ -367,12 +327,8 @@ function layoutNodes(data: LineageNode[], opts: { colGap?: number; rowGap?: numb
             : isResponse
               ? "linear-gradient(135deg, #10b981 0%, #34d399 100%)"
               : "linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%)",
-        border: "none", // Remove border to prevent double styling
-        borderRadius: "12px",
+        border: "2px solid rgba(255,255,255,0.3)",
         color: "white",
-        boxShadow: "0 8px 25px rgba(0, 0, 0, 0.15)",
-        width: 220,
-        minHeight: 140,
       }
 
       nodes.push({
@@ -381,32 +337,25 @@ function layoutNodes(data: LineageNode[], opts: { colGap?: number; rowGap?: numb
         position: { x: xPos, y: yPos },
         data: {
           label: (
-            <div className="p-4 w-full h-full">
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-bold text-sm bg-white/20 px-2 py-1 rounded">{extractAgentName(node)}</span>
+            <div className="p-3 min-w-[200px] max-w-[200px]">
+              <div className="font-semibold text-sm mb-1 flex items-center justify-between">
+                <span>{node.type?.replace("agent_", "").toUpperCase() || "ACTION"}</span>
                 {node.metadata?.payload?.confidence_score && (
-                  <span className="text-xs bg-white/30 px-2 py-1 rounded font-semibold">
+                  <span className="text-xs bg-white/20 px-1 rounded">
                     {Math.round(node.metadata.payload.confidence_score * 100)}%
                   </span>
                 )}
               </div>
-
-              <div className="text-xs opacity-90 mb-2 font-medium">
-                {node.type?.replace("agent_", "").toUpperCase() || "ACTION"}
-              </div>
-
-              <div className="text-xs opacity-80 mb-2">{formatTimestamp(node.metadata?.timestamp)}</div>
-
-              <div className="text-xs mb-3 line-clamp-2 leading-relaxed">
-                {node.metadata?.payload?.prompt?.substring(0, 80) ||
-                  node.metadata?.payload?.message?.substring(0, 80) ||
+              <div className="text-xs opacity-90 mb-2">{formatTimestamp(node.metadata?.timestamp)}</div>
+              <div className="text-xs mb-2 line-clamp-2">
+                {node.metadata?.payload?.prompt?.substring(0, 60) ||
+                  node.metadata?.payload?.message?.substring(0, 60) ||
                   node.name}
-                {(node.metadata?.payload?.prompt?.length > 80 || node.metadata?.payload?.message?.length > 80) && "..."}
+                {(node.metadata?.payload?.prompt?.length > 60 || node.metadata?.payload?.message?.length > 60) && "..."}
               </div>
-
               {(isError || isWarning) && (
                 <div
-                  className={`text-xs px-2 py-1 rounded text-center font-bold ${
+                  className={`text-xs px-2 py-1 rounded text-center font-bold w-full ${
                     isError ? "bg-red-900/80 text-red-100" : "bg-yellow-900/80 text-yellow-100"
                   }`}
                 >
@@ -417,7 +366,22 @@ function layoutNodes(data: LineageNode[], opts: { colGap?: number; rowGap?: numb
           ),
           node,
         },
-        style: nodeStyle,
+        style: {
+          background: isError
+            ? "linear-gradient(135deg, #dc2626 0%, #ef4444 100%)"
+            : isWarning
+              ? "linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)"
+              : isResponse
+                ? "linear-gradient(135deg, #10b981 0%, #34d399 100%)"
+                : "linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%)",
+          border: "2px solid rgba(255,255,255,0.4)",
+          borderRadius: "12px",
+          width: 200,
+          height: "auto",
+          minHeight: 120,
+          boxShadow: "0 8px 25px rgba(0, 0, 0, 0.2)",
+          color: "white",
+        },
         draggable: true,
       })
     })
@@ -1374,8 +1338,6 @@ export function DataModelLineage({
                   rawLog: log,
                 },
                 nextNodes: [],
-                agent_id: agentId,
-                level: level,
               })
 
               // Create sequential edges between logs of the same agent
@@ -1433,40 +1395,6 @@ export function DataModelLineage({
   React.useEffect(() => {
     setSelectedNodeData(selected)
   }, [selected])
-
-  const extractAgentName = (log: any): string => {
-    const payload = log.metadata?.payload || {}
-
-    // First try to get the actual agent name from various payload locations
-    const agentName =
-      payload.agent_name ||
-      payload.agentName ||
-      payload.name ||
-      payload.model_name ||
-      payload.agent?.name ||
-      log.metadata?.agent_name ||
-      log.metadata?.name
-
-    if (agentName && agentName !== log.agent_id) {
-      return agentName
-    }
-
-    // If we have an agent_id, try to create a readable name from it
-    if (log.agent_id) {
-      // Convert agent_1756879815720_r310hems8 to "Agent 1756879815720"
-      const match = log.agent_id.match(/agent_(\d+)/)
-      if (match) {
-        return `Agent ${match[1]}`
-      }
-
-      // If it's already a readable name, use it
-      if (!log.agent_id.includes("_") || log.agent_id.length < 20) {
-        return log.agent_id
-      }
-    }
-
-    return "Unknown Agent"
-  }
 
   return (
     <ReactFlowProvider>
@@ -1621,134 +1549,120 @@ export function DataModelLineage({
             </div>
 
             <div className="lg:col-span-1">
-              {selectedNodeData && (
-                <div className="w-80 bg-white border-l border-gray-200 p-6 overflow-y-auto">
-                  <div className="space-y-6">
-                    {/* Agent Information */}
-                    <div className="bg-blue-50 rounded-lg p-4">
-                      <h3 className="font-semibold text-blue-900 mb-3 flex items-center">
-                        <User className="w-4 h-4 mr-2" />
-                        Agent Information
-                      </h3>
-                      <div className="space-y-2 text-sm">
-                        <div>
-                          <span className="font-medium text-blue-800">Name:</span>
-                          <span className="ml-2 text-blue-700">{extractAgentName(selectedNodeData)}</span>
-                        </div>
-                        <div>
-                          <span className="font-medium text-blue-800">ID:</span>
-                          <span className="ml-2 text-blue-700 font-mono text-xs">{selectedNodeData.agent_id}</span>
-                        </div>
-                        <div>
-                          <span className="font-medium text-blue-800">Type:</span>
-                          <span className="ml-2 text-blue-700">{selectedNodeData.type}</span>
-                        </div>
-                        <div>
-                          <span className="font-medium text-blue-800">Level:</span>
-                          <span
-                            className={`ml-2 px-2 py-1 rounded text-xs font-semibold ${
-                              selectedNodeData.level === "error"
-                                ? "bg-red-100 text-red-800"
-                                : selectedNodeData.level === "warn"
-                                  ? "bg-yellow-100 text-yellow-800"
-                                  : "bg-green-100 text-green-800"
-                            }`}
-                          >
-                            {selectedNodeData.level?.toUpperCase()}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Performance & Scores */}
-                    {selectedNodeData.metadata?.payload && (
-                      <div className="bg-green-50 rounded-lg p-4">
-                        <h3 className="font-semibold text-green-900 mb-3 flex items-center">
-                          <BarChart3 className="w-4 h-4 mr-2" />
-                          Performance & Scores
-                        </h3>
-                        <div className="space-y-2 text-sm">
-                          {selectedNodeData.metadata.payload.confidence_score && (
-                            <div>
-                              <span className="font-medium text-green-800">Confidence:</span>
-                              <span className="ml-2 text-green-700">
-                                {Math.round(selectedNodeData.metadata.payload.confidence_score * 100)}%
-                              </span>
-                            </div>
-                          )}
-                          {selectedNodeData.metadata.payload.response_time && (
-                            <div>
-                              <span className="font-medium text-green-800">Response Time:</span>
-                              <span className="ml-2 text-green-700">
-                                {selectedNodeData.metadata.payload.response_time}ms
-                              </span>
-                            </div>
-                          )}
-                          {selectedNodeData.metadata.payload.token_usage && (
-                            <div>
-                              <span className="font-medium text-green-800">Tokens:</span>
-                              <span className="ml-2 text-green-700">
-                                {JSON.stringify(selectedNodeData.metadata.payload.token_usage)}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Request Data */}
-                    {selectedNodeData.metadata?.payload?.prompt && (
-                      <div className="bg-purple-50 rounded-lg p-4">
-                        <h3 className="font-semibold text-purple-900 mb-3 flex items-center">
-                          <MessageSquare className="w-4 h-4 mr-2" />
-                          Request Data
-                        </h3>
-                        <div className="space-y-3">
-                          <div>
-                            <span className="font-medium text-purple-800 block mb-1">Prompt:</span>
-                            <div className="bg-white p-3 rounded border text-xs text-gray-700 max-h-32 overflow-y-auto">
-                              {selectedNodeData.metadata.payload.prompt}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Response Data */}
-                    {selectedNodeData.metadata?.payload?.response && (
-                      <div className="bg-orange-50 rounded-lg p-4">
-                        <h3 className="font-semibold text-orange-900 mb-3 flex items-center">
-                          <MessageCircle className="w-4 h-4 mr-2" />
-                          Response Data
-                        </h3>
-                        <div className="space-y-3">
-                          <div>
-                            <span className="font-medium text-orange-800 block mb-1">Response:</span>
-                            <div className="bg-white p-3 rounded border text-xs text-gray-700 max-h-32 overflow-y-auto">
-                              {typeof selectedNodeData.metadata.payload.response === "string"
-                                ? selectedNodeData.metadata.payload.response
-                                : JSON.stringify(selectedNodeData.metadata.payload.response, null, 2)}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Full JSON Payload */}
-                    <div className="bg-gray-50 rounded-lg p-4">
-                      <h3 className="font-semibold text-gray-900 mb-3 flex items-center">
-                        <Code className="w-4 h-4 mr-2" />
-                        Complete SDK Log Data
-                      </h3>
-                      <div className="bg-white p-3 rounded border">
-                        <pre className="text-xs text-gray-600 overflow-x-auto max-h-64 overflow-y-auto">
-                          {JSON.stringify(selectedNodeData, null, 2)}
-                        </pre>
-                      </div>
-                    </div>
-                  </div>
+              <div className="w-80 bg-white border-l border-gray-200 flex flex-col">
+                <div className="p-4 border-b border-gray-200">
+                  <h3 className="text-lg font-semibold text-gray-900">Agent Analytics</h3>
                 </div>
-              )}
+
+                <div className="space-y-4">
+                  {selectedNodeData && (
+                    <>
+                      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg border">
+                        <h4 className="font-semibold text-gray-900 mb-3">🤖 Agent Details</h4>
+                        <div className="space-y-3 text-sm">
+                          <div>
+                            <span className="text-gray-600">Agent Name:</span>
+                            <div className="font-medium text-gray-900">
+                              {selectedNodeData.metadata?.payload?.agent_name ||
+                                selectedNodeData.metadata?.payload?.agentName ||
+                                selectedNodeData.metadata?.agentId ||
+                                "Unknown Agent"}
+                            </div>
+                          </div>
+                          <div>
+                            <span className="text-gray-600">Action Type:</span>
+                            <div className="font-medium text-gray-900">
+                              {selectedNodeData.type?.replace("agent_", "").toUpperCase() || "ACTION"}
+                            </div>
+                          </div>
+                          <div>
+                            <span className="text-gray-600">Status:</span>
+                            <div
+                              className={`font-medium ${
+                                selectedNodeData.metadata?.level === "error"
+                                  ? "text-red-600"
+                                  : selectedNodeData.metadata?.level === "warning"
+                                    ? "text-yellow-600"
+                                    : "text-green-600"
+                              }`}
+                            >
+                              {selectedNodeData.metadata?.level?.toUpperCase() || "SUCCESS"}
+                            </div>
+                          </div>
+
+                          <div className="mt-4 pt-4 border-t">
+                            <span className="text-gray-600 font-medium">Complete SDK Log Data:</span>
+                            <div className="mt-2 bg-gray-50 rounded p-3 max-h-96 overflow-y-auto">
+                              <pre className="text-xs font-mono whitespace-pre-wrap">
+                                {JSON.stringify(
+                                  selectedNodeData.metadata?.fullLogData || selectedNodeData.metadata?.payload,
+                                  null,
+                                  2,
+                                )}
+                              </pre>
+                            </div>
+                          </div>
+
+                          {selectedNodeData.metadata?.payload?.confidence && (
+                            <div>
+                              <span className="text-gray-600">Confidence:</span>
+                              <div className="font-medium text-gray-900">
+                                {(selectedNodeData.metadata.payload.confidence * 100).toFixed(1)}%
+                              </div>
+                            </div>
+                          )}
+                          {selectedNodeData.metadata?.payload?.response_time && (
+                            <div>
+                              <span className="text-gray-600">Response Time:</span>
+                              <div className="font-medium text-gray-900">
+                                {selectedNodeData.metadata.payload.response_time}ms
+                              </div>
+                            </div>
+                          )}
+                          {selectedNodeData.metadata?.payload?.tokens_used && (
+                            <div>
+                              <span className="text-gray-600">Tokens Used:</span>
+                              <div className="font-medium text-gray-900">
+                                {selectedNodeData.metadata.payload.tokens_used}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-4 rounded-lg border">
+                        <h4 className="font-semibold text-gray-900 mb-3">📋 Action Details</h4>
+                        <div className="space-y-3 text-sm">
+                          {selectedNodeData.metadata?.payload?.prompt && (
+                            <div>
+                              <span className="text-gray-600">Prompt:</span>
+                              <div className="font-mono text-xs bg-gray-100 p-2 rounded mt-1 max-h-20 overflow-y-auto">
+                                {selectedNodeData.metadata.payload.prompt}
+                              </div>
+                            </div>
+                          )}
+                          {selectedNodeData.metadata?.payload?.response && (
+                            <div>
+                              <span className="text-gray-600">Response:</span>
+                              <div className="font-mono text-xs bg-gray-100 p-2 rounded mt-1 max-h-20 overflow-y-auto">
+                                {selectedNodeData.metadata.payload.response}
+                              </div>
+                            </div>
+                          )}
+                          {selectedNodeData.metadata?.payload?.error && (
+                            <div>
+                              <span className="text-red-600">Error:</span>
+                              <div className="font-mono text-xs bg-red-50 p-2 rounded mt-1 text-red-800">
+                                {selectedNodeData.metadata.payload.error}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </CardContent>
